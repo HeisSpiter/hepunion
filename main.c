@@ -27,20 +27,28 @@ static struct file_system_type pierrefs_fs_type = {
 	.fs_flags	= FS_REVAL_DOT,
 };
 
-static struct dentry *pierrefs_mount(struct file_system_type *fs_type,
-				     int flags, const char *dev_name,
-				     void *raw_data)
-{
-	return 0;
+static int pierrefs_read_super(struct super_block *sb, void *raw_data,
+			       int silent) {
+	return -EINVAL;
 }
 
-static int __init init_pierrefs_fs(void)
-{
+static struct dentry *pierrefs_mount(struct file_system_type *fs_type,
+				     int flags, const char *dev_name,
+				     void *raw_data) {
+	struct dentry *dentry = mount_nodev(fs_type, flags,
+					    raw_data, pierrefs_read_super);
+	if (IS_ERR_OR_NULL(dentry)) {
+		return 0;
+	}
+
+	return dentry;
+}
+
+static int __init init_pierrefs_fs(void) {
 	return register_filesystem(&pierrefs_fs_type);
 }
 
-static void __exit exit_pierrefs_fs(void)
-{
+static void __exit exit_pierrefs_fs(void) {
 	unregister_filesystem(&pierrefs_fs_type);
 }
 
