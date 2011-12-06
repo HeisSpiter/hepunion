@@ -20,4 +20,18 @@
 #define PIERREFS_VERSION	"1.0"
 #define PIERREFS_NAME		"PierreFS"
 
+struct pierrefs_sb_info {
+	/**
+	 * Contains the full path of the RW branch
+	 * \warning It is not \ terminated
+	 */
+	char * read_write_branch;
+	/**
+	 * Contains the full path of the RO branch
+	 * \warning It is not \ terminated
+	 */
+	char * read_only_branch;
+};
+
+
 #endif /* #ifndef _PIERREFS_H_ */

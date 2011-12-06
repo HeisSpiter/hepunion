@@ -23,12 +23,28 @@ static struct file_system_type pierrefs_fs_type = {
 	.owner		= THIS_MODULE,
 	.name		= PIERREFS_NAME,
 	.mount		= pierrefs_mount,
-	.kill_sb	= generic_shutdown_super,
 	.fs_flags	= FS_REVAL_DOT,
 };
 
+static void get_branches(struct super_block *sb, void *raw_data) {
+}
+
 static int pierrefs_read_super(struct super_block *sb, void *raw_data,
 			       int silent) {
+	/* Check for parameters */
+	if (!raw_data) {
+		return -EINVAL;
+	}
+
+    /* Allocate super block info structure */
+	sb->s_fs_info = kzalloc(sizeof(struct pierrefs_sb_info), GFP_KERNEL);
+	if (unlikely(!sb->s_fs_info)) {
+		return -ENOMEM;
+	}
+
+    /* Get branches */
+    get_branches(sb, raw_data);
+
 	return -EINVAL;
 }
 
