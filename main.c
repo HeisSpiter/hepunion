@@ -146,14 +146,14 @@ static int get_branches(struct super_block *sb, const char *arg) {
 
     /* Check for branches */
     struct file * filp = filp_open(sb_info->read_only_branch, O_RDONLY, 0);
-    if (!filp) {
-        return -EINVAL /* FIXME */;
+    if (IS_ERR_OR_NULL(filp)) {
+        return (filp == 0) ? -EINVAL : PTR_ERR(filp);
     }
     filp_close(filp, 0);
 
     filp = filp_open(sb_info->read_write_branch, O_RDONLY, 0);
-    if (!filp) {
-        return -EINVAL /* FIXME */;
+    if (IS_ERR_OR_NULL(filp)) {
+        return (filp == 0) ? -EINVAL : PTR_ERR(filp);
     }
     filp_close(filp, 0);
 
