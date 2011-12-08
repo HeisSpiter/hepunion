@@ -23,6 +23,7 @@ static struct file_system_type pierrefs_fs_type = {
 	.owner		= THIS_MODULE,
 	.name		= PIERREFS_NAME,
 	.mount		= pierrefs_mount,
+	.kill_sb	= pierrefs_kill_sb,
 	.fs_flags	= FS_REVAL_DOT,
 };
 
@@ -52,11 +53,11 @@ static int make_path(const char *s, size_t n, char **path) {
 }
 
 static int get_branches(struct super_block *sb, const char *arg) {
-    int err;
-    char *output;
-    struct pierrefs_sb_info * sb_info = sb->s_fs_info;
+	int err;
+	char *output;
+	struct pierrefs_sb_info * sb_info = sb->s_fs_info;
 
-    /* We are expecting 2 branches, separated by : */
+	/* We are expecting 2 branches, separated by : */
 	const char *part2 = strchr(arg, ':');
 	if (!part2) {
 		return -EINVAL;
@@ -144,52 +145,52 @@ static int get_branches(struct super_block *sb, const char *arg) {
 		return -EINVAL;
 	}
 
-    /* Check for branches */
-    struct file * filp = filp_open(sb_info->read_only_branch, O_RDONLY, 0);
-    if (IS_ERR_OR_NULL(filp)) {
-        return (filp == 0) ? -EINVAL : PTR_ERR(filp);
-    }
-    filp_close(filp, 0);
+	/* Check for branches */
+	struct file * filp = filp_open(sb_info->read_only_branch, O_RDONLY, 0);
+	if (IS_ERR_OR_NULL(filp)) {
+		return (filp == 0) ? -EINVAL : PTR_ERR(filp);
+	}
+	filp_close(filp, 0);
 
-    filp = filp_open(sb_info->read_write_branch, O_RDONLY, 0);
-    if (IS_ERR_OR_NULL(filp)) {
-        return (filp == 0) ? -EINVAL : PTR_ERR(filp);
-    }
-    filp_close(filp, 0);
+	filp = filp_open(sb_info->read_write_branch, O_RDONLY, 0);
+	if (IS_ERR_OR_NULL(filp)) {
+		return (filp == 0) ? -EINVAL : PTR_ERR(filp);
+	}
+	filp_close(filp, 0);
 
-    return 0;
+	return 0;
 }
 
 static int pierrefs_read_super(struct super_block *sb, void *raw_data,
 			       int silent) {
-    int err;
+	int err;
 
 	/* Check for parameters */
 	if (!raw_data) {
 		return -EINVAL;
 	}
 
-    /* Allocate super block info structure */
+	/* Allocate super block info structure */
 	sb->s_fs_info = kzalloc(sizeof(struct pierrefs_sb_info), GFP_KERNEL);
 	if (unlikely(!sb->s_fs_info)) {
 		return -ENOMEM;
 	}
 
-    /* Get branches */
-    err = get_branches(sb, raw_data);
-    if (err) {
-        if (sb->s_fs_info->read_only_branch) {
-            kfree(sb->s_fs_info->read_only_branch);
-        }
-        if (sb->s_fs_info->read_write_branch) {
-            kfree(sb->s_fs_info->read_write_branch);
-        }
-        kfree(sb->s_fs_info);
-	    sb->s_fs_info = NULL;
-        return err;
-    }
+	/* Get branches */
+	err = get_branches(sb, raw_data);
+	if (err) {
+		if (sb->s_fs_info->read_only_branch) {
+			kfree(sb->s_fs_info->read_only_branch);
+		}
+		if (sb->s_fs_info->read_write_branch) {
+			kfree(sb->s_fs_info->read_write_branch);
+		}
+		kfree(sb->s_fs_info);
+		sb->s_fs_info = NULL;
+		return err;
+	}
 
-	return -EINVAL;
+	return 0;
 }
 
 static struct dentry *pierrefs_mount(struct file_system_type *fs_type,
@@ -202,6 +203,16 @@ static struct dentry *pierrefs_mount(struct file_system_type *fs_type,
 	}
 
 	return dentry;
+}
+
+static void pierrefs_kill_sb(struct super_block *sb) {
+	generic_shutdown_super(sb);
+	if (sb->s_fs_info->read_only_branch) {
+		kfree(sb->s_fs_info->read_only_branch);
+	}
+	if (sb->s_fs_info->read_write_branch) {
+		kfree(sb->s_fs_info->read_write_branch);
+	}
 }
 
 static int __init init_pierrefs_fs(void) {
