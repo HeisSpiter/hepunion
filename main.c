@@ -19,12 +19,21 @@ MODULE_DESCRIPTION("PierreFS " PIERREFS_VERSION
 		   " (http://pierrefs.sourceforge.net)");
 MODULE_LICENSE("GPL"); 
 
-static struct file_system_type pierrefs_fs_type = {
+static const struct file_system_type pierrefs_fs_type = {
 	.owner		= THIS_MODULE,
 	.name		= PIERREFS_NAME,
 	.mount		= pierrefs_mount,
 	.kill_sb	= pierrefs_kill_sb,
 	.fs_flags	= FS_REVAL_DOT,
+};
+
+static const struct super_operations pierrefs_sops = {
+};
+
+static const struct dentry_operations pierrefs_dops = {
+};
+
+static const struct inode_operations pierrefs_iops = {
 };
 
 static int make_path(const char *s, size_t n, char **path) {
@@ -56,6 +65,9 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	int err;
 	char *output;
 	struct pierrefs_sb_info * sb_info = sb->s_fs_info;
+	struct inode * root_i;
+	umode_t root_m;
+	struct timespec atime, mtime, ctime;
 
 	/* We are expecting 2 branches, separated by : */
 	const char *part2 = strchr(arg, ':');
@@ -150,13 +162,59 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	if (IS_ERR_OR_NULL(filp)) {
 		return (filp == 0) ? -EINVAL : PTR_ERR(filp);
 	}
+
+	/* Get superblock data from RO branch and set to ours */
+	sb->s_blocksize = filp->f_vfsmnt->sb->s_blocksize;
+	sb->s_blocksize_bits = filp->f_vfsmnt->sb->s_blocksize_bits;
+	/* Root modes - FIXME (check for me & merge) */
+	root_m = filp->f_vfsmnt->sb->s_root->d_inode->i_mode;
+	atime = filp->f_vfsmnt->sb->s_root->d_inode->i_atime;
+	mtime = filp->f_vfsmnt->sb->s_root->d_inode->i_mtime;
+	ctime = filp->f_vfsmnt->sb->s_root->d_inode->i_ctime;
+
+	/* Finally close */
 	filp_close(filp, 0);
+
+	/* Check for consistent data */
+	if (!is_flag_set(root_m, S_IFDIR)) {
+		return -EINVAL;
+	}
 
 	filp = filp_open(sb_info->read_write_branch, O_RDONLY, 0);
 	if (IS_ERR_OR_NULL(filp)) {
 		return (filp == 0) ? -EINVAL : PTR_ERR(filp);
 	}
 	filp_close(filp, 0);
+
+	/* Allocate inode for / */
+	root_i = new_inode(sb);
+	if (IS_ERR_OR_NULL(root_i)) {
+		return (root_i == 0) ? -EINVAL : PTR_ERR(root_i);
+	}
+
+	/* Init it */
+	root_i->i_ino = 1;
+	root_i->i_mode = root_m;
+	root_i->i_atime = atime;
+	root_i->i_mtime = mtime;
+	root_i->i_ctime = ctime;
+	root_i->i_op = &pierrefs_iops;
+	set_nlink(root_i, 2);
+
+	/* Create its directory entry */
+	sb->s_root = d_alloc_root(root_i);
+	if (IS_ERR_OR_NULL(sb->s_root)) {
+		clear_inode(root_i);
+		return (sb->s_root == 0) ? -EINVAL : PTR_ERR(sb->s_root);
+	}
+	d_set_d_op(sb->s_root, &pierrefs_dops);
+
+	/* Set super block attributes */
+	s->s_magic = PIERREFS_MAGIC;
+	s->s_op = &pierrefs_sops;
+	s->s_time_gran = 1;
+
+	/* TODO: Add directory entries */
 
 	return 0;
 }
@@ -206,13 +264,14 @@ static struct dentry *pierrefs_mount(struct file_system_type *fs_type,
 }
 
 static void pierrefs_kill_sb(struct super_block *sb) {
-	generic_shutdown_super(sb);
 	if (sb->s_fs_info->read_only_branch) {
 		kfree(sb->s_fs_info->read_only_branch);
 	}
 	if (sb->s_fs_info->read_write_branch) {
 		kfree(sb->s_fs_info->read_write_branch);
 	}
+
+	kill_litter_super(sb);
 }
 
 static int __init init_pierrefs_fs(void) {

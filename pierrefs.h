@@ -19,6 +19,7 @@
 
 #define PIERREFS_VERSION	"1.0"
 #define PIERREFS_NAME		"PierreFS"
+#define PIERREFS_MAGIC		0x9F510
 
 struct pierrefs_sb_info {
 	/**
@@ -33,5 +34,12 @@ struct pierrefs_sb_info {
 	char * read_only_branch;
 };
 
+/**
+ * Check if in a set of flags, another set of flags is set
+ * \param[in]	s	The set of flags in which to check
+ * \param[in]	f	The seeked flags
+ * \return	1 if all seeked flags are set, 0 otherwise
+ */
+#define is_flag_set(s, f) ((s & f) == f)
 
 #endif /* #ifndef _PIERREFS_H_ */
