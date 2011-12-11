@@ -35,6 +35,31 @@ struct pierrefs_sb_info {
 };
 
 /**
+ * Rights mask used to handle shifting with st_mode rights definition.
+ * It allows you to skip a set of right to go to the next one.
+ * First, others. One shift (on the left), group. Second shift, user
+ * \sa can_access
+ */
+#define RIGHTS_MASK	0x3
+
+/**
+ * Mask that defines all the modes of a file that can be changed using the
+ * metadata mechanism
+ */
+#define VALID_MODES_MASK (S_ISUID | S_ISGID | S_ISVTX |			\
+			  S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR |	\
+			  S_IRWXG | S_IRGRP | S_IWGRP | S_IXGRP |	\
+			  S_IRWXO | S_IROTH | S_IWOTH | S_IXOTH)
+
+/**
+ * Clear the opening/creating flags that could be sent to the open
+ * function
+ * This only allows rights bits
+ * \param[in]	f	The flags to clear
+ * \return	The cleared flags
+ */
+#define clear_mode_flags(f) f &= VALID_MODES_MASK
+/**
  * Check if in a set of flags, another set of flags is set
  * \param[in]	s	The set of flags in which to check
  * \param[in]	f	The seeked flags
