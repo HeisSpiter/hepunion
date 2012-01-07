@@ -26,12 +26,14 @@ struct pierrefs_sb_info {
 	 * Contains the full path of the RW branch
 	 * \warning It is not \ terminated
 	 */
-	char * read_write_branch;
+	char *read_write_branch;
+	size_t rw_lean;
 	/**
 	 * Contains the full path of the RO branch
 	 * \warning It is not \ terminated
 	 */
-	char * read_only_branch;
+	char *read_only_branch;
+	size_t ro_lean;
 };
 
 /**
@@ -66,5 +68,7 @@ struct pierrefs_sb_info {
  * \return	1 if all seeked flags are set, 0 otherwise
  */
 #define is_flag_set(s, f) ((s & f) == f)
+
+extern struct pierrefs_sb_info *sb_info;
 
 #endif /* #ifndef _PIERREFS_H_ */

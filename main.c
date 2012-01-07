@@ -22,7 +22,7 @@ MODULE_LICENSE("GPL");
 static const struct file_system_type pierrefs_fs_type = {
 	.owner		= THIS_MODULE,
 	.name		= PIERREFS_NAME,
-	.mount		= pierrefs_mount,
+	.get_sb		= pierrefs_get_sb,
 	.kill_sb	= pierrefs_kill_sb,
 	.fs_flags	= FS_REVAL_DOT,
 };
@@ -35,6 +35,8 @@ static const struct dentry_operations pierrefs_dops = {
 
 static const struct inode_operations pierrefs_iops = {
 };
+
+struct pierrefs_sb_info *sb_info;
 
 static int make_path(const char *s, size_t n, char **path) {
     /* Zero output */
@@ -234,6 +236,9 @@ static int pierrefs_read_super(struct super_block *sb, void *raw_data,
 		return -ENOMEM;
 	}
 
+	/* Keep a local copy */
+	sb_info = sb->s_fs_info;
+
 	/* Get branches */
 	err = get_branches(sb, raw_data);
 	if (err) {
@@ -251,7 +256,7 @@ static int pierrefs_read_super(struct super_block *sb, void *raw_data,
 	return 0;
 }
 
-static struct dentry *pierrefs_mount(struct file_system_type *fs_type,
+static struct dentry *pierrefs_get_sb(struct file_system_type *fs_type,
 				     int flags, const char *dev_name,
 				     void *raw_data) {
 	struct dentry *dentry = mount_nodev(fs_type, flags,

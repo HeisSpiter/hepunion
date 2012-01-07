@@ -9,15 +9,27 @@
  * \todo Identical files on RO/RW after mod
  */
 
+struct dentry * pierrefs_lookup(struct inode *inode, struct dentry *dentry, struct nameidata *nameidata) {
+	return 0;
+}
+
 int pierrefs_permission(struct inode *inode, int mask) {
 	int err;
+	char path[MAX_PATH];
+	char real_path[MAX_PATH];
 
-	/* Get file... */
-	err = find_file(/*path, real_path*/, 0)
+	/* Get path */
+	err = get_relative_path(inode, 0, path);
+	if (err) {
+		return err;
+	}
+
+	/* Get file */
+	err = find_file(path, real_path, 0)
 	if (err) {
 		return err;
 	}
 
 	/* And call worker */
-	return can_access(/*path, real_path*/, mask);
+	return can_access(path, real_path, mask);
 }
