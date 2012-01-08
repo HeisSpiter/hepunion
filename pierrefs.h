@@ -37,12 +37,60 @@ struct pierrefs_sb_info {
 };
 
 /**
+ * \brief Enumeration defining all the possible returns of the find_file() function
+ * \sa find_file
+ *
+ * Those are used to describe where the find_file() function found a file (if ever it
+ * found one).
+ */
+typedef enum _types {
+	/**
+	 * The file was found on the RO branch
+	 */
+	READ_ONLY = 0,
+	/**
+	 * The file was found on the RW branch
+	 */
+	READ_WRITE = 1,
+	/**
+	 * The file was found on the RO branch, and a copyup has been created
+	 */
+	READ_WRITE_COPYUP = 2
+} types;
+
+/**
  * Rights mask used to handle shifting with st_mode rights definition.
  * It allows you to skip a set of right to go to the next one.
  * First, others. One shift (on the left), group. Second shift, user
  * \sa can_access
  */
 #define RIGHTS_MASK	0x3
+
+/**
+ * Flag to pass to find_file() function. It indicates that if the file was
+ * found RO a copyup has to be done and its path returned
+ * \sa find_file
+ */
+#define CREATE_COPYUP	0x1
+/**
+ * Flag to pass to find_file() function. It indicates that the file has to
+ * already exist on the RW branch. If it doesn't, the function will fail
+ * \sa find_file
+ */
+#define MUST_READ_WRITE	0x2
+/**
+ * Flag to pass to find_file() function. The function will only check the
+ * RO branch to find the function. If it doesn't exist there, the function
+ * will fail (even if it could have existed on RW branch)
+ * \sa find_file
+ */
+#define MUST_READ_ONLY	0x4
+/**
+ * Flag to pass to find_file() function. It indicates that the file that
+ * the function will return might not exist regarding union method
+ * \sa find_file
+ */
+#define IGNORE_WHITEOUT	0x8
 
 /**
  * Mask that defines all the modes of a file that can be changed using the
@@ -70,26 +118,19 @@ struct pierrefs_sb_info {
 #define is_flag_set(s, f) ((s & f) == f)
 
 /**
- * \brief Enumeration defining all the possible returns of the find_file() function
- * \sa find_file
- *
- * Those are used to describe where the find_file() function found a file (if ever it
- * found one).
+ * Generate the string matching the given path for a full RO path
+ * \param[in]	p	The path for which full path is required
+ * \param[out]	r	The string that will contain the full RO path
+ * \return	The number of caracters written to r
  */
-typedef enum _types {
-	/**
-	 * The file was found on the RO branch
-	 */
-	READ_ONLY = 0,
-	/**
-	 * The file was found on the RW branch
-	 */
-	READ_WRITE = 1,
-	/**
-	 * The file was found on the RO branch, and a copyup has been created
-	 */
-	READ_WRITE_COPYUP = 2
-} types;
+#define make_ro_path(p, r) snprintf(r, PATH_MAX, "%s%s", sb_info->read_only_branch, p)
+/**
+ * Generate the string matching the given path for a full RW path
+ * \param[in]	p	The path for which full path is required
+ * \param[out]	r	The string that will contain the full RW path
+ * \return	The number of caracters written to r
+ */
+#define make_rw_path(p, r) snprintf(r, PATH_MAX, "%s%s", sb_info->read_write_branch, p)
 
 extern struct pierrefs_sb_info *sb_info;
 
