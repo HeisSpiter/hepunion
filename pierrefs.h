@@ -69,6 +69,28 @@ struct pierrefs_sb_info {
  */
 #define is_flag_set(s, f) ((s & f) == f)
 
+/**
+ * \brief Enumeration defining all the possible returns of the find_file() function
+ * \sa find_file
+ *
+ * Those are used to describe where the find_file() function found a file (if ever it
+ * found one).
+ */
+typedef enum _types {
+	/**
+	 * The file was found on the RO branch
+	 */
+	READ_ONLY = 0,
+	/**
+	 * The file was found on the RW branch
+	 */
+	READ_WRITE = 1,
+	/**
+	 * The file was found on the RO branch, and a copyup has been created
+	 */
+	READ_WRITE_COPYUP = 2
+} types;
+
 extern struct pierrefs_sb_info *sb_info;
 
 #endif /* #ifndef _PIERREFS_H_ */

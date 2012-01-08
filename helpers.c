@@ -79,8 +79,8 @@ int get_relative_path(const struct inode *inode, const struct dentry *dentry, ch
 		return 0;
 	}
 
-	/* FIXME */
-	return -1;
+	/* FIXME: Any better error code? */
+	return -ENODATA;
 }
 
 int can_access(const char *path, const char *real_path, int mode) {
@@ -107,12 +107,12 @@ int can_access(const char *path, const char *real_path, int mode) {
 			if ((X_OK & (signed)stbuf.mode) ||
 			    (X_OK << RIGHTS_MASK & (signed)stbuf.mode) ||
 			    (X_OK << (RIGHTS_MASK * 2) & (signed)stbuf.mode)) {
-				return 1;
+				return 0;
 			}
 		}
 		else {
 			/* Root can read/write */
-			return 1;
+			return 0;
 		}
 	}
 
@@ -149,3 +149,98 @@ int can_access(const char *path, const char *real_path, int mode) {
 	}
 }
 
+int find_file(const char *path, char *real_path, char flags) {
+	int err;
+	struct kstat kstbuf;
+	char tmp_path[PATH_MAX];
+	char wh_path[PATH_MAX];
+
+	/* Do not check flags validity
+	 * Caller can only be internal
+	 * So it must be trusted
+	 */
+	if (!is_flag_set(flags, MUST_READ_ONLY)) {
+		/* First try RW branch (higher priority) */
+		if (make_rw_path(path, real_path) > PATH_MAX) {
+			return -ENAMETOOLONG;
+		}
+
+		err = vfs_lstat(real_path, &kstbuf);
+		if (err < 0) {
+			if (is_flag_set(flags, MUST_READ_WRITE)) {
+				return err;
+			}
+		}
+		else {
+			/* Check for access */
+			err = can_traverse(path);
+			if (err < 0) {
+				return err;
+			}
+
+			return READ_WRITE;
+		}
+	}
+
+	/* Be smart, we might have to create a copyup */
+	if (is_flag_set(flags, CREATE_COPYUP)) {
+		if (make_ro_path(path, tmp_path) > PATH_MAX) {
+			return -ENAMETOOLONG;
+		}
+
+		err = vfs_lstat(tmp_path, &kstbuf);
+		if (err < 0) {
+			/* If file does not exist, even in RO, fail */
+			return err;
+		}
+
+		if (!is_flag_set(flags, IGNORE_WHITEOUT)) {
+			/* Check whether it was deleted */
+			err = find_whiteout(path, wh_path);
+			if (err < 0) {
+				return err;
+			}
+		}
+
+		/* Check for access */
+		err = can_traverse(path);
+		if (err < 0) {
+			return err;
+		}
+
+		err = create_copyup(path, tmp_path, real_path);
+		if (err == 0) {
+			return READ_WRITE_COPYUP;
+		}
+	}
+	else {
+		/* It was not found on RW, try RO */
+		if (make_ro_path(path, real_path) > PATH_MAX) {
+			return -ENAMETOOLONG;
+		}
+
+		err = vfs_lstat(real_path, &kstbuf);
+		if (err < 0) {
+			return err;
+		}
+
+		if (!is_flag_set(flags, IGNORE_WHITEOUT)) {
+			/* Check whether it was deleted */
+			err = find_whiteout(path, wh_path);
+			if (err == 0) {
+				return -ENOENT;
+			}
+		}
+
+		/* Check for access */
+		err = can_traverse(path);
+		if (err < 0) {
+			return err;
+		}
+
+		return READ_ONLY;
+	}
+
+	/* It was not found at all */
+	return err;
+}
