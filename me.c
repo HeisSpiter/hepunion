@@ -43,7 +43,43 @@
  * non alterable metadata.
  */
 
-int get_file_attr_worker(const char *path, const char *real_path, struct kstat *stbuf) {
+int find_me(const char *path, char *me_path, struct kstat *kstbuf) {
+	/* Find name */
+	char *tree_path = strrchr(path, '/');
+	if (!tree_path) {
+		return -EINVAL;
+	}
+
+	if (snprintf(me_path, PATH_MAX, "%s", context.read_write_branch) > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+
+	/* Copy path (and /) */
+	strncat(me_path, path, tree_path - path + 1);
+	/* Append me */
+	strcat(me_path, ".me.");
+	/* Finalement copy name */
+	strcat(me_path, tree_path + 1);
+
+	/* Now, try to get properties */
+	return vfs_lstat(me_path, stbuf);
+}
+
+int get_file_attr(const char *path, struct kstat *kstbuf) {
+	char real_path[PATH_MAX];
+	int err;
+
+	/* First, find file */
+	err = find_file(path, real_path, 0);
+	if (err < 0) {
+		return err;
+	}
+
+	/* Call worker */
+	return get_file_attr_worker(path, real_path, stbuf);
+}
+
+int get_file_attr_worker(const char *path, const char *real_path, struct kstat *kstbuf) {
 	int err;
 	char me;
 	struct kstat mest;
@@ -52,27 +88,26 @@ int get_file_attr_worker(const char *path, const char *real_path, struct kstat *
 	/* Look for a me file */
 	me = (find_me(path, me_file, &mest) == 0);
 
-	// Get attributes
-	err = vfs_lstat(real_path, stbuf);
-	if (!err) {
-		// If me file was present, merge results
-		if (me) {
-			stbuf->uid = mest.uid;
-			stbuf->gid = mest.gid;
-			stbuf->atime = mest.atime;
-			stbuf->mtime = mest.mtime;
-			stbuf->ctime = mest.ctime;
-			// Now we need to merge modes
-			// First clean .me. modes
-			mest.mode = clear_mode_flags(mest.mode);
-			// Then, clean real file modes
-			stbuf->mode &= ~VALID_MODES_MASK;
-			// Finally, apply .me. modes
-			stbuf->mode |= mest.mode;
-		}
-		return 0;
-	}
-	else {
+	/* Get attributes */
+	err = vfs_lstat(real_path, kstbuf);
+	if (err < 0) {
 		return err;
 	}
+
+	/* If me file was present, merge results */
+	if (me) {
+		kstbuf->uid = mest.uid;
+		kstbuf->gid = mest.gid;
+		kstbuf->atime = mest.atime;
+		kstbuf->mtime = mest.mtime;
+		kstbuf->ctime = mest.ctime;
+		/* Now we need to merge modes */
+		/* First clean .me. modes */
+		mest.mode = clear_mode_flags(mest.mode);
+		/* Then, clean real file modes */
+		kstbuf->mode &= ~VALID_MODES_MASK;
+		/* Finally, apply .me. modes */
+		kstbuf->mode |= mest.mode;
+	}
+	return 0;
 }
