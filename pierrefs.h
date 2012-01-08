@@ -134,4 +134,49 @@ typedef enum _types {
 
 extern struct pierrefs_sb_info *sb_info;
 
+/* Functions in helpers.c */
+/**
+ * Check Read/Write/Execute permissions on a file for calling process.
+ * \param[in]	path		Relative path of the file to check
+ * \param[in]	real_path	Full path of the file to check
+ * \param[in]	mode		ORed set of modes to check (R_OK, W_OK, X_OK)
+ * \return	1 if calling process can access, 0 otherwise. errno is set
+ * \note	This is checked against user, group, others permissions
+ */
+char can_access(const char *path, const char *real_path, int mode);
+/**
+ * Check permission for the calling process to create a file.
+ * \param[in]	p	Relative path of the file to create
+ * \param[in]	rp	Full path of the file to create
+ * \return	1 if calling process can create, 0 otherwise. errno is set
+ * \note	This is just a wrapper to can_remove since required rights the same
+ */
+#define can_create(p, rp) can_remove(p, rp)
+/**
+ * Check permission for the calling process to remove a file.
+ * \param[in]	path		Relative path of the file to remove
+ * \param[in]	real_path	Full path of the file to remove
+ * \return	1 if calling process can remove, 0 otherwise. errno is set
+ * \note	This is checked against user, group, others permissions for writing in parent directory
+ */
+char can_remove(const char *path, const char *real_path);
+/**
+ * Check permission for the calling process to go through a tree.
+ * \param[in]	path	Relative path of the tree to traverse
+ * \return	1 if calling process can remove, 0 otherwise. errno is set
+ * \note	This is checked against user, group, others permissions for execute in traverse directories
+ */
+char can_traverse(const char *path);
+/**
+ * Find a file either in RW or RO branch, taking into account whiteout files. It can copyup files if needed.
+ * \param[in]	path		Relative path of the file to find
+ * \param[out]	real_path	Full path of the file, if found
+ * \param[in]	flags		ORed set of flags defining where and how finding file (CREATE_COPYUP, MUST_READ_WRITE, MUST_READ_ONLY, IGNORE_WHITEOUT)
+ * \return	-1 in case of a failure, an unsigned integer describing where the file was found in case of a success
+ * \note	Unless flags state the contrary, the RW branch is the first checked for the file
+ * \note	In case you called the function with CREATE_COPYUP flag, and it succeded, then returned path is to RW file
+ * \warning	There is absolutely no checks for flags consistency!
+ */
+types find_file(const char *path, char *real_path, char flags);
+
 #endif /* #ifndef _PIERREFS_H_ */
