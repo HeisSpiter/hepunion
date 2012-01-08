@@ -10,79 +10,6 @@
  * the driver to realize work
  */
 
-/* Adapted from nfs_path function */
-int get_full_path(const struct inode *inode, const struct dentry *dentry, char *real_path)
-{
-	char tmp_path[MAX_PATH];
-	char *end = tmp_path+sizeof(tmp_path);
-	int namelen, buflen = MAX_PATH;
-
-	/* FIXME: For the moment only~~ */
-	assert(inode->i_nlink == 0);
-
-	/* If we don't have any dentry, then, let's find one */
-	if (!dentry) {
-		if (inode->i_dentry.next) {
-			dentry = list_entry(inode->i_dentry.next, struct dentry, d_alias);
-		}
-	}
-
-	*--end = '\0';
-	buflen--;
-	spin_lock(&dcache_lock);
-	while (!IS_ROOT(dentry)) {
-		namelen = dentry->d_name.len;
-		buflen -= namelen + 1;
-		if (buflen < 0)
-			goto Elong_unlock;
-		end -= namelen;
-		memcpy(end, dentry->d_name.name, namelen);
-		*--end = '/';
-		dentry = dentry->d_parent;
-	}
-	spin_unlock(&dcache_lock);
-	buflen -= sizeof(char);
-	if (buflen < 0)
-		goto Elong;
-	end -= namelen;
-	memcpy(end, "/", namelen);
-
-	/* Copy back name */
-	memcpy(path, end, buflen);
-	return buflen;
-
-Elong_unlock:
-	spin_unlock(&dcache_lock);
-Elong:
-	return -ENAMETOOLONG;
-}
-
-int get_relative_path(const struct inode *inode, const struct dentry *dentry, char *path) {
-	int len;
-	char real_path[MAX_PATH];
-
-	/* First, get full path */
-	len = get_full_path(inode, dentry, real_path);
-	if (len < 0) {
-		return len;
-	}
-
-	/* Check if it's on RO */
-	if (strncmp(sb_info->read_only_branch, real_path, sb_info->ro_len) == 0) {
-		memcpy(path, real_path + 1 + sb_info->ro_len, len - 1 - sb_info->ro_lean);
-		return 0;
-	}
-
-	/* Check if it's on RW */
-	if (strncmp(sb_info->read_write_branch, real_path, sb_info->rw_len) == 0) {
-		memcpy(path, real_path + 1 + sb_info->rw_len, len - 1 - sb_info->rw_lean);
-		return 0;
-	}
-
-	/* FIXME: Any better error code? */
-	return -ENODATA;
-}
-
 int can_access(const char *path, const char *real_path, int mode) {
 	struct kstat stbuf;
 	long euid, egid;
@@ -147,6 +74,62 @@ int can_access(const char *path, const char *real_path, int mode) {
 	else {
 		return -EACCESS;
 	}
+}
+
+int can_remove(const char *path, const char *real_path) {
+	char parent_path[PATH_MAX];
+
+	/* Find parent directory */
+	char *parent = strrchr(real_path, '/');
+
+	/* Caller wants to remove /! */
+	if (parent == real_path) {
+		return -EACCES;
+	}
+
+	strncpy(parent_path, real_path, parent - real_path);
+	parent_path[parent - real_path] = '\0';
+
+	/* Caller must be able to write in parent dir */
+	return can_access(path, parent_path, W_OK);
+}
+
+int can_traverse(const char *path) {
+	char short_path[PATH_MAX];
+	char long_path[PATH_MAX];
+	int err;
+
+	/* Prepare strings */
+	snprintf(short_path, PATH_MAX, "%c", '/');
+	if (snprintf(long_path, PATH_MAX, "%s/", context.read_only_branch) > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+
+	/* Get directory */
+	char *last = strrchr(path, '/');
+	/* If that's last (traversing root is always possible) */
+	if (path == last) {
+		return 0;
+	}
+
+	/* Really get directory */
+	char *old_directory = (char *)path + 1;
+	char *directory = strchr(old_directory, '/');
+	while (directory) {
+		strncat(short_path, old_directory, (directory - old_directory) / sizeof(char));
+		strncat(long_path, old_directory, (directory - old_directory) / sizeof(char));
+		err = can_access(short_path, long_path, X_OK);
+		if (err < 0) {
+			return err;
+		}
+
+		/* Next iteration (skip /) */
+		old_directory = directory;
+		directory = strchr(old_directory + 1, '/');
+	}
+
+	/* If that point is reached, it can access */
+	return 0;
 }
 
 int find_file(const char *path, char *real_path, char flags) {
@@ -243,4 +226,77 @@ int find_file(const char *path, char *real_path, char flags) {
 
 	/* It was not found at all */
 	return err;
+}
+
+/* Adapted from nfs_path function */
+int get_full_path(const struct inode *inode, const struct dentry *dentry, char *real_path)
+{
+	char tmp_path[MAX_PATH];
+	char *end = tmp_path+sizeof(tmp_path);
+	int namelen, buflen = MAX_PATH;
+
+	/* FIXME: For the moment only~~ */
+	assert(inode->i_nlink == 0);
+
+	/* If we don't have any dentry, then, let's find one */
+	if (!dentry) {
+		if (inode->i_dentry.next) {
+			dentry = list_entry(inode->i_dentry.next, struct dentry, d_alias);
+		}
+	}
+
+	*--end = '\0';
+	buflen--;
+	spin_lock(&dcache_lock);
+	while (!IS_ROOT(dentry)) {
+		namelen = dentry->d_name.len;
+		buflen -= namelen + 1;
+		if (buflen < 0)
+			goto Elong_unlock;
+		end -= namelen;
+		memcpy(end, dentry->d_name.name, namelen);
+		*--end = '/';
+		dentry = dentry->d_parent;
+	}
+	spin_unlock(&dcache_lock);
+	buflen -= sizeof(char);
+	if (buflen < 0)
+		goto Elong;
+	end -= namelen;
+	memcpy(end, "/", namelen);
+
+	/* Copy back name */
+	memcpy(path, end, buflen);
+	return buflen;
+
+Elong_unlock:
+	spin_unlock(&dcache_lock);
+Elong:
+	return -ENAMETOOLONG;
+}
+
+int get_relative_path(const struct inode *inode, const struct dentry *dentry, char *path) {
+	int len;
+	char real_path[MAX_PATH];
+
+	/* First, get full path */
+	len = get_full_path(inode, dentry, real_path);
+	if (len < 0) {
+		return len;
+	}
+
+	/* Check if it's on RO */
+	if (strncmp(sb_info->read_only_branch, real_path, sb_info->ro_len) == 0) {
+		memcpy(path, real_path + 1 + sb_info->ro_len, len - 1 - sb_info->ro_lean);
+		return 0;
+	}
+
+	/* Check if it's on RW */
+	if (strncmp(sb_info->read_write_branch, real_path, sb_info->rw_len) == 0) {
+		memcpy(path, real_path + 1 + sb_info->rw_len, len - 1 - sb_info->rw_lean);
+		return 0;
+	}
+
+	/* FIXME: Any better error code? */
+	return -ENODATA;
 }
