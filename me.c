@@ -68,7 +68,7 @@ int create_me(const char *me_path, struct kstat *kstbuf) {
 	attr.ia_ctime = stbuf->st_ctime;
 
 	/* Set all the attributes */
-	err = notify_change(fd->, &attr);
+	err = notify_change(fd->f_dentry->d_inode, &attr);
 	filp_close(fd, 0);
 
 	return err;
@@ -81,7 +81,7 @@ int find_me(const char *path, char *me_path, struct kstat *kstbuf) {
 		return -EINVAL;
 	}
 
-	if (snprintf(me_path, PATH_MAX, "%s", context.read_write_branch) > PATH_MAX) {
+	if (snprintf(me_path, PATH_MAX, "%s", sb_info->read_write_branch) > PATH_MAX) {
 		return -ENAMETOOLONG;
 	}
 
@@ -141,4 +141,102 @@ int get_file_attr_worker(const char *path, const char *real_path, struct kstat *
 		kstbuf->mode |= mest.mode;
 	}
 	return 0;
+}
+
+int set_me(const char *path, const char *real_path, struct kstat *kstbuf, int flags) {
+	int err;
+	char me;
+	char me_path[PATH_MAX];
+	struct kstat kstme;
+	struct file *fd;
+	struct iattr attr;
+
+	/* Look for a me file */
+	me = (find_me(path, me_path, &stme) == 0);
+
+	if (!me) {
+		/* Read real file info */
+		err = vfs_lstat(real_path, &stme);
+		if (err < 0) {
+			return err;
+		}
+
+		/* Recreate path up to the .me. file */
+		err = find_path(path, NULL);
+		if (err < 0) {
+			return err;
+		}
+
+		/* .me. does not exist, create it with appropriate mode */
+		mode_t mode = (flags & MODE) ? stbuf->st_mode : stme.st_mode;
+		clear_mode_flags(mode);
+
+		fd = creat_worker(me_path, mode);
+		if (IS_ERR(fd)) {
+			return fd;
+		}
+
+		attr.ia_valid = ATTR_UID | ATTR_GID | ATTR_ATIME | ATTR_MTIME;
+
+		/* Set its time */
+		if (flags & TIME) {
+			attr.ia_atime = stbuf->st_atime;
+			attr.ia_mtime = stbuf->st_mtime;
+		}
+		else {
+			attr.ia_atime = stme.st_atime;
+			attr.ia_mtime = stme.st_mtime;
+		}
+
+		/* Set its owner */
+		if (flags & OWNER) {
+			attr.ia_uid = stbuf->st_uid;
+			attr.ia_gid = stbuf->st_gid;
+		}
+		else {
+			attr.ia_uid = stme.st_uid;
+			attr.ia_gid = stme.st_gid;
+		}
+
+		err = notify_change(fd->f_dentry->d_inode, &attr);
+
+		filp_close(fd, 0);
+	}
+	else {
+		attr.ia_valid = 0;
+
+		fd = filp_open(me_path, O_RDONLY, 0);
+		if (IS_ERR(fd)) {
+			return fd;
+		}
+
+		/* Only change required attributes */
+		if (flags & MODE) {
+			attr.ia_valid |= ATTR_MODE;
+			attr.ia_mode = clear_mode_flags(stbuf->st_mode);
+		}
+
+		if (flags & TIME) {
+			attr.ia_valid |= ATTR_ATIME | ATTR_MTIME;
+			attr.ia_atime = stbuf->st_atime;
+			attr.ia_mtime = stbuf->st_mtime;
+		}
+
+		if (flags & OWNER) {
+			attr.ia_valid |= ATTR_UID | ATTR_GID;
+			attr.ia_uid = stbuf->st_uid;
+			attr.ia_gid = stbuf->st_gid;
+		}
+
+		if (attr.ia_valid) {
+			err = notify_change(fd->f_dentry->d_inode, &attr);
+		}
+		else {
+			err = 0;
+		}
+
+		filp_close(fd, 0);
+	}
+
+	return err;
 }
