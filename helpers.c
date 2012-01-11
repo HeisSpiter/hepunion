@@ -297,16 +297,14 @@ int get_relative_path(const struct inode *inode, const struct dentry *dentry, ch
 		return 0;
 	}
 
-	/* FIXME: Any better error code? */
-	return -ENODATA;
+	return -EINVAL;
 }
 
 struct file* dbg_open(const char *pathname, int flags) {
 	if (flags & (O_CREAT | O_WRONLY | O_RDWR)) {
 		if (strncmp(pathname, sb_info->read_only_branch, sb_info->ro_len) == 0) {
 			printf("WARNING! Tried to create a file on a RO branch!\n");
-			errno = EINVAL;
-			return -1;
+			return -EINVAL;
 		}
 	}
 
@@ -317,8 +315,7 @@ struct file* dbg_open_2(const char *pathname, int flags, mode_t mode) {
 	if (flags & (O_CREAT | O_WRONLY | O_RDWR)) {
 		if (strncmp(pathname, sb_info->read_only_branch, sb_info->ro_len) == 0) {
 			printf("WARNING! Tried to create a file on a RO branch!\n");
-			errno = EINVAL;
-			return -1;
+			return -EINVAL;
 		}
 	}
 
@@ -328,8 +325,7 @@ struct file* dbg_open_2(const char *pathname, int flags, mode_t mode) {
 struct file* dbg_creat(const char *pathname, mode_t mode) {
 	if (strncmp(pathname, sb_info->read_only_branch, sb_info->ro_len) == 0) {
 		printf("WARNING! Tried to create a file on a RO branch!\n");
-		errno = EINVAL;
-		return -1;
+		return -EINVAL;
 	}
 
 	return filp_creat(pathname, mode);
