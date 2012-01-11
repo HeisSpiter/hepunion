@@ -132,7 +132,19 @@ typedef enum _types {
  */
 #define make_rw_path(p, r) snprintf(r, PATH_MAX, "%s%s", sb_info->read_write_branch, p)
 
+#define filp_creat(p, m) filp_open(p, O_CREAT | O_WRONLY | O_TRUNC, m)
+
 extern struct pierrefs_sb_info *sb_info;
+
+#ifdef _DEBUG_
+#define open_worker(p, f) dbg_open(p, f)
+#define open_worker_2(p, f, m) dbg_open_2(p, f, m)
+#define creat_worker(p, m) dbg_creat(p, m)
+#else
+#define open_worker(p, f) filp_open(p, f, 0)
+#define open_worker_2(p, f, m) filp_open(p, f, m)
+#define creat_worker(p, m) filp_creat(p, m)
+#endif
 
 /* Functions in helpers.c */
 /**
@@ -178,5 +190,30 @@ char can_traverse(const char *path);
  * \warning	There is absolutely no checks for flags consistency!
  */
 types find_file(const char *path, char *real_path, char flags);
+/**
+ * Worker for debug purpose. It first checks opening mode and branch, and then call open.
+ * This is used to catch bad calls to RO branch
+ * \param[in]	pathname	File to open
+ * \param[in]	flags		Flags for file opening (see open man page)
+ * \return	-1 in case of a failure, 0 otherwise. errno is set
+ */
+int dbg_open(const char *pathname, int flags);
+/**
+ * Worker for debug purpose. It first checks opening mode and branch, and then call open.
+ * This is used to catch bad calls to RO branch
+ * \param[in]	pathname	File to open
+ * \param[in]	flags		Flags for file opening (see open man page)
+ * \param[in]	mode		Mode to set to the file (see open man page)
+ * \return	-1 in case of a failure, 0 otherwise. errno is set
+ */
+int dbg_open_2(const char *pathname, int flags, mode_t mode);
+/**
+ * Worker for debug purpose. It checks if the file is to be created on the right branch
+ * and then call creat
+ * \param[in]	pathname	File to create
+ * \param[in]	mode		Mode to set to the file (see open man page)
+ * \return	-1 in case of a failure, 0 otherwise. errno is set
+ */
+int dbg_creat(const char *pathname, mode_t mode);
 
 #endif /* #ifndef _PIERREFS_H_ */

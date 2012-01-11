@@ -43,6 +43,37 @@
  * non alterable metadata.
  */
 
+int create_me(const char *me_path, struct kstat *kstbuf) {
+	int err:
+	struct file *fd;
+	struct iattr attr;
+
+	/* Get creation modes */
+	mode_t mode = kstbuf->st_mode;
+	clear_mode_flags(mode);
+
+	/* Create file */
+	fd = creat_worker(me_path, mode);
+	if (IS_ERR(fd)) {
+		return fd;
+	}
+
+	attr.ia_valid = ATTR_MODE | ATTR_UID | ATTR_GID | ATTR_ATIME | ATTR_MTIME;
+	attr.ia_mode = stbuf->st_mode;
+	attr.ia_uid = stbuf->st_uid;
+	attr.ia_gid = stbuf->st_gid;
+	attr.ia_size = 0;
+	attr.ia_atime = stbuf->st_atime;
+	attr.ia_mtime = stbuf->st_mtime;
+	attr.ia_ctime = stbuf->st_ctime;
+
+	/* Set all the attributes */
+	err = notify_change(fd->, &attr);
+	filp_close(fd, 0);
+
+	return err;
+}
+
 int find_me(const char *path, char *me_path, struct kstat *kstbuf) {
 	/* Find name */
 	char *tree_path = strrchr(path, '/');
