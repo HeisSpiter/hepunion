@@ -13,6 +13,20 @@ struct dentry * pierrefs_lookup(struct inode *inode, struct dentry *dentry, stru
 	return 0;
 }
 
+int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *kstbuf) {
+	int err;
+	char path[MAX_PATH];
+
+	/* Get path */
+	err = get_relative_path(0, dentry, path);
+	if (err) {
+		return err;
+	}
+
+	/* Call worker */
+	return get_file_attr(path, kstbuf);
+}
+
 int pierrefs_permission(struct inode *inode, int mask) {
 	int err;
 	char path[MAX_PATH];

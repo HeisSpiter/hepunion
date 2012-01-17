@@ -235,11 +235,11 @@ int get_full_path(const struct inode *inode, const struct dentry *dentry, char *
 	char *end = tmp_path+sizeof(tmp_path);
 	int namelen, buflen = MAX_PATH;
 
-	/* FIXME: For the moment only~~ */
-	assert(inode->i_nlink == 0);
-
 	/* If we don't have any dentry, then, let's find one */
 	if (!dentry) {
+		/* FIXME: For the moment only~~ */
+		assert(inode->i_nlink == 0);
+
 		if (inode->i_dentry.next) {
 			dentry = list_entry(inode->i_dentry.next, struct dentry, d_alias);
 		}
