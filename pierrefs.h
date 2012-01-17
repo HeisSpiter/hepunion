@@ -191,6 +191,28 @@ char can_traverse(const char *path);
  */
 types find_file(const char *path, char *real_path, char flags);
 /**
+ * Get the full path (ie, on the lower FS) of the provided file.
+ * \param[in]	inode		Inode that refers to the file
+ * \param[in]	dentry		Dentry that refers to the file
+ * \param[out]	real_path	The real path that has been found
+ * \return 0 in case of a success, an error code otherwise
+ * \note	It is possible not to provide a dentry (but not recommended). An inode must be provided then
+ * \note	It is possible not to provide an inode. A dentry must be provided then
+ * \warning	If no dentry is provided, the function will return the path associated to the first dentry it finds
+ */
+int get_full_path(const struct inode *inode, const struct dentry *dentry, char *real_path);
+/**
+ * Get the relative path (to / of PierreFS) of the provided file.
+ * \param[in]	inode	Inode that refers to the file
+ * \param[in]	dentry	Dentry that refers to the file
+ * \param[out]	path	The relative path that has been found
+ * \return 0 in case of a success, an error code otherwise
+ * \note	It is possible not to provide a dentry (but not recommended). An inode must be provided then
+ * \note	It is possible not to provide an inode. A dentry must be provided then
+ * \warning	If no dentry is provided, the function might fail to find the path to the file even if it is on the PierreFS volume
+ */
+int get_relative_path(const struct inode *inode, const struct dentry *dentry, char *path);
+/**
  * Worker for debug purpose. It first checks opening mode and branch, and then call open.
  * This is used to catch bad calls to RO branch
  * \param[in]	pathname	File to open
