@@ -27,23 +27,49 @@ int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *
 	return get_file_attr(path, kstbuf);
 }
 
-int pierrefs_permission(struct inode *inode, int mask) {
+int pierrefs_permission(struct inode *inode, int mask, struct nameidata *nd) {
 	int err;
 	char path[MAX_PATH];
 	char real_path[MAX_PATH];
 
 	/* Get path */
-	err = get_relative_path(inode, 0, path);
+	err = get_relative_path(0, nd->dentry, path);
 	if (err) {
 		return err;
 	}
 
 	/* Get file */
 	err = find_file(path, real_path, 0)
-	if (err) {
+	if (err < 0) {
 		return err;
 	}
 
 	/* And call worker */
 	return can_access(path, real_path, mask);
+}
+
+int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
+	int err;
+	char path[MAX_PATH];
+	char real_path[MAX_PATH];
+
+	/* Get path */
+	err = get_relative_path(0, nd->dentry, path);
+	if (err) {
+		return err;
+	}
+
+	/* Get file */
+	err = find_file(path, real_path, 0)
+	if (err < 0) {
+		return err;
+	}
+
+	if (err == READ_WRITE || err = READ_WRITE_COPYUP) {
+		/* Just update file attributes */
+		return notify_change(dentry->d_inode, attr);
+    }
+
+	/* TODO: Update me */
+	return 0;
 }
