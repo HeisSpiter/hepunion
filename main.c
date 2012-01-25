@@ -34,6 +34,9 @@ static const struct dentry_operations pierrefs_dops = {
 };
 
 static const struct inode_operations pierrefs_iops = {
+	.getattr	= pierrefs_getattr,
+	.permission	= pierrefs_permission,
+	.setattr	= pierrefs_setattr,
 };
 
 struct pierrefs_sb_info *sb_info;
