@@ -70,6 +70,9 @@ int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
 		return notify_change(dentry->d_inode, attr);
     }
 
-	/* TODO: Update me */
-	return 0;
+	/* Update me
+	 * Don't clear flags, set_me_worker will do
+	 * So, only call the worker
+	 */
+	return set_me_worker(path, real_path, attr);
 }

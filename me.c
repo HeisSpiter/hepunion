@@ -144,15 +144,44 @@ int get_file_attr_worker(const char *path, const char *real_path, struct kstat *
 }
 
 int set_me(const char *path, const char *real_path, struct kstat *kstbuf, int flags) {
+	struct iattr attr;
+
+	/* Convert the kstbuf to a iattr struct */
+	attr.ia_valid = 0;
+	attr.ia_mode = stbuf->st_mode;
+	attr.ia_atime = stbuf->st_atime;
+	attr.ia_mtime = stbuf->st_mtime;
+	attr.ia_uid = stbuf->st_uid;
+	attr.ia_gid = stbuf->st_gid;
+
+	if (is_flag_set(flags, MODE)) {
+		attr.ia_valid |= ATTR_MODE;
+	}
+
+	if (is_flag_set(flags, TIME)) {
+		attr.ia_valid |= ATTR_ATIME | ATTR_MTIME;
+	}
+
+	if (is_flag_set(flags, OWNER)) {
+		attr.ia_valid |= ATTR_UID | ATTR_GID;
+	}
+
+	/* Call the real worker */
+	return set_me(path, real_path, &attr);
+}
+
+int set_me_worker(const char *path, const char *real_path, struct iattr *attr) {
 	int err;
 	char me;
 	char me_path[PATH_MAX];
 	struct kstat kstme;
 	struct file *fd;
-	struct iattr attr;
+
+	/* Ensure input is correct */
+	attr->ia_valid &= ATTR_UID | ATTR_GID | ATTR_ATIME | ATTR_MTIME | ATTR_MODE;
 
 	/* Look for a me file */
-	me = (find_me(path, me_path, &stme) == 0);
+	me = (find_me(path, me_path, &stme) > 0);
 
 	if (!me) {
 		/* Read real file info */
@@ -168,7 +197,7 @@ int set_me(const char *path, const char *real_path, struct kstat *kstbuf, int fl
 		}
 
 		/* .me. does not exist, create it with appropriate mode */
-		mode_t mode = (flags & MODE) ? stbuf->st_mode : stme.st_mode;
+		mode_t mode = (attr->ia_valid & ATTR_MODE) ? attr->ia_mode : stme.st_mode;
 		clear_mode_flags(mode);
 
 		fd = creat_worker(me_path, mode);
@@ -176,26 +205,21 @@ int set_me(const char *path, const char *real_path, struct kstat *kstbuf, int fl
 			return fd;
 		}
 
-		attr.ia_valid = ATTR_UID | ATTR_GID | ATTR_ATIME | ATTR_MTIME;
+		/* Remove mode if it was set */
+		attr->ia_valid &= ATTR_MODE;
 
 		/* Set its time */
-		if (flags & TIME) {
-			attr.ia_atime = stbuf->st_atime;
-			attr.ia_mtime = stbuf->st_mtime;
-		}
-		else {
-			attr.ia_atime = stme.st_atime;
-			attr.ia_mtime = stme.st_mtime;
+		if (!is_flag_set(attr->ia_valid, (ATTR_ATIME | ATTR_MTIME))) {
+			attr->ia_atime = stme.st_atime;
+			attr->ia_mtime = stme.st_mtime;
+			attr->ia_valid |= ATTR_ATIME | ATTR_MTIME;
 		}
 
 		/* Set its owner */
-		if (flags & OWNER) {
-			attr.ia_uid = stbuf->st_uid;
-			attr.ia_gid = stbuf->st_gid;
-		}
-		else {
-			attr.ia_uid = stme.st_uid;
-			attr.ia_gid = stme.st_gid;
+		if (!is_flag_set(attr->ia_valid, (ATTR_UID | ATTR_GID))) {
+			attr->ia_uid = stme.st_uid;
+			attr->ia_gid = stme.st_gid;
+			attr->ia_valid |= ATTR_UID | ATTR_GID;
 		}
 
 		err = notify_change(fd->f_dentry->d_inode, &attr);
@@ -203,33 +227,14 @@ int set_me(const char *path, const char *real_path, struct kstat *kstbuf, int fl
 		filp_close(fd, 0);
 	}
 	else {
-		attr.ia_valid = 0;
-
-		fd = filp_open(me_path, O_RDONLY, 0);
+		fd = dbg_open(me_path, O_RDWR);
 		if (IS_ERR(fd)) {
 			return fd;
 		}
 
-		/* Only change required attributes */
-		if (flags & MODE) {
-			attr.ia_valid |= ATTR_MODE;
-			attr.ia_mode = clear_mode_flags(stbuf->st_mode);
-		}
-
-		if (flags & TIME) {
-			attr.ia_valid |= ATTR_ATIME | ATTR_MTIME;
-			attr.ia_atime = stbuf->st_atime;
-			attr.ia_mtime = stbuf->st_mtime;
-		}
-
-		if (flags & OWNER) {
-			attr.ia_valid |= ATTR_UID | ATTR_GID;
-			attr.ia_uid = stbuf->st_uid;
-			attr.ia_gid = stbuf->st_gid;
-		}
-
+		/* Only change if there are changes */
 		if (attr.ia_valid) {
-			err = notify_change(fd->f_dentry->d_inode, &attr);
+			err = notify_change(fd->f_dentry->d_inode, attr);
 		}
 		else {
 			err = 0;

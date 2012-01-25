@@ -146,6 +146,69 @@ extern struct pierrefs_sb_info *sb_info;
 #define creat_worker(p, m) filp_creat(p, m)
 #endif
 
+/* Functions in me.c */
+/**
+ * Create a metadata file from scrach only using path
+ * and metadata.
+ * \param[in]	me_path	Full path of the metadata file to create
+ * \param[in]	kstbuf	Structure containing all the metadata to use
+ * \return	0 in case of a success, -err in case of an error
+ * \note	To set metadata of a file, use set_me() instead
+ */
+int create_me(const char *me_path, struct kstat *kstbuf);
+/**
+ * Find the metadata file associated with a file and query
+ * its properties.
+ * \param[in]	path	Relative path of the file to check
+ * \param[out]	me_path	Full path of the possible metadata file
+ * \param[out]	kstbuf	Structure containing extracted metadata in case of a success
+ * \return	0 in case of a success, -err in case of error
+ */
+int find_me(const char *path, char *me_path, struct kstat *kstbuf);
+/**
+ * Query the unioned metadata of a file. This can include the read
+ * of a metadata file.
+ * \param[in]	path		Relative path of the file to check
+ * \param[out]	kstbuf		Structure containing extracted metadata in case of a success
+ * \return	0 in case of a success, -err in case of error
+ * \note	In case you already have full path, prefer using get_file_attr_worker()
+ */
+int get_file_attr(const char *path, struct kstat * kstbuf);
+/**
+ * Query the unioned metadata of a file. This can include the read
+ * of a metadata file.
+ * \param[in]	path		Relative path of the file to check
+ * \param[in]	real_path	Full path of the file to check
+ * \param[out]	kstbuf		Structure containing extracted metadata in case of a success
+ * \return	0 in case of a success, -err in case of error
+ * \note	In case you don't have full path, use get_file_attr() that will find it for you
+ */
+int get_file_attr_worker(const char *path, const char *real_path, struct kstat *kstbuf);
+/**
+ * Set the metadata for a file, using a metadata file.
+ * \param[in]	path		Relative path of the file to set
+ * \param[in]	real_path	Full path of the file to set
+ * \param[in]	kstbuf		Structure containing the metadata to set
+ * \param[in]	flags		ORed set of flags defining which metadata set (OWNER, MODE, TIME)
+ * \return	0 in case of a success, -err in case of error
+ * \warning	Never ever use that function on a RW file! This would lead to file system inconsistency
+ * \note	In case you have an iattr struct, use set_me_worker() function
+ * \todo	Would deserve a check for equality and .me. removal
+ */
+int set_me(const char *path, const char *real_path, struct kstat *kstbuf, int flags);
+/**
+ * Set the metadata for a file, using a metadata file.
+ * \param[in]	path		Relative path of the file to set
+ * \param[in]	real_path	Full path of the file to set
+ * \param[in]	attr		Structure containing the metadata to set
+ * \return	0 in case of a success, -err in case of error
+ * \warning	Never ever use that function on a RW file! This would lead to file system inconsistency
+ * \note	If you have a kstat structure, you should use set_me() instead
+ * \note	Only ATTR_UID, ATTR_GID, ATTR_ATIME, ATTR_MTIME, ATTR_MODE flags are supported
+ * \todo	Would deserve a check for equality and .me. removal
+ */
+int set_me_worker(const char *path, const char *real_path, struct iattr *attr);
+
 /* Functions in helpers.c */
 /**
  * Check Read/Write/Execute permissions on a file for calling process.
