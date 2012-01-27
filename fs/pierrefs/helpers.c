@@ -14,7 +14,6 @@
 
 int can_access(const char *path, const char *real_path, int mode) {
 	struct kstat stbuf;
-	long euid, egid;
 	int err;
 
 	/* Get file attributes */
@@ -23,19 +22,15 @@ int can_access(const char *path, const char *real_path, int mode) {
 		return err;
 	}
 
-	/* Get effective IDs */
-	euid = sys_geteuid();
-	egid = sys_getegid();
-
 	/* If root user, allow almost everything */
-	if (euid == 0) {
-		if (mode & X_OK) {
+	if (current->fsuid == 0) {
+		if (mode & MAY_EXEC) {
 			/* Root needs at least on X
 			 * For rights details, see below
 			 */
-			if ((X_OK & (signed)stbuf.mode) ||
-			    (X_OK << RIGHTS_MASK & (signed)stbuf.mode) ||
-			    (X_OK << (RIGHTS_MASK * 2) & (signed)stbuf.mode)) {
+			if ((MAY_EXEC & (signed)stbuf.mode) ||
+			    (MAY_EXEC << RIGHTS_MASK & (signed)stbuf.mode) ||
+			    (MAY_EXEC << (RIGHTS_MASK * 2) & (signed)stbuf.mode)) {
 				return 0;
 			}
 		}
@@ -62,10 +57,10 @@ int can_access(const char *path, const char *real_path, int mode) {
 	 * Check is done from more specific to general.
 	 * This explains order and values
 	 */
-	if (euid == stbuf.uid) {
+	if (current->fsuid == stbuf.uid) {
 		mode <<= (RIGHTS_MASK * 2);
 	}
-	else if (egid == stbuf.gid) {
+	else if (current->fsgid == stbuf.gid) {
 		mode <<= RIGHTS_MASK;
 	}
 
@@ -74,7 +69,7 @@ int can_access(const char *path, const char *real_path, int mode) {
 		return 0;
 	}
 	else {
-		return -EACCESS;
+		return -EACCES;
 	}
 }
 
@@ -93,34 +88,35 @@ int can_remove(const char *path, const char *real_path) {
 	parent_path[parent - real_path] = '\0';
 
 	/* Caller must be able to write in parent dir */
-	return can_access(path, parent_path, W_OK);
+	return can_access(path, parent_path, MAY_WRITE);
 }
 
 int can_traverse(const char *path) {
 	char short_path[PATH_MAX];
 	char long_path[PATH_MAX];
 	int err;
+	char *last, *old_directory, *directory;
 
 	/* Prepare strings */
 	snprintf(short_path, PATH_MAX, "%c", '/');
-	if (snprintf(long_path, PATH_MAX, "%s/", context.read_only_branch) > PATH_MAX) {
+	if (snprintf(long_path, PATH_MAX, "%s/", sb_info->read_only_branch) > PATH_MAX) {
 		return -ENAMETOOLONG;
 	}
 
 	/* Get directory */
-	char *last = strrchr(path, '/');
+	last = strrchr(path, '/');
 	/* If that's last (traversing root is always possible) */
 	if (path == last) {
 		return 0;
 	}
 
 	/* Really get directory */
-	char *old_directory = (char *)path + 1;
-	char *directory = strchr(old_directory, '/');
+	old_directory = (char *)path + 1;
+	directory = strchr(old_directory, '/');
 	while (directory) {
 		strncat(short_path, old_directory, (directory - old_directory) / sizeof(char));
 		strncat(long_path, old_directory, (directory - old_directory) / sizeof(char));
-		err = can_access(short_path, long_path, X_OK);
+		err = can_access(short_path, long_path, MAY_EXEC);
 		if (err < 0) {
 			return err;
 		}
@@ -233,14 +229,14 @@ int find_file(const char *path, char *real_path, char flags) {
 /* Adapted from nfs_path function */
 int get_full_path(const struct inode *inode, const struct dentry *dentry, char *real_path)
 {
-	char tmp_path[MAX_PATH];
+	char tmp_path[PATH_MAX];
 	char *end = tmp_path+sizeof(tmp_path);
-	int namelen, buflen = MAX_PATH;
+	int namelen, buflen = PATH_MAX;
 
 	/* If we don't have any dentry, then, let's find one */
 	if (!dentry) {
 		/* FIXME: For the moment only~~ */
-		assert(inode->i_nlink == 0);
+		/* assert(inode->i_nlink == 0); */
 
 		if (inode->i_dentry.next) {
 			dentry = list_entry(inode->i_dentry.next, struct dentry, d_alias);
@@ -268,7 +264,7 @@ int get_full_path(const struct inode *inode, const struct dentry *dentry, char *
 	memcpy(end, "/", namelen);
 
 	/* Copy back name */
-	memcpy(path, end, buflen);
+	memcpy(real_path, end, buflen);
 	return buflen;
 
 Elong_unlock:
@@ -279,7 +275,7 @@ Elong:
 
 int get_relative_path(const struct inode *inode, const struct dentry *dentry, char *path) {
 	int len;
-	char real_path[MAX_PATH];
+	char real_path[PATH_MAX];
 
 	/* First, get full path */
 	len = get_full_path(inode, dentry, real_path);
@@ -289,13 +285,13 @@ int get_relative_path(const struct inode *inode, const struct dentry *dentry, ch
 
 	/* Check if it's on RO */
 	if (strncmp(sb_info->read_only_branch, real_path, sb_info->ro_len) == 0) {
-		memcpy(path, real_path + 1 + sb_info->ro_len, len - 1 - sb_info->ro_lean);
+		memcpy(path, real_path + 1 + sb_info->ro_len, len - 1 - sb_info->ro_len);
 		return 0;
 	}
 
 	/* Check if it's on RW */
 	if (strncmp(sb_info->read_write_branch, real_path, sb_info->rw_len) == 0) {
-		memcpy(path, real_path + 1 + sb_info->rw_len, len - 1 - sb_info->rw_lean);
+		memcpy(path, real_path + 1 + sb_info->rw_len, len - 1 - sb_info->rw_len);
 		return 0;
 	}
 
@@ -305,8 +301,7 @@ int get_relative_path(const struct inode *inode, const struct dentry *dentry, ch
 struct file* dbg_open(const char *pathname, int flags) {
 	if (flags & (O_CREAT | O_WRONLY | O_RDWR)) {
 		if (strncmp(pathname, sb_info->read_only_branch, sb_info->ro_len) == 0) {
-			printf("WARNING! Tried to create a file on a RO branch!\n");
-			return -EINVAL;
+			return ERR_PTR(-EINVAL);
 		}
 	}
 
@@ -316,8 +311,7 @@ struct file* dbg_open(const char *pathname, int flags) {
 struct file* dbg_open_2(const char *pathname, int flags, mode_t mode) {
 	if (flags & (O_CREAT | O_WRONLY | O_RDWR)) {
 		if (strncmp(pathname, sb_info->read_only_branch, sb_info->ro_len) == 0) {
-			printf("WARNING! Tried to create a file on a RO branch!\n");
-			return -EINVAL;
+			return ERR_PTR(-EINVAL);
 		}
 	}
 
@@ -326,8 +320,7 @@ struct file* dbg_open_2(const char *pathname, int flags, mode_t mode) {
 
 struct file* dbg_creat(const char *pathname, mode_t mode) {
 	if (strncmp(pathname, sb_info->read_only_branch, sb_info->ro_len) == 0) {
-		printf("WARNING! Tried to create a file on a RO branch!\n");
-		return -EINVAL;
+		return ERR_PTR(-EINVAL);
 	}
 
 	return filp_creat(pathname, mode);

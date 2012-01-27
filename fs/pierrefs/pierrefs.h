@@ -30,13 +30,13 @@ struct pierrefs_sb_info {
 	 * \warning It is not \ terminated
 	 */
 	char *read_write_branch;
-	size_t rw_lean;
+	size_t rw_len;
 	/**
 	 * Contains the full path of the RO branch
 	 * \warning It is not \ terminated
 	 */
 	char *read_only_branch;
-	size_t ro_lean;
+	size_t ro_len;
 };
 
 /**
@@ -149,6 +149,17 @@ extern struct pierrefs_sb_info *sb_info;
 #define creat_worker(p, m) filp_creat(p, m)
 #endif
 
+/* Functions in cow.c */
+/**
+ * Create a copyup for a file.
+ * File, here, can describe everything, including directory
+ * \param[in]	path	Relative path of the file to copy
+ * \param[in]	ro_path	Full path of the file to copy
+ * \param[out]	rw_path Full path of the copied file
+ * \return	0 in case of a success, -1 otherwise. errno is set
+ */
+int create_copyup(const char *path, const char *ro_path, char *rw_path);
+
 /* Functions in me.c */
 /**
  * Create a metadata file from scrach only using path
@@ -218,7 +229,7 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr);
  * \param[in]	path		Relative path of the file to check
  * \param[in]	real_path	Full path of the file to check
  * \param[in]	mode		ORed set of modes to check (R_OK, W_OK, X_OK)
- * \return	1 if calling process can access, 0 otherwise. errno is set
+ * \return	1 if calling process can access, -err in case of error
  * \note	This is checked against user, group, others permissions
  */
 int can_access(const char *path, const char *real_path, int mode);
@@ -226,7 +237,7 @@ int can_access(const char *path, const char *real_path, int mode);
  * Check permission for the calling process to create a file.
  * \param[in]	p	Relative path of the file to create
  * \param[in]	rp	Full path of the file to create
- * \return	1 if calling process can create, 0 otherwise. errno is set
+ * \return	1 if calling process can create, -err in case of error
  * \note	This is just a wrapper to can_remove since required rights the same
  */
 #define can_create(p, rp) can_remove(p, rp)
@@ -234,28 +245,28 @@ int can_access(const char *path, const char *real_path, int mode);
  * Check permission for the calling process to remove a file.
  * \param[in]	path		Relative path of the file to remove
  * \param[in]	real_path	Full path of the file to remove
- * \return	1 if calling process can remove, 0 otherwise. errno is set
+ * \return	1 if calling process can remove, -err in case of error
  * \note	This is checked against user, group, others permissions for writing in parent directory
  */
-char can_remove(const char *path, const char *real_path);
+int can_remove(const char *path, const char *real_path);
 /**
  * Check permission for the calling process to go through a tree.
  * \param[in]	path	Relative path of the tree to traverse
  * \return	1 if calling process can remove, 0 otherwise. errno is set
  * \note	This is checked against user, group, others permissions for execute in traverse directories
  */
-char can_traverse(const char *path);
+int can_traverse(const char *path);
 /**
  * Find a file either in RW or RO branch, taking into account whiteout files. It can copyup files if needed.
  * \param[in]	path		Relative path of the file to find
  * \param[out]	real_path	Full path of the file, if found
  * \param[in]	flags		ORed set of flags defining where and how finding file (CREATE_COPYUP, MUST_READ_WRITE, MUST_READ_ONLY, IGNORE_WHITEOUT)
- * \return	-1 in case of a failure, an unsigned integer describing where the file was found in case of a success
+ * \return	-err in case of a failure, an unsigned integer describing where the file was found in case of a success
  * \note	Unless flags state the contrary, the RW branch is the first checked for the file
  * \note	In case you called the function with CREATE_COPYUP flag, and it succeded, then returned path is to RW file
  * \warning	There is absolutely no checks for flags consistency!
  */
-types find_file(const char *path, char *real_path, char flags);
+int find_file(const char *path, char *real_path, char flags);
 /**
  * Get the full path (ie, on the lower FS) of the provided file.
  * \param[in]	inode		Inode that refers to the file
@@ -285,7 +296,7 @@ int get_relative_path(const struct inode *inode, const struct dentry *dentry, ch
  * \param[in]	flags		Flags for file opening (see open man page)
  * \return	-1 in case of a failure, 0 otherwise. errno is set
  */
-int dbg_open(const char *pathname, int flags);
+struct file* dbg_open(const char *pathname, int flags);
 /**
  * Worker for debug purpose. It first checks opening mode and branch, and then call open.
  * This is used to catch bad calls to RO branch
@@ -294,7 +305,7 @@ int dbg_open(const char *pathname, int flags);
  * \param[in]	mode		Mode to set to the file (see open man page)
  * \return	-1 in case of a failure, 0 otherwise. errno is set
  */
-int dbg_open_2(const char *pathname, int flags, mode_t mode);
+struct file* dbg_open_2(const char *pathname, int flags, mode_t mode);
 /**
  * Worker for debug purpose. It checks if the file is to be created on the right branch
  * and then call creat
@@ -302,7 +313,16 @@ int dbg_open_2(const char *pathname, int flags, mode_t mode);
  * \param[in]	mode		Mode to set to the file (see open man page)
  * \return	-1 in case of a failure, 0 otherwise. errno is set
  */
-int dbg_creat(const char *pathname, mode_t mode);
+struct file* dbg_creat(const char *pathname, mode_t mode);
+
+/* Functions in wh.c */
+/**
+ * Find the whiteout that might hide a file.
+ * \param[in]	path	Relative path of the file to check
+ * \param[out]	wh_path	Full path of the found whiteout
+ * \return	0 in case of a success, -1 otherwise. errno is set
+ */
+int find_whiteout(const char *path, char *wh_path);
 
 #endif /* #ifdef __KERNEL__ */
 

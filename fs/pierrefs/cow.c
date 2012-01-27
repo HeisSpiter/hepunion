@@ -32,6 +32,10 @@
 
 #include "pierrefs.h"
 
+int create_copyup(const char *path, const char *ro_path, char *rw_path) {
+	return -1;
+}
+
 int find_path_worker(const char *path, char *real_path) {
 	return -1;
 }
