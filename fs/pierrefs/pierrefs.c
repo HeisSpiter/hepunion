@@ -9,13 +9,15 @@
  * \todo Identical files on RO/RW after mod
  */
 
+#include "pierrefs.h"
+
 struct dentry * pierrefs_lookup(struct inode *inode, struct dentry *dentry, struct nameidata *nameidata) {
 	return 0;
 }
 
 int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *kstbuf) {
 	int err;
-	char path[MAX_PATH];
+	char path[PATH_MAX];
 
 	/* Get path */
 	err = get_relative_path(0, dentry, path);
@@ -29,8 +31,8 @@ int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *
 
 int pierrefs_permission(struct inode *inode, int mask, struct nameidata *nd) {
 	int err;
-	char path[MAX_PATH];
-	char real_path[MAX_PATH];
+	char path[PATH_MAX];
+	char real_path[PATH_MAX];
 
 	/* Get path */
 	err = get_relative_path(0, nd->dentry, path);
@@ -39,7 +41,7 @@ int pierrefs_permission(struct inode *inode, int mask, struct nameidata *nd) {
 	}
 
 	/* Get file */
-	err = find_file(path, real_path, 0)
+	err = find_file(path, real_path, 0);
 	if (err < 0) {
 		return err;
 	}
@@ -50,24 +52,24 @@ int pierrefs_permission(struct inode *inode, int mask, struct nameidata *nd) {
 
 int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
 	int err;
-	char path[MAX_PATH];
-	char real_path[MAX_PATH];
+	char path[PATH_MAX];
+	char real_path[PATH_MAX];
 
 	/* Get path */
-	err = get_relative_path(0, nd->dentry, path);
+	err = get_relative_path(0, dentry, path);
 	if (err) {
 		return err;
 	}
 
 	/* Get file */
-	err = find_file(path, real_path, 0)
+	err = find_file(path, real_path, 0);
 	if (err < 0) {
 		return err;
 	}
 
-	if (err == READ_WRITE || err = READ_WRITE_COPYUP) {
+	if (err == READ_WRITE || err == READ_WRITE_COPYUP) {
 		/* Just update file attributes */
-		return notify_change(dentry->d_inode, attr);
+		return notify_change(dentry, attr);
     }
 
 	/* Update me

@@ -14,12 +14,15 @@
  * - Data and metadata separation
  */
 
-#ifndef _PIERREFS_H_
-#define _PIERREFS_H_
+#ifndef __PIERREFS_H__
+#define __PIERREFS_H__
 
-#define PIERREFS_VERSION	"1.0"
-#define PIERREFS_NAME		"PierreFS"
-#define PIERREFS_MAGIC		0x9F510
+#ifdef __KERNEL__
+
+#include <linux/pierrefs_type.h>
+#include <linux/fs.h>
+#include <linux/dcache.h>
+#include <linux/namei.h>
 
 struct pierrefs_sb_info {
 	/**
@@ -218,7 +221,7 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr);
  * \return	1 if calling process can access, 0 otherwise. errno is set
  * \note	This is checked against user, group, others permissions
  */
-char can_access(const char *path, const char *real_path, int mode);
+int can_access(const char *path, const char *real_path, int mode);
 /**
  * Check permission for the calling process to create a file.
  * \param[in]	p	Relative path of the file to create
@@ -301,4 +304,6 @@ int dbg_open_2(const char *pathname, int flags, mode_t mode);
  */
 int dbg_creat(const char *pathname, mode_t mode);
 
-#endif /* #ifndef _PIERREFS_H_ */
+#endif /* #ifdef __KERNEL__ */
+
+#endif /* #ifndef __PIERREFS_H__ */

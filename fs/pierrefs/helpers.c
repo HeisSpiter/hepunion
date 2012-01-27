@@ -10,6 +10,8 @@
  * the driver to realize work
  */
 
+#include "pierrefs.h"
+
 int can_access(const char *path, const char *real_path, int mode) {
 	struct kstat stbuf;
 	long euid, egid;

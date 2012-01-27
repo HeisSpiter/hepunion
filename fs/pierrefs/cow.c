@@ -30,7 +30,13 @@
  * team.
  */
 
-int find_path(const char *path, opt char *real_path) {
+#include "pierrefs.h"
+
+int find_path_worker(const char *path, char *real_path) {
+	return -1;
+}
+
+int find_path(const char *path, char *real_path) {
 	if (real_path) {
 		return find_path_worker(path, real_path);
 	}
