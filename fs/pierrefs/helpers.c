@@ -99,7 +99,7 @@ int can_traverse(const char *path) {
 
 	/* Prepare strings */
 	snprintf(short_path, PATH_MAX, "%c", '/');
-	if (snprintf(long_path, PATH_MAX, "%s/", sb_info->read_only_branch) > PATH_MAX) {
+	if (snprintf(long_path, PATH_MAX, "%s/", get_context()->read_only_branch) > PATH_MAX) {
 		return -ENAMETOOLONG;
 	}
 
@@ -231,7 +231,7 @@ int get_full_path(const struct inode *inode, const struct dentry *dentry, char *
 {
 	char tmp_path[PATH_MAX];
 	char *end = tmp_path+sizeof(tmp_path);
-	int namelen, buflen = PATH_MAX;
+	int namelen = 0, buflen = PATH_MAX;
 
 	/* If we don't have any dentry, then, let's find one */
 	if (!dentry) {
@@ -276,12 +276,16 @@ Elong:
 int get_relative_path(const struct inode *inode, const struct dentry *dentry, char *path) {
 	int len;
 	char real_path[PATH_MAX];
+	struct pierrefs_sb_info *sb_info;
 
 	/* First, get full path */
 	len = get_full_path(inode, dentry, real_path);
 	if (len < 0) {
 		return len;
 	}
+
+	/* Get branches info */
+	sb_info = get_context();
 
 	/* Check if it's on RO */
 	if (strncmp(sb_info->read_only_branch, real_path, sb_info->ro_len) == 0) {
@@ -300,7 +304,7 @@ int get_relative_path(const struct inode *inode, const struct dentry *dentry, ch
 
 struct file* dbg_open(const char *pathname, int flags) {
 	if (flags & (O_CREAT | O_WRONLY | O_RDWR)) {
-		if (strncmp(pathname, sb_info->read_only_branch, sb_info->ro_len) == 0) {
+		if (strncmp(pathname, get_context()->read_only_branch, get_context()->ro_len) == 0) {
 			return ERR_PTR(-EINVAL);
 		}
 	}
@@ -310,7 +314,7 @@ struct file* dbg_open(const char *pathname, int flags) {
 
 struct file* dbg_open_2(const char *pathname, int flags, mode_t mode) {
 	if (flags & (O_CREAT | O_WRONLY | O_RDWR)) {
-		if (strncmp(pathname, sb_info->read_only_branch, sb_info->ro_len) == 0) {
+		if (strncmp(pathname, get_context()->read_only_branch, get_context()->ro_len) == 0) {
 			return ERR_PTR(-EINVAL);
 		}
 	}
@@ -319,7 +323,7 @@ struct file* dbg_open_2(const char *pathname, int flags, mode_t mode) {
 }
 
 struct file* dbg_creat(const char *pathname, mode_t mode) {
-	if (strncmp(pathname, sb_info->read_only_branch, sb_info->ro_len) == 0) {
+	if (strncmp(pathname, get_context()->read_only_branch, get_context()->ro_len) == 0) {
 		return ERR_PTR(-EINVAL);
 	}
 

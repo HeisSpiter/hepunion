@@ -23,6 +23,7 @@
 #include <linux/fs.h>
 #include <linux/dcache.h>
 #include <linux/namei.h>
+#include <linux/mount.h>
 
 struct pierrefs_sb_info {
 	/**
@@ -121,23 +122,26 @@ typedef enum _types {
 #define is_flag_set(s, f) ((s & f) == f)
 
 /**
+ * Get current context associated with mount point
+ * \return	It returns super block info structure (pierrefs_sb_info)
+ */
+#define get_context() ((struct pierrefs_sb_info *)current->fs->rootmnt->mnt_sb->s_fs_info)
+/**
  * Generate the string matching the given path for a full RO path
  * \param[in]	p	The path for which full path is required
  * \param[out]	r	The string that will contain the full RO path
  * \return	The number of caracters written to r
  */
-#define make_ro_path(p, r) snprintf(r, PATH_MAX, "%s%s", sb_info->read_only_branch, p)
+#define make_ro_path(p, r) snprintf(r, PATH_MAX, "%s%s", get_context()->read_only_branch, p)
 /**
  * Generate the string matching the given path for a full RW path
  * \param[in]	p	The path for which full path is required
  * \param[out]	r	The string that will contain the full RW path
  * \return	The number of caracters written to r
  */
-#define make_rw_path(p, r) snprintf(r, PATH_MAX, "%s%s", sb_info->read_write_branch, p)
+#define make_rw_path(p, r) snprintf(r, PATH_MAX, "%s%s", get_context()->read_write_branch, p)
 
 #define filp_creat(p, m) filp_open(p, O_CREAT | O_WRONLY | O_TRUNC, m)
-
-extern struct pierrefs_sb_info *sb_info;
 
 #ifdef _DEBUG_
 #define open_worker(p, f) dbg_open(p, f)
