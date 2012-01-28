@@ -24,6 +24,7 @@
 #include <linux/dcache.h>
 #include <linux/namei.h>
 #include <linux/mount.h>
+#include <linux/module.h>
 
 struct pierrefs_sb_info {
 	/**
@@ -62,6 +63,10 @@ typedef enum _types {
 	READ_WRITE_COPYUP = 2
 } types;
 
+extern struct inode_operations pierrefs_iops;
+extern struct super_operations pierrefs_sops;
+extern struct dentry_operations pierrefs_dops;
+
 /**
  * Rights mask used to handle shifting with st_mode rights definition.
  * It allows you to skip a set of right to go to the next one.
@@ -95,6 +100,26 @@ typedef enum _types {
  * \sa find_file
  */
 #define IGNORE_WHITEOUT	0x8
+
+/**
+ * Flag to pass to the set_me() function. It indicates that the st_uid and
+ * st_gid fields will be used to define both user & group of the file
+ * \sa set_me
+ */
+#define OWNER	0x1
+/**
+ * Flag to pass to the set_me() function. It indicates that the st_mode
+ * field will be used to define the mode of a file
+ * \sa set_me
+ */
+#define MODE	0x2
+/**
+ * Flag to pass to the set_me() function. It indicates that the st_atime and
+ * st_mtime fields will be used to define both last access time and modification
+ * time
+ * \sa set_me
+ */
+#define TIME	0x4
 
 /**
  * Mask that defines all the modes of a file that can be changed using the
@@ -163,6 +188,15 @@ typedef enum _types {
  * \return	0 in case of a success, -1 otherwise. errno is set
  */
 int create_copyup(const char *path, const char *ro_path, char *rw_path);
+/**
+ * Find a path that is available in RW.
+ * If none exists, but RO path exists, then a copyup of the
+ * path will be done
+ * \param[in]	path		Relative path of the path to check
+ * \param[out]	real_path	Optionnal full path available in RW
+ * \return	0 in case of a success, -err in case of error
+ */
+int find_path(const char *path, char *real_path);
 
 /* Functions in me.c */
 /**

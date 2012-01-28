@@ -24,6 +24,8 @@
  * team.
  */
 
+#include "pierrefs.h"
+
 static int create_whiteout_worker(const char *wh_path) {
 	int err;
 	struct iattr attr;
@@ -31,7 +33,7 @@ static int create_whiteout_worker(const char *wh_path) {
 	/* Create file */
 	struct file *fd = creat_worker(wh_path, S_IRUSR);
 	if (IS_ERR(fd)) {
-		return fd;
+		return PTR_ERR(fd);
 	}
 
 	/* Set owner to root */
@@ -61,7 +63,7 @@ int create_whiteout(const char *path, char *wh_path) {
 		return -EINVAL;
 	}
 
-	if (snprintf(wh_path, PATH_MAX, "%s", context.read_write_branch) > PATH_MAX) {
+	if (snprintf(wh_path, PATH_MAX, "%s", get_context()->read_write_branch) > PATH_MAX) {
 		return -ENAMETOOLONG;
 	}
 
@@ -91,7 +93,7 @@ int find_whiteout(const char *path, char *wh_path) {
 		return -EINVAL;
 	}
 
-	if (snprintf(wh_path, PATH_MAX, "%s", context.read_write_branch) > PATH_MAX) {
+	if (snprintf(wh_path, PATH_MAX, "%s", get_context()->read_write_branch) > PATH_MAX) {
 		return -ENAMETOOLONG;
 	}
 

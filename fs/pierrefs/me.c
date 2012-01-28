@@ -43,29 +43,31 @@
  * non alterable metadata.
  */
 
+#include "pierrefs.h"
+
 int create_me(const char *me_path, struct kstat *kstbuf) {
-	int err:
+	int err;
 	struct file *fd;
 	struct iattr attr;
 
 	/* Get creation modes */
-	mode_t mode = kstbuf->st_mode;
+	umode_t mode = kstbuf->mode;
 	clear_mode_flags(mode);
 
 	/* Create file */
 	fd = creat_worker(me_path, mode);
 	if (IS_ERR(fd)) {
-		return fd;
+		return PTR_ERR(fd);
 	}
 
 	attr.ia_valid = ATTR_MODE | ATTR_UID | ATTR_GID | ATTR_ATIME | ATTR_MTIME;
-	attr.ia_mode = stbuf->st_mode;
-	attr.ia_uid = stbuf->st_uid;
-	attr.ia_gid = stbuf->st_gid;
+	attr.ia_mode = kstbuf->mode;
+	attr.ia_uid = kstbuf->uid;
+	attr.ia_gid = kstbuf->gid;
 	attr.ia_size = 0;
-	attr.ia_atime = stbuf->st_atime;
-	attr.ia_mtime = stbuf->st_mtime;
-	attr.ia_ctime = stbuf->st_ctime;
+	attr.ia_atime = kstbuf->atime;
+	attr.ia_mtime = kstbuf->mtime;
+	attr.ia_ctime = kstbuf->ctime;
 
 	/* Set all the attributes */
 	err = notify_change(fd->f_dentry->d_inode, &attr);
@@ -81,7 +83,7 @@ int find_me(const char *path, char *me_path, struct kstat *kstbuf) {
 		return -EINVAL;
 	}
 
-	if (snprintf(me_path, PATH_MAX, "%s", sb_info->read_write_branch) > PATH_MAX) {
+	if (snprintf(me_path, PATH_MAX, "%s", get_context()->read_write_branch) > PATH_MAX) {
 		return -ENAMETOOLONG;
 	}
 
@@ -93,7 +95,7 @@ int find_me(const char *path, char *me_path, struct kstat *kstbuf) {
 	strcat(me_path, tree_path + 1);
 
 	/* Now, try to get properties */
-	return vfs_lstat(me_path, stbuf);
+	return vfs_lstat(me_path, kstbuf);
 }
 
 int get_file_attr(const char *path, struct kstat *kstbuf) {
@@ -107,17 +109,17 @@ int get_file_attr(const char *path, struct kstat *kstbuf) {
 	}
 
 	/* Call worker */
-	return get_file_attr_worker(path, real_path, stbuf);
+	return get_file_attr_worker(path, real_path, kstbuf);
 }
 
 int get_file_attr_worker(const char *path, const char *real_path, struct kstat *kstbuf) {
 	int err;
 	char me;
-	struct kstat mest;
-	char me_file[MAX_PATH];
+	struct kstat kstme;
+	char me_file[PATH_MAX];
 
 	/* Look for a me file */
-	me = (find_me(path, me_file, &mest) == 0);
+	me = (find_me(path, me_file, &kstme) > 0);
 
 	/* Get attributes */
 	err = vfs_lstat(real_path, kstbuf);
@@ -127,18 +129,18 @@ int get_file_attr_worker(const char *path, const char *real_path, struct kstat *
 
 	/* If me file was present, merge results */
 	if (me) {
-		kstbuf->uid = mest.uid;
-		kstbuf->gid = mest.gid;
-		kstbuf->atime = mest.atime;
-		kstbuf->mtime = mest.mtime;
-		kstbuf->ctime = mest.ctime;
+		kstbuf->uid = kstme.uid;
+		kstbuf->gid = kstme.gid;
+		kstbuf->atime = kstme.atime;
+		kstbuf->mtime = kstme.mtime;
+		kstbuf->ctime = kstme.ctime;
 		/* Now we need to merge modes */
 		/* First clean .me. modes */
-		mest.mode = clear_mode_flags(mest.mode);
+		kstme.mode = clear_mode_flags(kstme.mode);
 		/* Then, clean real file modes */
 		kstbuf->mode &= ~VALID_MODES_MASK;
 		/* Finally, apply .me. modes */
-		kstbuf->mode |= mest.mode;
+		kstbuf->mode |= kstme.mode;
 	}
 	return 0;
 }
@@ -148,11 +150,11 @@ int set_me(const char *path, const char *real_path, struct kstat *kstbuf, int fl
 
 	/* Convert the kstbuf to a iattr struct */
 	attr.ia_valid = 0;
-	attr.ia_mode = stbuf->st_mode;
-	attr.ia_atime = stbuf->st_atime;
-	attr.ia_mtime = stbuf->st_mtime;
-	attr.ia_uid = stbuf->st_uid;
-	attr.ia_gid = stbuf->st_gid;
+	attr.ia_mode = kstbuf->mode;
+	attr.ia_atime = kstbuf->atime;
+	attr.ia_mtime = kstbuf->mtime;
+	attr.ia_uid = kstbuf->uid;
+	attr.ia_gid = kstbuf->gid;
 
 	if (is_flag_set(flags, MODE)) {
 		attr.ia_valid |= ATTR_MODE;
@@ -167,7 +169,7 @@ int set_me(const char *path, const char *real_path, struct kstat *kstbuf, int fl
 	}
 
 	/* Call the real worker */
-	return set_me(path, real_path, &attr);
+	return set_me_worker(path, real_path, &attr);
 }
 
 int set_me_worker(const char *path, const char *real_path, struct iattr *attr) {
@@ -176,16 +178,17 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr) {
 	char me_path[PATH_MAX];
 	struct kstat kstme;
 	struct file *fd;
+	umode_t mode;
 
 	/* Ensure input is correct */
 	attr->ia_valid &= ATTR_UID | ATTR_GID | ATTR_ATIME | ATTR_MTIME | ATTR_MODE;
 
 	/* Look for a me file */
-	me = (find_me(path, me_path, &stme) > 0);
+	me = (find_me(path, me_path, &kstme) > 0);
 
 	if (!me) {
 		/* Read real file info */
-		err = vfs_lstat(real_path, &stme);
+		err = vfs_lstat(real_path, &kstme);
 		if (err < 0) {
 			return err;
 		}
@@ -197,12 +200,12 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr) {
 		}
 
 		/* .me. does not exist, create it with appropriate mode */
-		mode_t mode = (attr->ia_valid & ATTR_MODE) ? attr->ia_mode : stme.st_mode;
+		mode = (attr->ia_valid & ATTR_MODE) ? attr->ia_mode : kstme.mode;
 		clear_mode_flags(mode);
 
 		fd = creat_worker(me_path, mode);
 		if (IS_ERR(fd)) {
-			return fd;
+			return PTR_ERR(fd);
 		}
 
 		/* Remove mode if it was set */
@@ -210,30 +213,30 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr) {
 
 		/* Set its time */
 		if (!is_flag_set(attr->ia_valid, (ATTR_ATIME | ATTR_MTIME))) {
-			attr->ia_atime = stme.st_atime;
-			attr->ia_mtime = stme.st_mtime;
+			attr->ia_atime = kstme.atime;
+			attr->ia_mtime = kstme.mtime;
 			attr->ia_valid |= ATTR_ATIME | ATTR_MTIME;
 		}
 
 		/* Set its owner */
 		if (!is_flag_set(attr->ia_valid, (ATTR_UID | ATTR_GID))) {
-			attr->ia_uid = stme.st_uid;
-			attr->ia_gid = stme.st_gid;
+			attr->ia_uid = kstme.uid;
+			attr->ia_gid = kstme.gid;
 			attr->ia_valid |= ATTR_UID | ATTR_GID;
 		}
 
-		err = notify_change(fd->f_dentry->d_inode, &attr);
+		err = notify_change(fd->f_dentry->d_inode, attr);
 
 		filp_close(fd, 0);
 	}
 	else {
 		fd = dbg_open(me_path, O_RDWR);
 		if (IS_ERR(fd)) {
-			return fd;
+			return PTR_ERR(fd);
 		}
 
 		/* Only change if there are changes */
-		if (attr.ia_valid) {
+		if (attr->ia_valid) {
 			err = notify_change(fd->f_dentry->d_inode, attr);
 		}
 		else {

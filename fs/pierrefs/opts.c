@@ -78,3 +78,15 @@ int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
 	 */
 	return set_me_worker(path, real_path, attr);
 }
+
+struct inode_operations pierrefs_iops = {
+	.getattr	= pierrefs_getattr,
+	.permission	= pierrefs_permission,
+	.setattr	= pierrefs_setattr,
+};
+
+struct super_operations pierrefs_sops = {
+};
+
+struct dentry_operations pierrefs_dops = {
+};

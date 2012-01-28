@@ -15,7 +15,7 @@ include config.mk
 export CONFIG_PIERREFS_FS
 
 EXTRA_CFLAGS := -I${CURDIR}/include
-EXTRA_CFLAGS += ${AUFS_DEF_CONFIG}
+EXTRA_CFLAGS += ${PIERREFS_DEF_CONFIG}
 
 MakeMod = ${MAKE} -C ${KDIR} M=${CURDIR}/fs/pierrefs EXTRA_CFLAGS="${EXTRA_CFLAGS}"
 

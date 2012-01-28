@@ -19,28 +19,6 @@ MODULE_DESCRIPTION("PierreFS " PIERREFS_VERSION
 		   " (http://pierrefs.sourceforge.net)");
 MODULE_LICENSE("GPL"); 
 
-static const struct file_system_type pierrefs_fs_type = {
-	.owner		= THIS_MODULE,
-	.name		= PIERREFS_NAME,
-	.get_sb		= pierrefs_get_sb,
-	.kill_sb	= pierrefs_kill_sb,
-	.fs_flags	= FS_REVAL_DOT,
-};
-
-static const struct super_operations pierrefs_sops = {
-};
-
-static const struct dentry_operations pierrefs_dops = {
-};
-
-static const struct inode_operations pierrefs_iops = {
-	.getattr	= pierrefs_getattr,
-	.permission	= pierrefs_permission,
-	.setattr	= pierrefs_setattr,
-};
-
-struct pierrefs_sb_info *sb_info;
-
 static int make_path(const char *s, size_t n, char **path) {
     /* Zero output */
     *path = 0;
@@ -56,7 +34,7 @@ static int make_path(const char *s, size_t n, char **path) {
 	}
 
 	/* Allocate one more ('\0') */
-	*path = kmalloc((n + 1) * sizeof(char));
+	*path = kmalloc((n + 1) * sizeof(char), GFP_NOFS);
 	if (*path) {
 		memcpy(*path, s, n);
 		*path[n] = '\0';
@@ -67,27 +45,27 @@ static int make_path(const char *s, size_t n, char **path) {
 }
 
 static int get_branches(struct super_block *sb, const char *arg) {
-	int err;
-	char *output;
+	int err, forced_ro = 0;
+	char *output, *type, *part2;
 	struct pierrefs_sb_info * sb_info = sb->s_fs_info;
 	struct inode * root_i;
 	umode_t root_m;
 	struct timespec atime, mtime, ctime;
+	struct file *filp;
 
 	/* We are expecting 2 branches, separated by : */
-	const char *part2 = strchr(arg, ':');
+	part2 = strchr(arg, ':');
 	if (!part2) {
 		return -EINVAL;
 	}
 
 	/* Look for first branch type */
-	const char *type = strchr(arg, '=');
-	int forced_ro = 0;
+	type = strchr(arg, '=');
 	/* First branch has a type */
 	if (type && type < part2) {
 		/* Get branch name */
 		err = make_path(arg, type - arg, &output);
-		if (err || !ouput) {
+		if (err || !output) {
 			return err;
 		}
 
@@ -120,7 +98,7 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	/* If second branch has a type */
 	if (type) {
 		/* Get branch name */
-		err make_path(part2, type - part2, &output);
+		err = make_path(part2, type - part2, &output);
 		if (err || !output) {
 			return err;
 		}
@@ -163,19 +141,19 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	}
 
 	/* Check for branches */
-	struct file * filp = filp_open(sb_info->read_only_branch, O_RDONLY, 0);
-	if (IS_ERR_OR_NULL(filp)) {
-		return (filp == 0) ? -EINVAL : PTR_ERR(filp);
+	filp = filp_open(sb_info->read_only_branch, O_RDONLY, 0);
+	if (IS_ERR(filp)) {
+		return PTR_ERR(filp);
 	}
 
 	/* Get superblock data from RO branch and set to ours */
-	sb->s_blocksize = filp->f_vfsmnt->sb->s_blocksize;
-	sb->s_blocksize_bits = filp->f_vfsmnt->sb->s_blocksize_bits;
+	sb->s_blocksize = filp->f_vfsmnt->mnt_sb->s_blocksize;
+	sb->s_blocksize_bits = filp->f_vfsmnt->mnt_sb->s_blocksize_bits;
 	/* Root modes - FIXME (check for me & merge) */
-	root_m = filp->f_vfsmnt->sb->s_root->d_inode->i_mode;
-	atime = filp->f_vfsmnt->sb->s_root->d_inode->i_atime;
-	mtime = filp->f_vfsmnt->sb->s_root->d_inode->i_mtime;
-	ctime = filp->f_vfsmnt->sb->s_root->d_inode->i_ctime;
+	root_m = filp->f_vfsmnt->mnt_sb->s_root->d_inode->i_mode;
+	atime = filp->f_vfsmnt->mnt_sb->s_root->d_inode->i_atime;
+	mtime = filp->f_vfsmnt->mnt_sb->s_root->d_inode->i_mtime;
+	ctime = filp->f_vfsmnt->mnt_sb->s_root->d_inode->i_ctime;
 
 	/* Finally close */
 	filp_close(filp, 0);
@@ -186,15 +164,15 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	}
 
 	filp = filp_open(sb_info->read_write_branch, O_RDONLY, 0);
-	if (IS_ERR_OR_NULL(filp)) {
-		return (filp == 0) ? -EINVAL : PTR_ERR(filp);
+	if (IS_ERR(filp)) {
+		return PTR_ERR(filp);
 	}
 	filp_close(filp, 0);
 
 	/* Allocate inode for / */
 	root_i = new_inode(sb);
-	if (IS_ERR_OR_NULL(root_i)) {
-		return (root_i == 0) ? -EINVAL : PTR_ERR(root_i);
+	if (IS_ERR(root_i)) {
+		return PTR_ERR(root_i);
 	}
 
 	/* Init it */
@@ -204,20 +182,20 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	root_i->i_mtime = mtime;
 	root_i->i_ctime = ctime;
 	root_i->i_op = &pierrefs_iops;
-	set_nlink(root_i, 2);
+	root_i->i_nlink = 2;
 
 	/* Create its directory entry */
 	sb->s_root = d_alloc_root(root_i);
-	if (IS_ERR_OR_NULL(sb->s_root)) {
+	if (IS_ERR(sb->s_root)) {
 		clear_inode(root_i);
-		return (sb->s_root == 0) ? -EINVAL : PTR_ERR(sb->s_root);
+		return PTR_ERR(sb->s_root);
 	}
-	d_set_d_op(sb->s_root, &pierrefs_dops);
+	sb->s_root->d_op = &pierrefs_dops;
 
 	/* Set super block attributes */
-	s->s_magic = PIERREFS_MAGIC;
-	s->s_op = &pierrefs_sops;
-	s->s_time_gran = 1;
+	sb->s_magic = PIERREFS_MAGIC;
+	sb->s_op = &pierrefs_sops;
+	sb->s_time_gran = 1;
 
 	/* TODO: Add directory entries */
 
@@ -227,6 +205,7 @@ static int get_branches(struct super_block *sb, const char *arg) {
 static int pierrefs_read_super(struct super_block *sb, void *raw_data,
 			       int silent) {
 	int err;
+	struct pierrefs_sb_info *sb_info;
 
 	/* Check for parameters */
 	if (!raw_data) {
@@ -234,24 +213,22 @@ static int pierrefs_read_super(struct super_block *sb, void *raw_data,
 	}
 
 	/* Allocate super block info structure */
+	sb_info =
 	sb->s_fs_info = kzalloc(sizeof(struct pierrefs_sb_info), GFP_KERNEL);
 	if (unlikely(!sb->s_fs_info)) {
 		return -ENOMEM;
 	}
 
-	/* Keep a local copy */
-	sb_info = sb->s_fs_info;
-
 	/* Get branches */
 	err = get_branches(sb, raw_data);
 	if (err) {
-		if (sb->s_fs_info->read_only_branch) {
-			kfree(sb->s_fs_info->read_only_branch);
+		if (sb_info->read_only_branch) {
+			kfree(sb_info->read_only_branch);
 		}
-		if (sb->s_fs_info->read_write_branch) {
-			kfree(sb->s_fs_info->read_write_branch);
+		if (sb_info->read_write_branch) {
+			kfree(sb_info->read_write_branch);
 		}
-		kfree(sb->s_fs_info);
+		kfree(sb_info);
 		sb->s_fs_info = NULL;
 		return err;
 	}
@@ -259,28 +236,37 @@ static int pierrefs_read_super(struct super_block *sb, void *raw_data,
 	return 0;
 }
 
-static struct dentry *pierrefs_get_sb(struct file_system_type *fs_type,
+static int pierrefs_get_sb(struct file_system_type *fs_type,
 				     int flags, const char *dev_name,
-				     void *raw_data) {
-	struct dentry *dentry = mount_nodev(fs_type, flags,
-					    raw_data, pierrefs_read_super);
-	if (IS_ERR_OR_NULL(dentry)) {
-		return 0;
-	}
+				     void *raw_data, struct vfsmount *mnt) {
+	int err = get_sb_nodev(fs_type, flags,
+					    raw_data, pierrefs_read_super, mnt);
 
-	return dentry;
+	return err;
 }
 
 static void pierrefs_kill_sb(struct super_block *sb) {
-	if (sb->s_fs_info->read_only_branch) {
-		kfree(sb->s_fs_info->read_only_branch);
+	struct pierrefs_sb_info *sb_info;
+
+	sb_info = sb->s_fs_info;
+
+	if (sb_info->read_only_branch) {
+		kfree(sb_info->read_only_branch);
 	}
-	if (sb->s_fs_info->read_write_branch) {
-		kfree(sb->s_fs_info->read_write_branch);
+	if (sb_info->read_write_branch) {
+		kfree(sb_info->read_write_branch);
 	}
 
 	kill_litter_super(sb);
 }
+
+static struct file_system_type pierrefs_fs_type = {
+	.owner		= THIS_MODULE,
+	.name		= PIERREFS_NAME,
+	.get_sb		= pierrefs_get_sb,
+	.kill_sb	= pierrefs_kill_sb,
+	.fs_flags	= FS_REVAL_DOT,
+};
 
 static int __init init_pierrefs_fs(void) {
 	return register_filesystem(&pierrefs_fs_type);
