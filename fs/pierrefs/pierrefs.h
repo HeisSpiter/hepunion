@@ -172,10 +172,12 @@ extern struct dentry_operations pierrefs_dops;
 #define open_worker(p, f) dbg_open(p, f)
 #define open_worker_2(p, f, m) dbg_open_2(p, f, m)
 #define creat_worker(p, m) dbg_creat(p, m)
+#define mkdir_worker(p, m) dbg_mkdir(p, m)
 #else
 #define open_worker(p, f) filp_open(p, f, 0)
 #define open_worker_2(p, f, m) filp_open(p, f, m)
 #define creat_worker(p, m) filp_creat(p, m)
+#define mkdir_worker(p, m) mkdir(p, m)
 #endif
 
 /* Functions in cow.c */
@@ -328,6 +330,14 @@ int get_full_path(const struct inode *inode, const struct dentry *dentry, char *
  */
 int get_relative_path(const struct inode *inode, const struct dentry *dentry, char *path);
 /**
+ * Implementation taken from Linux kernel. It's here to allow creation of a directory
+ * using pathname.
+ * \param[in]	pathname	Directory to create
+ * \param[in]	mode		Mode to set to the directory (see mkdir man page)
+ * \return	-0 in case of a success, -err otherwise
+ */
+long mkdir(const char *pathname, int mode);
+/**
  * Worker for debug purpose. It first checks opening mode and branch, and then call open.
  * This is used to catch bad calls to RO branch
  * \param[in]	pathname	File to open
@@ -352,6 +362,14 @@ struct file* dbg_open_2(const char *pathname, int flags, mode_t mode);
  * \return	-1 in case of a failure, 0 otherwise. errno is set
  */
 struct file* dbg_creat(const char *pathname, mode_t mode);
+/**
+ * Worker for debug purpose. It checks if the directory is to be created on the right branch
+ * and then call mkdir
+ * \param[in]	pathname	Directory to create
+ * \param[in]	mode		Mode to set to the directory (see mkdir man page)
+ * \return	-1 in case of a failure, 0 otherwise. errno is set
+ */
+int dbg_mkdir(const char *pathname, mode_t mode);
 
 /* Functions in wh.c */
 /**

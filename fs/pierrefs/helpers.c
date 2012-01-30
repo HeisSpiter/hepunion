@@ -302,6 +302,38 @@ int get_relative_path(const struct inode *inode, const struct dentry *dentry, ch
 	return -EINVAL;
 }
 
+/* Imported for Linux kernel */
+long mkdir(const char *pathname, int mode)
+{
+	int error = 0;
+	char * tmp;
+
+	tmp = getname(pathname);
+	error = PTR_ERR(tmp);
+	if (!IS_ERR(tmp)) {
+		struct dentry *dentry;
+		struct nameidata nd;
+
+		error = path_lookup(tmp, LOOKUP_PARENT, &nd);
+		if (error)
+			goto out;
+		dentry = lookup_create(&nd, 1);
+		error = PTR_ERR(dentry);
+		if (!IS_ERR(dentry)) {
+			if (!IS_POSIXACL(nd.dentry->d_inode))
+				mode &= ~current->fs->umask;
+				error = vfs_mkdir(nd.dentry->d_inode, dentry, mode);
+				dput(dentry);
+			}
+			mutex_unlock(&nd.dentry->d_inode->i_mutex);
+			path_release(&nd);
+out:
+		putname(tmp);
+	}
+
+	return error;
+}
+
 struct file* dbg_open(const char *pathname, int flags) {
 	if (flags & (O_CREAT | O_WRONLY | O_RDWR)) {
 		if (strncmp(pathname, get_context()->read_only_branch, get_context()->ro_len) == 0) {
@@ -328,4 +360,12 @@ struct file* dbg_creat(const char *pathname, mode_t mode) {
 	}
 
 	return filp_creat(pathname, mode);
+}
+
+int dbg_mkdir(const char *pathname, mode_t mode) {
+	if (strncmp(pathname, get_context()->read_only_branch, get_context()->ro_len) == 0) {
+		return -EINVAL;
+	}
+
+	return mkdir(pathname, mode);
 }

@@ -45,12 +45,10 @@ static int create_whiteout_worker(const char *wh_path) {
 	filp_close(fd, 0);
 
 	if (err < 0) {
-		filp_close(fd, 0);
 		vfs_unlink(fd->f_dentry->d_inode, fd->f_dentry);
 		return err;
 	}
 
-	filp_close(fd, 0);
 	return 0;
 }
 

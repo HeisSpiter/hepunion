@@ -37,7 +37,114 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path) {
 }
 
 int find_path_worker(const char *path, char *real_path) {
-	return -1;
+	/* Try to find that tree */
+	int err;
+	char read_only[PATH_MAX];
+	char tree_path[PATH_MAX];
+	char real_tree_path[PATH_MAX];
+	types tree_path_present;
+	char *old_directory;
+	char *directory;
+	struct kstat kstbuf;
+	struct file *dir;
+	struct iattr attr;
+
+	/* Get path without rest */
+	char *last = strrchr(path, '/');
+	if (!last) {
+		return -EINVAL;
+	}
+
+	memcpy(tree_path, path, last - path + 1);
+	tree_path[last - path + 1] = '\0';
+	tree_path_present = find_file(tree_path, real_tree_path, 0);
+	/* Path should at least exist RO */
+	if (tree_path_present < 0) {
+		return -tree_path_present;
+	}
+	/* Path is already present, nothing to do */
+	else if (tree_path_present == READ_WRITE) {
+		/* Execpt filing in output buffer */
+		if (snprintf(real_path, PATH_MAX, "%s%s", get_context()->read_write_branch, path) > PATH_MAX) {
+			return -ENAMETOOLONG;
+		}
+
+		return 0;
+	}
+
+	/* Once here, recreating tree by COW is mandatory */
+	if (snprintf(real_path, PATH_MAX, "%s/", get_context()->read_write_branch) > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+
+	/* Also prepare for RO branch */
+	if (snprintf(read_only, PATH_MAX, "%s/", get_context()->read_only_branch) > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+
+	/* If that's last (creating dir at root) */
+	if (last == path) {
+		if (snprintf(real_path, PATH_MAX, "%s/", get_context()->read_write_branch) > PATH_MAX) {
+			return -ENAMETOOLONG;
+		}
+
+		return 0;
+	}
+
+	/* Really get directory */
+	old_directory = (char *)path + 1;
+	directory = strchr(old_directory, '/');
+	while (directory) {
+		/* Append... */
+		strncat(read_only, old_directory, (directory - old_directory) / sizeof(char));
+		strncat(real_path, old_directory, (directory - old_directory) / sizeof(char));
+
+		/* Only create if it doesn't already exist */
+		if (vfs_lstat(real_path, &kstbuf) < 0) {
+			/* Get previous dir properties */
+			err = vfs_lstat(read_only, &kstbuf);
+			if (err < 0) {
+				return err;
+			}
+
+			/* Create directory */
+			err = mkdir_worker(real_path, kstbuf.mode);
+			if (err < 0) {
+				return err;
+			}
+
+			/* Now, set all the previous attributes */
+			dir = dbg_open(real_path, O_RDWR);
+			if (IS_ERR(dir)) {
+				/* FIXME: Should delete in case of failure */
+				return PTR_ERR(dir);
+			}
+
+			attr.ia_valid = ATTR_ATIME | ATTR_MTIME | ATTR_UID | ATTR_GID;
+			attr.ia_atime = kstbuf.atime;
+			attr.ia_mtime = kstbuf.mtime;
+			attr.ia_uid = kstbuf.uid;
+			attr.ia_gid = kstbuf.gid;
+
+			err = notify_change(dir->f_dentry->d_inode, &attr);
+			filp_close(dir, 0);
+
+			if (err < 0) {
+				vfs_unlink(dir->f_dentry->d_inode, dir->f_dentry);
+				return err;
+			}
+		}
+
+		/* Next iteration (skip /) */
+		old_directory = directory;
+		directory = strchr(directory + 1, '/');
+	}
+
+	/* Append name to create */
+	strcat(real_path, last);
+
+	/* It's over */
+	return 0;
 }
 
 int find_path(const char *path, char *real_path) {
