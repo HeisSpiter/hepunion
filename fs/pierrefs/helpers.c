@@ -273,6 +273,31 @@ Elong:
 	return -ENAMETOOLONG;
 }
 
+struct dentry * get_path_dentry(const char *pathname, int flag) {
+	int err;
+	char * tmp;
+	struct dentry *dentry;
+	struct nameidata nd;
+
+	tmp = getname(pathname);
+	if (IS_ERR(tmp)) {
+		return (struct dentry *)tmp;
+	}
+
+	err = path_lookup(tmp, flag, &nd);
+	if (err) {
+		putname(tmp);
+		return ERR_PTR(err);
+	}
+
+	dentry = nd.dentry;
+	dget(dentry);
+	path_release(&nd);
+	putname(tmp);
+
+	return dentry;
+}
+
 int get_relative_path(const struct inode *inode, const struct dentry *dentry, char *path) {
 	int len;
 	char real_path[PATH_MAX];

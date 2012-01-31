@@ -330,6 +330,13 @@ int get_full_path(const struct inode *inode, const struct dentry *dentry, char *
  */
 int get_relative_path(const struct inode *inode, const struct dentry *dentry, char *path);
 /**
+ * Get the dentry representing the given path.
+ * \param[in]	pathname	Pathname to lookup
+ * \param[in]	flag		Flag to use for opening
+ * \return dentry, or -err in case of error
+ */
+struct dentry* get_path_dentry(const char *pathname, int flag);
+/**
  * Implementation taken from Linux kernel. It's here to allow creation of a directory
  * using pathname.
  * \param[in]	pathname	Directory to create

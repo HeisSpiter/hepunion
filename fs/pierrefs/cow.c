@@ -46,8 +46,8 @@ int find_path_worker(const char *path, char *real_path) {
 	char *old_directory;
 	char *directory;
 	struct kstat kstbuf;
-	struct file *dir;
 	struct iattr attr;
+	struct dentry *dentry;
 
 	/* Get path without rest */
 	char *last = strrchr(path, '/');
@@ -114,10 +114,10 @@ int find_path_worker(const char *path, char *real_path) {
 			}
 
 			/* Now, set all the previous attributes */
-			dir = dbg_open(real_path, O_RDWR);
-			if (IS_ERR(dir)) {
+			dentry = get_path_dentry(real_path, LOOKUP_DIRECTORY);
+			if (IS_ERR(dentry)) {
 				/* FIXME: Should delete in case of failure */
-				return PTR_ERR(dir);
+				return PTR_ERR(dentry);
 			}
 
 			attr.ia_valid = ATTR_ATIME | ATTR_MTIME | ATTR_UID | ATTR_GID;
@@ -126,13 +126,15 @@ int find_path_worker(const char *path, char *real_path) {
 			attr.ia_uid = kstbuf.uid;
 			attr.ia_gid = kstbuf.gid;
 
-			err = notify_change(dir->f_dentry->d_inode, &attr);
-			filp_close(dir, 0);
+			err = notify_change(dentry->d_inode, &attr);
 
 			if (err < 0) {
-				vfs_unlink(dir->f_dentry->d_inode, dir->f_dentry);
+				vfs_unlink(dentry->d_inode, dentry);
+				dput(dentry);
 				return err;
 			}
+
+			dput(dentry);
 		}
 
 		/* Next iteration (skip /) */

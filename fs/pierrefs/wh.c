@@ -29,6 +29,7 @@
 static int create_whiteout_worker(const char *wh_path) {
 	int err;
 	struct iattr attr;
+	struct dentry *dentry;
 
 	/* Create file */
 	struct file *fd = creat_worker(wh_path, S_IRUSR);
@@ -42,14 +43,21 @@ static int create_whiteout_worker(const char *wh_path) {
 	attr.ia_uid = 0;
 
 	err = notify_change(fd->f_dentry->d_inode, &attr);
-	filp_close(fd, 0);
-
-	if (err < 0) {
-		vfs_unlink(fd->f_dentry->d_inode, fd->f_dentry);
+	if (err == 0) {
 		return err;
 	}
 
-	return 0;
+	/* Save dentry */
+	dentry = fd->f_dentry;
+	dget(dentry);
+
+	/* Close file and delete it */
+	filp_close(fd, 0);
+	vfs_unlink(fd->f_dentry->d_inode, fd->f_dentry);
+
+	dput(dentry);
+
+	return err;
 }
 
 int create_whiteout(const char *path, char *wh_path) {
