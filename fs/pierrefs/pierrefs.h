@@ -386,6 +386,20 @@ int dbg_mkdir(const char *pathname, mode_t mode);
  * \return	0 in case of a success, -1 otherwise. errno is set
  */
 int find_whiteout(const char *path, char *wh_path);
+/**
+ * Unlink a file on RW branch, and whiteout possible file on RO branch.
+ * \param[in]	path		Relative path of the file to unlink
+ * \param[in]	rw_path		Full path of the file on RW branch to unlink
+ * \param[in]	has_ro_sure	Optional, set to 1 if you check that file exists on RO
+ * \return	0 in case of a success, -1 otherwise. errno is set
+ */
+int unlink_rw_file(const char *path, const char *rw_path, char has_ro_sure);
+/**
+ * Unlink the whiteout hidding a file.
+ * \param[in]	path	Relative path of the file to "restore"
+ * \return	0 in case of a success, -1 otherwise. errno is set
+ */
+int unlink_whiteout(const char *path);
 
 #endif /* #ifdef __KERNEL__ */
 

@@ -113,3 +113,82 @@ int find_whiteout(const char *path, char *wh_path) {
 	/* Does it exists */
 	return vfs_lstat(wh_path, &kstbuf);
 }
+
+int unlink_rw_file(const char *path, const char *rw_path, char has_ro_sure) {
+	int err;
+	char has_ro = 0;
+	char ro_path[PATH_MAX];
+	char wh_path[PATH_MAX];
+	struct dentry *dentry;
+
+
+	/* Check if RO exists */
+	if (!has_ro_sure && find_file(path, ro_path, MUST_READ_ONLY) >= 0) {
+		has_ro = 1;
+	}
+	else if (has_ro_sure) {
+		has_ro = 1;
+	}
+
+	/* Check if user can unlink file */
+	err = can_remove(path, rw_path);
+	if (err < 0) {
+		return err;
+	}
+
+	/* Get file dentry */
+	dentry = get_path_dentry(rw_path, LOOKUP_REVAL);
+	if (IS_ERR(dentry)) {
+		return PTR_ERR(dentry);
+	}
+
+	/* Remove file */
+	err = vfs_unlink(dentry->d_inode, dentry);
+	dput(dentry);
+
+	if (err < 0) {
+		return err;
+	}
+
+	/* Whiteout potential RO file */
+	if (has_ro) {
+		create_whiteout(path, wh_path);
+	}
+
+	return 0;
+}
+
+int unlink_whiteout(const char *path) {
+	int err;
+	char wh_path[PATH_MAX];
+	struct dentry *dentry;
+
+	/* Find name */
+	char *tree_path = strrchr(path, '/');
+	if (!tree_path) {
+		return -EINVAL;
+	}
+
+	if (snprintf(wh_path, PATH_MAX, "%s", get_context()->read_write_branch) > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+
+	/* Copy path (and /) */
+	strncat(wh_path, path, tree_path - path + 1);
+	/* Append wh */
+	strcat(wh_path, ".wh.");
+	/* Finalement copy name */
+	strcat(wh_path, tree_path + 1);
+
+	/* Get file dentry */
+	dentry = get_path_dentry(wh_path, LOOKUP_REVAL);
+	if (IS_ERR(dentry)) {
+		return PTR_ERR(dentry);
+	}
+
+	/* Now unlink whiteout */
+	err = vfs_unlink(dentry->d_inode, dentry);
+	dput(dentry);
+
+	return err;
+}
