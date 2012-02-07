@@ -173,11 +173,19 @@ extern struct dentry_operations pierrefs_dops;
 #define open_worker_2(p, f, m) dbg_open_2(p, f, m)
 #define creat_worker(p, m) dbg_creat(p, m)
 #define mkdir_worker(p, m) dbg_mkdir(p, m)
+#define mknod_worker(p, m, d) dbg_mknod(p, m, d)
+#define mkfifo_worker(p, m) dbg_mkfifo(p, m)
+#define symlink_worker(o, n) dbg_symlink(o, n)
+#define link_worker(o, n) dbg_link(o, n)
 #else
 #define open_worker(p, f) filp_open(p, f, 0)
 #define open_worker_2(p, f, m) filp_open(p, f, m)
 #define creat_worker(p, m) filp_creat(p, m)
 #define mkdir_worker(p, m) mkdir(p, m)
+#define mknod_worker(p, m, d) mknod(p, m, d)
+#define mkfifo_worker(p, m) mkfifo(p, m)
+#define symlink_worker(o, n) symlink(o, n)
+#define link_worker(o, n) link(o, n)
 #endif
 
 /* Functions in cow.c */
