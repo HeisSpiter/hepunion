@@ -377,6 +377,39 @@ struct file* dbg_creat(const char *pathname, mode_t mode);
  * \return	-1 in case of a failure, 0 otherwise. errno is set
  */
 int dbg_mkdir(const char *pathname, mode_t mode);
+/**
+ * Worker for debug purpose. It checks if the special file is to be created on the right branch
+ * and then call mknod
+ * \param[in]	pathname	Special file to create
+ * \param[in]	mode		Mode to set to the directory (see mknod man page)
+ * \param[in]	dev		Attributes of the device (see mknod man page)
+ * \return	-1 in case of a failure, 0 otherwise. errno is set
+ */
+int dbg_mknod(const char *pathname, mode_t mode, dev_t dev);
+/**
+ * Worker for debug purpose. It checks if the FIFO is to be created on the right branch
+ * and then call mkfifo
+ * \param[in]	pathname	FIFO to create
+ * \param[in]	mode		Mode to set to the directory (see mkfifo man page)
+ * \return	-1 in case of a failure, 0 otherwise. errno is set
+ */
+int dbg_mkfifo(const char *pathname, mode_t mode);
+/**
+ * Worker for debug purpose. It checks if the symlink is to be created on the right branch
+ * and then call symlink
+ * \param[in]	oldpath	Target of the symlink
+ * \param[in]	newpath	Symlink to create
+ * \return	-1 in case of a failure, 0 otherwise. errno is set
+ */
+int dbg_symlink(const char *oldpath, const char *newpath);
+/**
+ * Worker for debug purpose. It checks if the link is to be created on the right branch
+ * and then call link
+ * \param[in]	oldpath	Target of the link
+ * \param[in]	newpath	Link to create
+ * \return	-1 in case of a failure, 0 otherwise. errno is set
+ */
+int dbg_link(const char *oldpath, const char *newpath);
 
 /* Functions in wh.c */
 /**

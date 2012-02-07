@@ -275,25 +275,17 @@ Elong:
 
 struct dentry * get_path_dentry(const char *pathname, int flag) {
 	int err;
-	char * tmp;
 	struct dentry *dentry;
 	struct nameidata nd;
 
-	tmp = getname(pathname);
-	if (IS_ERR(tmp)) {
-		return (struct dentry *)tmp;
-	}
-
-	err = path_lookup(tmp, flag, &nd);
+	err = __user_walk(pathname, flag, &nd);
 	if (err) {
-		putname(tmp);
 		return ERR_PTR(err);
 	}
 
 	dentry = nd.dentry;
 	dget(dentry);
 	path_release(&nd);
-	putname(tmp);
 
 	return dentry;
 }
@@ -328,33 +320,158 @@ int get_relative_path(const struct inode *inode, const struct dentry *dentry, ch
 }
 
 /* Imported for Linux kernel */
-long mkdir(const char *pathname, int mode)
-{
+long mkdir(const char *pathname, int mode) {
 	int error = 0;
 	char * tmp;
+	struct dentry *dentry;
+	struct nameidata nd;
 
 	tmp = getname(pathname);
-	error = PTR_ERR(tmp);
-	if (!IS_ERR(tmp)) {
+	if (IS_ERR(tmp))
+		return PTR_ERR(tmp);
+
+	error = path_lookup(tmp, LOOKUP_PARENT, &nd);
+	if (error)
+		goto out;
+	dentry = lookup_create(&nd, 1);
+	error = PTR_ERR(dentry);
+
+	if (!IS_ERR(dentry)) {
+		if (!IS_POSIXACL(nd.dentry->d_inode))
+			mode &= ~current->fs->umask;
+		error = vfs_mkdir(nd.dentry->d_inode, dentry, mode);
+		dput(dentry);
+	}
+	mutex_unlock(&nd.dentry->d_inode->i_mutex);
+	path_release(&nd);
+out:
+	putname(tmp);
+
+	return error;
+}
+
+/* Imported from Linux kernel */
+long mknod(const char *pathname, int mode, unsigned dev) {
+	int error = 0;
+	char * tmp;
+	struct dentry * dentry;
+	struct nameidata nd;
+
+	if (S_ISDIR(mode))
+		return -EPERM;
+	tmp = getname(pathname);
+	if (IS_ERR(tmp))
+		return PTR_ERR(tmp);
+
+	error = path_lookup(tmp, LOOKUP_PARENT, &nd);
+	if (error)
+		goto out;
+	dentry = lookup_create(&nd, 0);
+	error = PTR_ERR(dentry);
+
+	if (!IS_POSIXACL(nd.dentry->d_inode))
+		mode &= ~current->fs->umask;
+	if (!IS_ERR(dentry)) {
+		switch (mode & S_IFMT) {
+			case 0: case S_IFREG:
+				error = vfs_create(nd.dentry->d_inode,dentry,mode,&nd);
+				break;
+			case S_IFCHR: case S_IFBLK:
+				error = vfs_mknod(nd.dentry->d_inode,dentry,mode, new_decode_dev(dev));
+				break;
+			case S_IFIFO: case S_IFSOCK:
+				error = vfs_mknod(nd.dentry->d_inode,dentry,mode,0);
+				break;
+			case S_IFDIR:
+				error = -EPERM;
+				break;
+			default:
+				error = -EINVAL;
+		}
+		dput(dentry);
+	}
+	mutex_unlock(&nd.dentry->d_inode->i_mutex);
+	path_release(&nd);
+out:
+	putname(tmp);
+
+	return error;
+}
+
+int mkfifo(const char *pathname, int mode) {
+	/* Ensure FIFO mode is set */
+	mode |= S_IFIFO;
+
+	/* Call mknod */
+	return mknod(pathname, mode, 0);
+}
+
+/* Imported from Linux kernel */
+long symlink(const char *oldname, const char *newname) {
+	int error = 0;
+	char * from;
+	char * to;
+
+	from = getname(oldname);
+	if(IS_ERR(from))
+		return PTR_ERR(from);
+	to = getname(newname);
+	error = PTR_ERR(to);
+	if (!IS_ERR(to)) {
 		struct dentry *dentry;
 		struct nameidata nd;
 
-		error = path_lookup(tmp, LOOKUP_PARENT, &nd);
+		error = path_lookup(to, LOOKUP_PARENT, &nd);
 		if (error)
 			goto out;
-		dentry = lookup_create(&nd, 1);
+		dentry = lookup_create(&nd, 0);
 		error = PTR_ERR(dentry);
 		if (!IS_ERR(dentry)) {
-			if (!IS_POSIXACL(nd.dentry->d_inode))
-				mode &= ~current->fs->umask;
-				error = vfs_mkdir(nd.dentry->d_inode, dentry, mode);
-				dput(dentry);
-			}
-			mutex_unlock(&nd.dentry->d_inode->i_mutex);
-			path_release(&nd);
+			error = vfs_symlink(nd.dentry->d_inode, dentry, from, S_IALLUGO);
+			dput(dentry);
+		}
+		mutex_unlock(&nd.dentry->d_inode->i_mutex);
+		path_release(&nd);
 out:
-		putname(tmp);
+		putname(to);
 	}
+	putname(from);
+	return error;
+}
+
+/* Imported from Linux kernel - simplified */
+long link(const char *oldname, const char *newname) {
+	struct dentry *new_dentry;
+	struct nameidata nd, old_nd;
+	int error;
+	char * to;
+
+	to = getname(newname);
+	if (IS_ERR(to))
+		return PTR_ERR(to);
+
+	error = __user_walk(oldname, 0, &old_nd);
+	if (error)
+		goto exit;
+	error = path_lookup(to, LOOKUP_PARENT, &nd);
+	if (error)
+		goto out;
+	error = -EXDEV;
+	if (old_nd.mnt != nd.mnt)
+		goto out_release;
+	new_dentry = lookup_create(&nd, 0);
+	error = PTR_ERR(new_dentry);
+	if (!IS_ERR(new_dentry)) {
+		error = vfs_link(old_nd.dentry, nd.dentry->d_inode, new_dentry);
+		dput(new_dentry);
+	}
+	mutex_unlock(&nd.dentry->d_inode->i_mutex);
+out_release:
+	path_release(&nd);
+out:
+	path_release(&old_nd);
+exit:
+	putname(to);
 
 	return error;
 }
@@ -393,4 +510,36 @@ int dbg_mkdir(const char *pathname, mode_t mode) {
 	}
 
 	return mkdir(pathname, mode);
+}
+
+int dbg_mknod(const char *pathname, mode_t mode, dev_t dev) {
+	if (strncmp(pathname, get_context()->read_only_branch, get_context()->ro_len) == 0) {
+		return -EINVAL;
+	}
+
+	return mknod(pathname, mode, dev);
+}
+
+int dbg_mkfifo(const char *pathname, mode_t mode) {
+	if (strncmp(pathname, get_context()->read_only_branch, get_context()->ro_len) == 0) {
+		return -EINVAL;
+	}
+
+	return mkfifo(pathname, mode);
+}
+
+int dbg_symlink(const char *oldpath, const char *newpath) {
+	if (strncmp(newpath, get_context()->read_only_branch, get_context()->ro_len) == 0) {
+		return -EINVAL;
+	}
+
+	return symlink(oldpath, newpath);
+}
+
+int dbg_link(const char *oldpath, const char *newpath) {
+	if (strncmp(newpath, get_context()->read_only_branch, get_context()->ro_len) == 0) {
+		return -EINVAL;
+	}
+
+	return link(oldpath, newpath);
 }
