@@ -129,7 +129,7 @@ int find_path_worker(const char *path, char *real_path) {
 			err = notify_change(dentry->d_inode, &attr);
 
 			if (err < 0) {
-				vfs_unlink(dentry->d_inode, dentry);
+				vfs_rmdir(dentry->d_inode, dentry);
 				dput(dentry);
 				return err;
 			}
