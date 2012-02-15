@@ -32,8 +32,225 @@
 
 #include "pierrefs.h"
 
+typedef struct {
+	const char *ro_path;
+	const char *path;
+} readdir_context;
+
+int copy_child(void *buf, const char *name, int namlen, loff_t offset, ino_t ino, unsigned d_type) {
+	char tmp_path[PATH_MAX];
+	char tmp_ro_path[PATH_MAX];
+	char tmp_rw_path[PATH_MAX];
+	readdir_context *ctx = (readdir_context*)buf;
+
+	/* Don't copy special entries */
+	if (is_special(name, namlen)) {
+		return 0;
+	}
+
+	if (snprintf(tmp_ro_path, PATH_MAX, "%s/%s", ctx->ro_path, name) > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+
+	if (snprintf(tmp_path, PATH_MAX, "%s/%s", ctx->path, name) > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+
+	/* Recreate everything recursively */
+	return create_copyup(tmp_path, tmp_ro_path, tmp_rw_path);
+}
+
 int create_copyup(const char *path, const char *ro_path, char *rw_path) {
-	return -1;
+	/* Once here, two things are sure:
+	 * RO exists, RW does not
+	 */
+	int err, len;
+	char tmp[PATH_MAX];
+	char me_path[PATH_MAX];
+	struct kstat kstbuf;
+	struct file *ro_fd, *rw_fd;
+	ssize_t rcount;
+	unsigned char buf[MAXSIZE];
+	struct dentry *dentry;
+	struct iattr attr;
+	readdir_context ctx;
+
+	/* Get file attributes */
+	err = get_file_attr_worker(path, ro_path, &kstbuf);
+	if (err < 0) {
+		return err;
+	}
+
+	/* Copyup dirs if required */
+	err = find_path(path, rw_path);
+	if (err < 0) {
+		return err;
+	}
+
+	/* Handle the file properly */
+	switch (kstbuf.mode & S_IFMT) {
+		/* Socket - Not supported */
+		case S_IFSOCK:
+			return -EINVAL; /* FIXME */
+
+		/* Symbolic link */
+		case S_IFLNK:
+			/* Read destination */
+			len = readlink(ro_path, tmp, sizeof(tmp) - 1);
+			if (len < 0) {
+				return len;
+			}
+			tmp[len] = '\0';
+
+			/* And create a new symbolic link */
+			err = symlink_worker(tmp, rw_path);
+			if (err < 0) {
+				return err;
+			}
+			break;
+
+		/* Regular file */
+		case S_IFREG:
+			/* Open read only... */
+			ro_fd = open_worker(ro_path, O_RDONLY);
+			if (IS_ERR(ro_fd)) {
+				return PTR_ERR(ro_fd);
+			}
+
+			/* Then, create copyup... */
+			rw_fd = open_worker_2(rw_path, O_CREAT | O_WRONLY | O_EXCL, kstbuf.mode); 
+			if (IS_ERR(rw_fd)) {
+				filp_close(ro_fd, 0);
+				return PTR_ERR(rw_fd);
+			}
+
+
+			if (kstbuf.size > 0) {
+				/* Here we could use mmap. But since we are reading and writing
+				 * in a non random way, read & write are faster (read ahead, lazy-write)
+				 */
+				for (;;) {
+					rcount = vfs_read(ro_fd, buf, MAXSIZE, &ro_fd->f_pos);
+					if (rcount < 0) {
+						break;
+					}
+
+					rcount = vfs_write(rw_fd, buf, rcount, &rw_fd->f_pos);
+					if (rcount < 0) {
+						filp_close(ro_fd, 0);
+						filp_close(rw_fd, 0);
+
+						/* Delete copyup */
+						dentry = get_path_dentry(rw_path, LOOKUP_REVAL);
+						if (!IS_ERR(dentry)) {
+							vfs_unlink(dentry->d_inode, dentry);
+							dput(dentry);
+						}
+
+						return rcount;
+					}
+				}
+			}
+
+			/* Close files */
+			filp_close(ro_fd, 0);
+			filp_close(rw_fd, 0);
+			break;
+
+		case S_IFBLK:
+		case S_IFCHR:
+			/* Recreate a node */
+			err = mknod_worker(rw_path, kstbuf.mode, kstbuf.rdev);
+			if (err < 0) {
+				return err;
+			}
+			break;
+
+		case S_IFDIR:
+			/* Recreate a dir */
+			err = mkdir_worker(rw_path, kstbuf.mode);
+			if (err < 0) {
+				return err;
+			}
+
+			/* Recreate dir structure */
+			ro_fd = open_worker(ro_path, O_RDONLY);
+			if (IS_ERR(ro_fd)) {
+				dentry = get_path_dentry(rw_path, LOOKUP_REVAL);
+				if (IS_ERR(dentry)) {
+					return PTR_ERR(ro_fd);
+				}
+
+				vfs_unlink(dentry->d_inode, dentry);
+				dput(dentry);
+				return PTR_ERR(ro_fd);
+			}
+
+			/* Create a copyup of each file & dir */
+			ctx.ro_path = ro_path;
+			ctx.path = path;
+			err = vfs_readdir(ro_fd, copy_child, &ctx);
+			filp_close(ro_fd, 0);
+
+			/* Handle failure */
+			if (err < 0) {
+				dentry = get_path_dentry(rw_path, LOOKUP_REVAL);
+				if (IS_ERR(dentry)) {
+					return err;
+				}
+
+				vfs_unlink(dentry->d_inode, dentry);
+				dput(dentry);
+				return err;
+			}
+
+			break;
+
+		case S_IFIFO:
+			/* Recreate FIFO */
+			err = mkfifo_worker(rw_path, kstbuf.mode);
+			if (err < 0) {
+				return err;
+			}
+			break;
+	}
+
+	/* Get dentry for the copyup */
+	dentry = get_path_dentry(rw_path, LOOKUP_REVAL);
+	if (IS_ERR(dentry)) {
+		return PTR_ERR(dentry);
+	}
+
+	/* Set copyup attributes */
+	attr.ia_valid = ATTR_ATIME | ATTR_MTIME | ATTR_UID | ATTR_GID | ATTR_MODE;
+	attr.ia_atime = kstbuf.atime;
+	attr.ia_mtime = kstbuf.mtime;
+	attr.ia_uid = kstbuf.uid;
+	attr.ia_gid = kstbuf.gid;
+	attr.ia_mode = kstbuf.mode;
+
+	err = notify_change(dentry->d_inode, &attr);
+
+	if (err < 0) {
+		vfs_unlink(dentry->d_inode, dentry);
+		dput(dentry);
+		return err;
+	}
+
+	dput(dentry);
+
+	/* Check if there was a me and remove */
+	if (find_me(path, me_path, &kstbuf) >= 0) {
+		dentry = get_path_dentry(me_path, LOOKUP_REVAL);
+		if (IS_ERR(dentry)) {
+			return 0;
+		}
+
+		vfs_unlink(dentry->d_inode, dentry);
+		dput(dentry);
+	}
+
+	return 0;
 }
 
 int find_path_worker(const char *path, char *real_path) {

@@ -476,6 +476,31 @@ exit:
 	return error;
 }
 
+/* Imported from Linux kernel */
+long readlink(const char *path, char *buf, int bufsiz) {
+	struct inode *inode;
+	struct nameidata nd;
+	int error;
+
+	if (bufsiz <= 0)
+		return -EINVAL;
+
+	error = __user_walk(path, 0, &nd);
+	if (!error) {
+		inode = nd.dentry->d_inode;
+		error = -EINVAL;
+		if (inode->i_op && inode->i_op->readlink) {
+			error = security_inode_readlink(nd.dentry);
+			if (!error) {
+				touch_atime(nd.mnt, nd.dentry);
+				error = inode->i_op->readlink(nd.dentry, buf, bufsiz);
+			}
+		}
+		path_release(&nd);
+	}
+	return error;
+}
+
 struct file* dbg_open(const char *pathname, int flags) {
 	if (flags & (O_CREAT | O_WRONLY | O_RDWR)) {
 		if (strncmp(pathname, get_context()->read_only_branch, get_context()->ro_len) == 0) {

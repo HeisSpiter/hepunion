@@ -25,6 +25,7 @@
 #include <linux/namei.h>
 #include <linux/mount.h>
 #include <linux/module.h>
+#include <linux/security.h>
 
 struct pierrefs_sb_info {
 	/**
@@ -122,6 +123,11 @@ extern struct dentry_operations pierrefs_dops;
 #define TIME	0x4
 
 /**
+ * Defines the maximum size that will be used for buffers to manipulate files
+ */
+#define MAXSIZE 4096
+
+/**
  * Mask that defines all the modes of a file that can be changed using the
  * metadata mechanism
  */
@@ -145,6 +151,17 @@ extern struct dentry_operations pierrefs_dops;
  * \return	1 if all seeked flags are set, 0 otherwise
  */
 #define is_flag_set(s, f) ((s & f) == f)
+
+/**
+ * Check if the given directory entry is a special file (. or ..)
+ * \param[in]	e	dir_entry structure pointer
+ * \return	1 if that's a special file, 0 otherwise
+ * \warning	You MUST have defined d_reclen field the structure before using this macro
+ */
+#define is_special(n, l)		\
+	((l == 1 && n[0] == '.') ||	\
+	 (l == 2 &&	n[0] == '.' &&	\
+	  n[1] == '.'))
 
 /**
  * Get current context associated with mount point
@@ -345,13 +362,46 @@ int get_relative_path(const struct inode *inode, const struct dentry *dentry, ch
  */
 struct dentry* get_path_dentry(const char *pathname, int flag);
 /**
+ * Implementation taken from Linux kernel. It's here to allow creation of a symlink
+ * using pathname.
+ * \param[in]	oldname	Target of the symlink
+ * \param[in]	newname	Symlink path
+ * \return	0 in case of a success, -err otherwise
+ */
+long symlink(const char *oldname, const char *newname);
+/**
  * Implementation taken from Linux kernel. It's here to allow creation of a directory
  * using pathname.
  * \param[in]	pathname	Directory to create
  * \param[in]	mode		Mode to set to the directory (see mkdir man page)
- * \return	-0 in case of a success, -err otherwise
+ * \return	0 in case of a success, -err otherwise
  */
 long mkdir(const char *pathname, int mode);
+/**
+ * Wrapper for mknod that allows creation of a FIFO file using pathname.
+ * \param[in]	pathname	FIFO file to create
+ * \param[in]	mode		Mode to set to the file (see mkfifo man page)
+ * \return 	0 in case of a success, -err otherwise
+ */
+int mkfifo(const char *pathname, int mode);
+/**
+ * Implementation taken from Linux kernel. It's here to allow creation of a special
+ * file using pathname.
+ * \param[in]	pathname	File to create
+ * \param[in]	mode		Mode to set to the file (see mknod man page)
+ * \param[in]	dev			Special device
+ * \return	0 in case of a success, -err otherwise
+ */
+long mknod(const char *pathname, int mode, unsigned dev);
+/**
+ * Implementation taken from Linux kernel. It's here to allow link readding (seems like
+ * that's not the job vfs_readdlink is doing).
+ * \param[in]	path	Link to read
+ * \param[out]	buf		Link target
+ * \param[in]	bufsiz	Output buffer size
+ * \return	0 in case of a success, -err otherwise 
+ */
+long readlink(const char *path, char *buf, int bufsiz);
 /**
  * Worker for debug purpose. It first checks opening mode and branch, and then call open.
  * This is used to catch bad calls to RO branch
