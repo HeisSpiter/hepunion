@@ -149,8 +149,8 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	/* Get superblock data from RO branch and set to ours */
 	sb->s_blocksize = filp->f_vfsmnt->mnt_sb->s_blocksize;
 	sb->s_blocksize_bits = filp->f_vfsmnt->mnt_sb->s_blocksize_bits;
-	/* Root modes - FIXME (check for me & merge) */
-	root_m = filp->f_vfsmnt->mnt_sb->s_root->d_inode->i_mode;
+	/* Root modes - those can't be changed */
+	root_m = S_IRUSR | S_IXUSR | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH;
 	atime = filp->f_vfsmnt->mnt_sb->s_root->d_inode->i_atime;
 	mtime = filp->f_vfsmnt->mnt_sb->s_root->d_inode->i_mtime;
 	ctime = filp->f_vfsmnt->mnt_sb->s_root->d_inode->i_ctime;
