@@ -11,8 +11,37 @@
 
 #include "pierrefs.h"
 
-struct dentry * pierrefs_lookup(struct inode *inode, struct dentry *dentry, struct nameidata *nameidata) {
-	return 0;
+struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nameidata) {
+	/* We are looking for "dentry" in "dir" */
+	int err;
+	size_t len;
+	char path[PATH_MAX];
+	char real_path[PATH_MAX];
+	struct inode *inode = NULL;
+
+	/* First get path of the directory */
+	err = get_relative_path(dir, 0, path);
+	if (err < 0) {
+		return ERR_PTR(err);
+	}
+
+	len = strlen(path);
+
+	/* Now, look for the file */
+	strncat(path, dentry->d_name.name, PATH_MAX - len - 1);
+	err = find_file(path, real_path, 0);
+	if (err < 0) {
+		return ERR_PTR(err);
+	}
+
+	/* We've got it!
+	 * Set dentry operations
+	 */
+	dentry->d_op = &pierrefs_dops;
+	/* Set our inode */
+	d_add(dentry, inode);
+
+	return NULL;
 }
 
 int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *kstbuf) {
@@ -21,7 +50,7 @@ int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *
 
 	/* Get path */
 	err = get_relative_path(0, dentry, path);
-	if (err) {
+	if (err < 0) {
 		return err;
 	}
 
@@ -81,6 +110,7 @@ int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
 
 struct inode_operations pierrefs_iops = {
 	.getattr	= pierrefs_getattr,
+	.lookup		= pierrefs_lookup,
 	.permission	= pierrefs_permission,
 	.setattr	= pierrefs_setattr,
 };
