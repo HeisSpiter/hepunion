@@ -209,7 +209,7 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr) {
 		}
 
 		/* Remove mode if it was set */
-		attr->ia_valid &= ATTR_MODE;
+		attr->ia_valid &= ~ATTR_MODE;
 
 		/* Set its time */
 		if (!is_flag_set(attr->ia_valid, (ATTR_ATIME | ATTR_MTIME))) {

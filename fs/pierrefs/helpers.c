@@ -290,7 +290,7 @@ struct dentry * get_path_dentry(const char *pathname, int flag) {
 	return dentry;
 }
 
-int get_relative_path(const struct inode *inode, const struct dentry *dentry, char *path) {
+int get_relative_path(const struct inode *inode, const struct dentry *dentry, char *path, int is_ours) {
 	int len;
 	char real_path[PATH_MAX];
 	struct pierrefs_sb_info *sb_info;
@@ -299,6 +299,13 @@ int get_relative_path(const struct inode *inode, const struct dentry *dentry, ch
 	len = get_full_path(inode, dentry, real_path);
 	if (len < 0) {
 		return len;
+	}
+
+	/* If those structures are owned by PierreFS, there's no
+	 * need to skip the branch part
+	 */
+	if (is_ours) {
+		return 0;
 	}
 
 	/* Get branches info */
@@ -319,12 +326,12 @@ int get_relative_path(const struct inode *inode, const struct dentry *dentry, ch
 	return -EINVAL;
 }
 
-int get_relative_path_for_file(const struct inode *dir, const struct dentry *dentry, char *path) {
+int get_relative_path_for_file(const struct inode *dir, const struct dentry *dentry, char *path, int is_ours) {
 	int err;
 	size_t len;
 
 	/* First get path of the directory */
-	err = get_relative_path(dir, 0, path);
+	err = get_relative_path(dir, 0, path, is_ours);
 	if (err < 0) {
 		return err;
 	}

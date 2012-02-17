@@ -348,21 +348,23 @@ int get_full_path(const struct inode *inode, const struct dentry *dentry, char *
  * \param[in]	inode	Inode that refers to the file
  * \param[in]	dentry	Dentry that refers to the file
  * \param[out]	path	The relative path that has been found
+ * \param[in]	is_ours	Set to 1, it means that dentry & inode are local to PierreFS
  * \return 0 in case of a success, an error code otherwise
  * \note	It is possible not to provide a dentry (but not recommended). An inode must be provided then
  * \note	It is possible not to provide an inode. A dentry must be provided then
  * \warning	If no dentry is provided, the function might fail to find the path to the file even if it is on the PierreFS volume
  */
-int get_relative_path(const struct inode *inode, const struct dentry *dentry, char *path);
+int get_relative_path(const struct inode *inode, const struct dentry *dentry, char *path, int is_ours);
 /**
  * Get the relative path (to / of PierreFS) for the creation of the provided file.
  * \param[in]	dir		Inode that refers to the directory in which the file is to be created
  * \param[in]	dentry	Dentry that refers to the file to create in the directory
  * \param[out]	path	The relative path that has been found
+ * \param[in]	is_ours	Set to 1, it means that dentry & inode are local to PierreFS
  * \return 0 in case of a success, an error code otherwise
  * \warning	This fuction relies on get_relative_path() and its limitations apply here
  */
-int get_relative_path_for_file(const struct inode *dir, const struct dentry *dentry, char *path);
+int get_relative_path_for_file(const struct inode *dir, const struct dentry *dentry, char *path, int is_ours);
 /**
  * Get the dentry representing the given path.
  * \param[in]	pathname	Pathname to lookup

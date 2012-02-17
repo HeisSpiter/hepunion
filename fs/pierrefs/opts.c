@@ -16,7 +16,7 @@ int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *
 	char path[PATH_MAX];
 
 	/* Get path */
-	err = get_relative_path(0, dentry, path);
+	err = get_relative_path(0, dentry, path, 1);
 	if (err < 0) {
 		return err;
 	}
@@ -33,7 +33,7 @@ int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *d
 	char real_to[PATH_MAX];
 
 	/* First, find file */
-	err = get_relative_path(0, old_dentry, from);
+	err = get_relative_path(0, old_dentry, from, 1);
 	if (err < 0) {
 		return err;
 	}
@@ -44,7 +44,7 @@ int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *d
 	}
 
 	/* Find destination */
-	err = get_relative_path_for_file(dir, dentry, to);
+	err = get_relative_path_for_file(dir, dentry, to, 1);
 	if (err < 0) {
 		return err;
 	}
@@ -88,7 +88,7 @@ struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry, struct
 	struct inode *inode = NULL;
 
 	/* First get path of the file */
-	err = get_relative_path_for_file(dir, dentry, path);
+	err = get_relative_path_for_file(dir, dentry, path, 1);
 	if (err < 0) {
 		return ERR_PTR(err);
 	}
@@ -115,7 +115,7 @@ int pierrefs_permission(struct inode *inode, int mask, struct nameidata *nd) {
 	char real_path[PATH_MAX];
 
 	/* Get path */
-	err = get_relative_path(0, nd->dentry, path);
+	err = get_relative_path(0, nd->dentry, path, 1);
 	if (err) {
 		return err;
 	}
@@ -136,7 +136,7 @@ int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
 	char real_path[PATH_MAX];
 
 	/* Get path */
-	err = get_relative_path(0, dentry, path);
+	err = get_relative_path(0, dentry, path, 1);
 	if (err) {
 		return err;
 	}
@@ -166,7 +166,7 @@ int pierrefs_symlink(struct inode *dir, struct dentry *dentry, const char *symna
 	char real_to[PATH_MAX];
 
 	/* Find destination */
-	err = get_relative_path_for_file(dir, dentry, to);
+	err = get_relative_path_for_file(dir, dentry, to, 1);
 	if (err < 0) {
 		return err;
 	}
