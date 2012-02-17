@@ -362,13 +362,13 @@ int get_relative_path(const struct inode *inode, const struct dentry *dentry, ch
  */
 struct dentry* get_path_dentry(const char *pathname, int flag);
 /**
- * Implementation taken from Linux kernel. It's here to allow creation of a symlink
- * using pathname.
- * \param[in]	oldname	Target of the symlink
- * \param[in]	newname	Symlink path
+ * Implementation taken from Linux kernel (and simplified). It's here to allow creation
+ * of a link using pathname.
+ * \param[in]	oldname	Target of the link
+ * \param[in]	newname	Link path
  * \return	0 in case of a success, -err otherwise
  */
-long symlink(const char *oldname, const char *newname);
+long link(const char *oldname, const char *newname);
 /**
  * Implementation taken from Linux kernel. It's here to allow creation of a directory
  * using pathname.
@@ -402,6 +402,14 @@ long mknod(const char *pathname, int mode, unsigned dev);
  * \return	0 in case of a success, -err otherwise 
  */
 long readlink(const char *path, char *buf, int bufsiz);
+/**
+ * Implementation taken from Linux kernel. It's here to allow creation of a symlink
+ * using pathname.
+ * \param[in]	oldname	Target of the symlink
+ * \param[in]	newname	Symlink path
+ * \return	0 in case of a success, -err otherwise
+ */
+long symlink(const char *oldname, const char *newname);
 /**
  * Worker for debug purpose. It first checks opening mode and branch, and then call open.
  * This is used to catch bad calls to RO branch
