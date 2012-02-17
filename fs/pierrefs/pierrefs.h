@@ -355,6 +355,15 @@ int get_full_path(const struct inode *inode, const struct dentry *dentry, char *
  */
 int get_relative_path(const struct inode *inode, const struct dentry *dentry, char *path);
 /**
+ * Get the relative path (to / of PierreFS) for the creation of the provided file.
+ * \param[in]	dir		Inode that refers to the directory in which the file is to be created
+ * \param[in]	dentry	Dentry that refers to the file to create in the directory
+ * \param[out]	path	The relative path that has been found
+ * \return 0 in case of a success, an error code otherwise
+ * \warning	This fuction relies on get_relative_path() and its limitations apply here
+ */
+int get_relative_path_for_file(const struct inode *dir, const struct dentry *dentry, char *path);
+/**
  * Get the dentry representing the given path.
  * \param[in]	pathname	Pathname to lookup
  * \param[in]	flag		Flag to use for opening

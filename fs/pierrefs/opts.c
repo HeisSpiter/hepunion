@@ -27,7 +27,6 @@ int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *
 
 int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *dentry) {
 	int err, origin;
-	size_t len;
 	char from[PATH_MAX];
 	char to[PATH_MAX];
 	char real_from[PATH_MAX];
@@ -45,16 +44,15 @@ int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *d
 	}
 
 	/* Find destination */
-	err = get_relative_path(dir, 0, to);
+	err = get_relative_path_for_file(dir, dentry, to);
 	if (err < 0) {
 		return err;
 	}
 
-	len = strlen(to);
-	strncat(to, dentry->d_name.name, PATH_MAX - len - 1);
+	/* And ensure it doesn't exist */
 	err = find_file(to, real_to, 0);
 	if (err >= 0) {
-		return err;
+		return -EEXIST;
 	}
 
 	if (origin == READ_ONLY) {
@@ -85,21 +83,17 @@ int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *d
 struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nameidata) {
 	/* We are looking for "dentry" in "dir" */
 	int err;
-	size_t len;
 	char path[PATH_MAX];
 	char real_path[PATH_MAX];
 	struct inode *inode = NULL;
 
-	/* First get path of the directory */
-	err = get_relative_path(dir, 0, path);
+	/* First get path of the file */
+	err = get_relative_path_for_file(dir, dentry, path);
 	if (err < 0) {
 		return ERR_PTR(err);
 	}
 
-	len = strlen(path);
-
 	/* Now, look for the file */
-	strncat(path, dentry->d_name.name, PATH_MAX - len - 1);
 	err = find_file(path, real_path, 0);
 	if (err < 0) {
 		return ERR_PTR(err);
@@ -165,12 +159,48 @@ int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
 	return set_me_worker(path, real_path, attr);
 }
 
+int pierrefs_symlink(struct inode *dir, struct dentry *dentry, const char *symname) {
+	/* Create the link on the RW branch */
+	int err;
+	char to[PATH_MAX];
+	char real_to[PATH_MAX];
+
+	/* Find destination */
+	err = get_relative_path_for_file(dir, dentry, to);
+	if (err < 0) {
+		return err;
+	}
+
+	/* And ensure it doesn't exist */
+	err = find_file(to, real_to, 0);
+	if (err >= 0) {
+		return -EEXIST;
+	}
+
+	/* Get full path for destination */
+	if (make_rw_path(to, real_to) > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+
+	/* Not it's sure the link does not exist, create it */
+	err = symlink_worker(symname, real_to);
+	if (err < 0) {
+		return err;
+	}
+
+	/* Remove possible whiteout */
+	unlink_whiteout(to);
+
+	return 0;
+}
+
 struct inode_operations pierrefs_iops = {
 	.getattr	= pierrefs_getattr,
 	.link		= pierrefs_link,
 	.lookup		= pierrefs_lookup,
 	.permission	= pierrefs_permission,
 	.setattr	= pierrefs_setattr,
+	.symlink	= pierrefs_symlink,
 };
 
 struct super_operations pierrefs_sops = {

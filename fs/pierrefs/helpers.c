@@ -319,6 +319,28 @@ int get_relative_path(const struct inode *inode, const struct dentry *dentry, ch
 	return -EINVAL;
 }
 
+int get_relative_path_for_file(const struct inode *dir, const struct dentry *dentry, char *path) {
+	int err;
+	size_t len;
+
+	/* First get path of the directory */
+	err = get_relative_path(dir, 0, path);
+	if (err < 0) {
+		return err;
+	}
+
+	len = strlen(path);
+	/* Ensure it can fit in */
+	if (len + dentry->d_name.len > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+
+	/* Now, look for the file */
+	strncat(path, dentry->d_name.name, PATH_MAX - len - 1);
+
+	return 0;
+}
+
 /* Imported for Linux kernel */
 long mkdir(const char *pathname, int mode) {
 	int error = 0;
