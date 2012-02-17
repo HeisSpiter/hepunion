@@ -40,6 +40,9 @@ struct pierrefs_sb_info {
 	 */
 	char *read_only_branch;
 	size_t ro_len;
+	/* Strings big enough to contain a path */
+	char global1[PATH_MAX];
+	char global2[PATH_MAX];
 };
 
 /**

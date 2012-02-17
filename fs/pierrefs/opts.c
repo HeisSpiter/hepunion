@@ -13,7 +13,7 @@
 
 int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *kstbuf) {
 	int err;
-	char path[PATH_MAX];
+	char *path = get_context()->global1;
 
 	/* Get path */
 	err = get_relative_path(0, dentry, path, 1);
@@ -27,8 +27,8 @@ int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *
 
 int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *dentry) {
 	int err, origin;
-	char from[PATH_MAX];
-	char to[PATH_MAX];
+	char *from = get_context()->global1;
+	char *to = get_context()->global2;
 	char real_from[PATH_MAX];
 	char real_to[PATH_MAX];
 
@@ -83,8 +83,8 @@ int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *d
 struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nameidata) {
 	/* We are looking for "dentry" in "dir" */
 	int err;
-	char path[PATH_MAX];
-	char real_path[PATH_MAX];
+	char *path = get_context()->global1;
+	char *real_path = get_context()->global2;
 	struct inode *inode = NULL;
 
 	/* First get path of the file */
@@ -111,8 +111,8 @@ struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry, struct
 
 int pierrefs_permission(struct inode *inode, int mask, struct nameidata *nd) {
 	int err;
-	char path[PATH_MAX];
-	char real_path[PATH_MAX];
+	char *path = get_context()->global1;
+	char *real_path = get_context()->global2;
 
 	/* Get path */
 	err = get_relative_path(0, nd->dentry, path, 1);
@@ -132,8 +132,8 @@ int pierrefs_permission(struct inode *inode, int mask, struct nameidata *nd) {
 
 int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
 	int err;
-	char path[PATH_MAX];
-	char real_path[PATH_MAX];
+	char *path = get_context()->global1;
+	char *real_path = get_context()->global2;
 
 	/* Get path */
 	err = get_relative_path(0, dentry, path, 1);
@@ -162,8 +162,8 @@ int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
 int pierrefs_symlink(struct inode *dir, struct dentry *dentry, const char *symname) {
 	/* Create the link on the RW branch */
 	int err;
-	char to[PATH_MAX];
-	char real_to[PATH_MAX];
+	char *to = get_context()->global1;
+	char *real_to = get_context()->global2;
 
 	/* Find destination */
 	err = get_relative_path_for_file(dir, dentry, to, 1);
