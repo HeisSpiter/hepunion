@@ -55,6 +55,18 @@ int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *d
 		return -EEXIST;
 	}
 
+	/* Create path if needed */
+	err = find_path(to, real_to);
+	if (err < 0) {
+		return err;
+	}
+
+	/* Check access */
+	err = can_create(to, real_to);
+	if (err < 0) {
+		return err;
+	}
+
 	if (origin == READ_ONLY) {
 		/* Here, fallback to a symlink */
 		err = symlink_worker(real_from, real_to);
@@ -182,7 +194,19 @@ int pierrefs_symlink(struct inode *dir, struct dentry *dentry, const char *symna
 		return -ENAMETOOLONG;
 	}
 
-	/* Not it's sure the link does not exist, create it */
+	/* Create path if needed */
+	err = find_path(to, real_to);
+	if (err < 0) {
+		return err;
+	}
+
+	/* Check access */
+	err = can_create(to, real_to);
+	if (err < 0) {
+		return err;
+	}
+
+	/* Now it's sure the link does not exist, create it */
 	err = symlink_worker(symname, real_to);
 	if (err < 0) {
 		return err;
