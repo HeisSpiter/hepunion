@@ -114,6 +114,14 @@ int find_whiteout(const char *path, char *wh_path) {
 	return vfs_lstat(wh_path, &kstbuf);
 }
 
+int hide_directory_contents(const char *path) {
+	return -EINVAL;
+}
+
+int is_empty_dir(const char *path, const char *ro_path, const char *rw_path) {
+	return -EINVAL;
+}
+
 int unlink_rw_file(const char *path, const char *rw_path, char has_ro_sure) {
 	int err;
 	char has_ro = 0;

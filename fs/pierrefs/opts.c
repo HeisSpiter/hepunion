@@ -55,14 +55,14 @@ int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *d
 		return -EEXIST;
 	}
 
-	/* Create path if needed */
-	err = find_path(to, real_to);
+	/* Check access */
+	err = can_create(to, real_to);
 	if (err < 0) {
 		return err;
 	}
 
-	/* Check access */
-	err = can_create(to, real_to);
+	/* Create path if needed */
+	err = find_path(to, real_to);
 	if (err < 0) {
 		return err;
 	}
@@ -119,6 +119,69 @@ struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry, struct
 	d_add(dentry, inode);
 
 	return NULL;
+}
+
+int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
+	int err;
+	char *path = get_context()->global1;
+	char *real_path = get_context()->global2;
+
+	/* Try to find the directory first */
+	err = get_relative_path_for_file(dir, dentry, path, 1);
+	if (err < 0) {
+		return err;
+	}
+
+	/* And ensure it doesn't exist */
+	err = find_file(path, real_path, 0);
+	if (err >= 0) {
+		return -EEXIST;
+	}
+
+	/* Get full path for destination */
+	if (make_rw_path(path, real_path) > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+
+	/* Check access */
+	err = can_create(path, real_path);
+	if (err < 0) {
+		return err;
+	}
+
+	/* Now, create/reuse arborescence */
+	err = find_path(path, real_path);
+	if (err < 0) {
+		return err;
+	}
+
+	/* Ensure we have good mode */
+	mode |= S_IFDIR;
+
+	/* Just create dir now */
+	err = mkdir_worker(real_path, mode);
+	if (err < 0) {
+		return err;
+	}
+
+	/* Hide contents */
+	err = hide_directory_contents(path);
+	if (err < 0) {
+		dentry = get_path_dentry(real_path, LOOKUP_REVAL);
+		if (IS_ERR(dentry)) {
+			return err;
+		}
+
+		vfs_unlink(dentry->d_inode, dentry);
+		dput(dentry);
+
+		return err;
+	}
+
+	/* Remove possible .wh. */
+	unlink_whiteout(path);
+
+	return 0;
 }
 
 int pierrefs_permission(struct inode *inode, int mask, struct nameidata *nd) {
@@ -194,14 +257,14 @@ int pierrefs_symlink(struct inode *dir, struct dentry *dentry, const char *symna
 		return -ENAMETOOLONG;
 	}
 
-	/* Create path if needed */
-	err = find_path(to, real_to);
+	/* Check access */
+	err = can_create(to, real_to);
 	if (err < 0) {
 		return err;
 	}
 
-	/* Check access */
-	err = can_create(to, real_to);
+	/* Create path if needed */
+	err = find_path(to, real_to);
 	if (err < 0) {
 		return err;
 	}
@@ -222,6 +285,7 @@ struct inode_operations pierrefs_iops = {
 	.getattr	= pierrefs_getattr,
 	.link		= pierrefs_link,
 	.lookup		= pierrefs_lookup,
+	.mkdir		= pierrefs_mkdir,
 	.permission	= pierrefs_permission,
 	.setattr	= pierrefs_setattr,
 	.symlink	= pierrefs_symlink,

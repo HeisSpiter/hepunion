@@ -500,6 +500,22 @@ int dbg_link(const char *oldpath, const char *newpath);
  */
 int find_whiteout(const char *path, char *wh_path);
 /**
+ * Create a whiteout for each file contained in a directory.
+ * \param[in]	path	Relative path of the directory where to hide files
+ * \return	0 in case of a success, -err otherwise.
+ * \note	In case directory doesn't exist on RO branch, it's a success
+ */
+int hide_directory_contents(const char *path);
+/**
+ * Check, using unionion, whether is directory is empty. If regarding union it's, ensure it really is.
+ * \param[in]	path	Relative path of the directory to check
+ * \param[in]	ro_path	Full path on RO branch of the directory
+ * \param[in]	rw_path	Optional, full path on RW branch of the directory
+ * \return	1 if empty, -err otherwise
+ * \note	If you don't provide RW branch, no union will be done, it will just check for RO emptyness
+ */
+int is_empty_dir(const char *path, const char *ro_path, const char *rw_path);
+/**
  * Unlink a file on RW branch, and whiteout possible file on RO branch.
  * \param[in]	path		Relative path of the file to unlink
  * \param[in]	rw_path		Full path of the file on RW branch to unlink
