@@ -40,6 +40,14 @@ struct pierrefs_sb_info {
 	 */
 	char *read_only_branch;
 	size_t ro_len;
+	/**
+	 * Contains the UID when switched to root
+	 */
+	uid_t uid;
+	/**
+	 * Contains the GID when switched to root
+	 */
+	gid_t gid;
 	/* Strings big enough to contain a path */
 	char global1[PATH_MAX];
 	char global2[PATH_MAX];
@@ -185,6 +193,21 @@ extern struct dentry_operations pierrefs_dops;
  * \return	The number of caracters written to r
  */
 #define make_rw_path(p, r) snprintf(r, PATH_MAX, "%s%s", get_context()->read_write_branch, p)
+/**
+ * Switch the current context user and group to root to allow
+ * modifications on child file systems
+ */
+#define pop_root()							\
+	current->fsuid = get_context()->uid;	\
+	current->fsgid = get_context()->gid
+/**
+ * Switch the current context back to real user and real group
+ */
+#define push_root()							\
+	get_context()->uid = current->fsuid;	\
+	get_context()->gid = current->fsgid;	\
+	current->fsuid = 0;						\
+	current->fsgid = 0
 
 #define filp_creat(p, m) filp_open(p, O_CREAT | O_WRONLY | O_TRUNC, m)
 

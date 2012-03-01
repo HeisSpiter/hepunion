@@ -17,7 +17,7 @@ MODULE_AUTHOR("Pierre Schweitzer, CERN CH"
 	      " (http://pierrefs.sourceforge.net)");
 MODULE_DESCRIPTION("PierreFS " PIERREFS_VERSION
 		   " (http://pierrefs.sourceforge.net)");
-MODULE_LICENSE("GPL"); 
+MODULE_LICENSE("GPL");
 
 static int make_path(const char *s, size_t n, char **path) {
     /* Zero output */

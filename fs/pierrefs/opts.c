@@ -172,7 +172,9 @@ int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 			return err;
 		}
 
+		push_root();
 		vfs_unlink(dentry->d_inode, dentry);
+		pop_root();
 		dput(dentry);
 
 		return err;

@@ -42,7 +42,9 @@ static int create_whiteout_worker(const char *wh_path) {
 	attr.ia_gid = 0;
 	attr.ia_uid = 0;
 
+	push_root();
 	err = notify_change(fd->f_dentry->d_inode, &attr);
+	pop_root();
 	if (err == 0) {
 		return err;
 	}
@@ -52,8 +54,10 @@ static int create_whiteout_worker(const char *wh_path) {
 	dget(dentry);
 
 	/* Close file and delete it */
+	push_root();
 	filp_close(fd, 0);
 	vfs_unlink(fd->f_dentry->d_inode, fd->f_dentry);
+	pop_root();
 
 	dput(dentry);
 
@@ -91,6 +95,7 @@ int create_whiteout(const char *path, char *wh_path) {
 }
 
 int find_whiteout(const char *path, char *wh_path) {
+	int err;
 	struct kstat kstbuf;
 
 	/* Find name */
@@ -111,7 +116,11 @@ int find_whiteout(const char *path, char *wh_path) {
 	strcat(wh_path, tree_path + 1);
 
 	/* Does it exists */
-	return vfs_lstat(wh_path, &kstbuf);
+	push_root();
+	err = vfs_lstat(wh_path, &kstbuf);
+	pop_root();
+
+	return err;
 }
 
 int hide_directory_contents(const char *path) {
@@ -151,7 +160,9 @@ int unlink_rw_file(const char *path, const char *rw_path, char has_ro_sure) {
 	}
 
 	/* Remove file */
+	push_root();
 	err = vfs_unlink(dentry->d_inode, dentry);
+	pop_root();
 	dput(dentry);
 
 	if (err < 0) {
@@ -195,7 +206,9 @@ int unlink_whiteout(const char *path) {
 	}
 
 	/* Now unlink whiteout */
+	push_root();
 	err = vfs_unlink(dentry->d_inode, dentry);
+	pop_root();
 	dput(dentry);
 
 	return err;

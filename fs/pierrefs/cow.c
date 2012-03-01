@@ -130,20 +130,28 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path) {
 				 * in a non random way, read & write are faster (read ahead, lazy-write)
 				 */
 				for (;;) {
+					push_root();
 					rcount = vfs_read(ro_fd, buf, MAXSIZE, &ro_fd->f_pos);
+					pop_root();
 					if (rcount < 0) {
 						break;
 					}
 
+					push_root();
 					rcount = vfs_write(rw_fd, buf, rcount, &rw_fd->f_pos);
+					pop_root();
 					if (rcount < 0) {
+						push_root();
 						filp_close(ro_fd, 0);
 						filp_close(rw_fd, 0);
+						pop_root();
 
 						/* Delete copyup */
 						dentry = get_path_dentry(rw_path, LOOKUP_REVAL);
 						if (!IS_ERR(dentry)) {
+							push_root();
 							vfs_unlink(dentry->d_inode, dentry);
+							pop_root();
 							dput(dentry);
 						}
 
@@ -153,8 +161,10 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path) {
 			}
 
 			/* Close files */
+			push_root();
 			filp_close(ro_fd, 0);
 			filp_close(rw_fd, 0);
+			pop_root();
 			break;
 
 		case S_IFBLK:
@@ -181,7 +191,9 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path) {
 					return PTR_ERR(ro_fd);
 				}
 
+				push_root();
 				vfs_unlink(dentry->d_inode, dentry);
+				pop_root();
 				dput(dentry);
 				return PTR_ERR(ro_fd);
 			}
@@ -189,8 +201,10 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path) {
 			/* Create a copyup of each file & dir */
 			ctx.ro_path = ro_path;
 			ctx.path = path;
+			push_root();
 			err = vfs_readdir(ro_fd, copy_child, &ctx);
 			filp_close(ro_fd, 0);
+			pop_root();
 
 			/* Handle failure */
 			if (err < 0) {
@@ -199,7 +213,9 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path) {
 					return err;
 				}
 
+				push_root();
 				vfs_unlink(dentry->d_inode, dentry);
+				pop_root();
 				dput(dentry);
 				return err;
 			}
@@ -229,10 +245,14 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path) {
 	attr.ia_gid = kstbuf.gid;
 	attr.ia_mode = kstbuf.mode;
 
+	push_root();
 	err = notify_change(dentry->d_inode, &attr);
+	pop_root();
 
 	if (err < 0) {
+		push_root();
 		vfs_unlink(dentry->d_inode, dentry);
+		pop_root();
 		dput(dentry);
 		return err;
 	}
@@ -246,7 +266,9 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path) {
 			return 0;
 		}
 
+		push_root();
 		vfs_unlink(dentry->d_inode, dentry);
+		pop_root();
 		dput(dentry);
 	}
 
@@ -317,9 +339,11 @@ int find_path_worker(const char *path, char *real_path) {
 		strncat(real_path, old_directory, (directory - old_directory) / sizeof(char));
 
 		/* Only create if it doesn't already exist */
+		push_root();
 		if (vfs_lstat(real_path, &kstbuf) < 0) {
 			/* Get previous dir properties */
 			err = vfs_lstat(read_only, &kstbuf);
+			pop_root();
 			if (err < 0) {
 				return err;
 			}
@@ -343,6 +367,7 @@ int find_path_worker(const char *path, char *real_path) {
 			attr.ia_uid = kstbuf.uid;
 			attr.ia_gid = kstbuf.gid;
 
+			push_root();
 			err = notify_change(dentry->d_inode, &attr);
 
 			if (err < 0) {
@@ -353,6 +378,8 @@ int find_path_worker(const char *path, char *real_path) {
 
 			dput(dentry);
 		}
+
+		pop_root();
 
 		/* Next iteration (skip /) */
 		old_directory = directory;

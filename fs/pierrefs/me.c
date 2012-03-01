@@ -70,13 +70,16 @@ int create_me(const char *me_path, struct kstat *kstbuf) {
 	attr.ia_ctime = kstbuf->ctime;
 
 	/* Set all the attributes */
+	push_root();
 	err = notify_change(fd->f_dentry->d_inode, &attr);
 	filp_close(fd, 0);
+	pop_root();
 
 	return err;
 }
 
 int find_me(const char *path, char *me_path, struct kstat *kstbuf) {
+	int err;
 	/* Find name */
 	char *tree_path = strrchr(path, '/');
 	if (!tree_path) {
@@ -95,7 +98,11 @@ int find_me(const char *path, char *me_path, struct kstat *kstbuf) {
 	strcat(me_path, tree_path + 1);
 
 	/* Now, try to get properties */
-	return vfs_lstat(me_path, kstbuf);
+	push_root();
+	err = vfs_lstat(me_path, kstbuf);
+	pop_root();
+
+	return err;
 }
 
 int get_file_attr(const char *path, struct kstat *kstbuf) {
@@ -122,7 +129,9 @@ int get_file_attr_worker(const char *path, const char *real_path, struct kstat *
 	me = (find_me(path, me_file, &kstme) > 0);
 
 	/* Get attributes */
+	push_root();
 	err = vfs_lstat(real_path, kstbuf);
+	pop_root();
 	if (err < 0) {
 		return err;
 	}
@@ -188,7 +197,9 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr) {
 
 	if (!me) {
 		/* Read real file info */
+		push_root();
 		err = vfs_lstat(real_path, &kstme);
+		pop_root();
 		if (err < 0) {
 			return err;
 		}
@@ -225,9 +236,11 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr) {
 			attr->ia_valid |= ATTR_UID | ATTR_GID;
 		}
 
+		push_root();
 		err = notify_change(fd->f_dentry->d_inode, attr);
 
 		filp_close(fd, 0);
+		pop_root();
 	}
 	else {
 		fd = dbg_open(me_path, O_RDWR);
@@ -237,13 +250,17 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr) {
 
 		/* Only change if there are changes */
 		if (attr->ia_valid) {
+			push_root();
 			err = notify_change(fd->f_dentry->d_inode, attr);
+			pop_root();
 		}
 		else {
 			err = 0;
 		}
 
+		push_root();
 		filp_close(fd, 0);
+		pop_root();
 	}
 
 	return err;

@@ -146,7 +146,9 @@ int find_file(const char *path, char *real_path, char flags) {
 			return -ENAMETOOLONG;
 		}
 
+		push_root();
 		err = vfs_lstat(real_path, &kstbuf);
+		pop_root();
 		if (err < 0) {
 			if (is_flag_set(flags, MUST_READ_WRITE)) {
 				return err;
@@ -169,7 +171,9 @@ int find_file(const char *path, char *real_path, char flags) {
 			return -ENAMETOOLONG;
 		}
 
+		push_root();
 		err = vfs_lstat(tmp_path, &kstbuf);
+		pop_root();
 		if (err < 0) {
 			/* If file does not exist, even in RO, fail */
 			return err;
@@ -200,7 +204,9 @@ int find_file(const char *path, char *real_path, char flags) {
 			return -ENAMETOOLONG;
 		}
 
+		push_root();
 		err = vfs_lstat(real_path, &kstbuf);
+		pop_root();
 		if (err < 0) {
 			return err;
 		}
@@ -278,7 +284,9 @@ struct dentry * get_path_dentry(const char *pathname, int flag) {
 	struct dentry *dentry;
 	struct nameidata nd;
 
+	push_root();
 	err = __user_walk(pathname, flag, &nd);
+	pop_root();
 	if (err) {
 		return ERR_PTR(err);
 	}
@@ -359,16 +367,22 @@ long mkdir(const char *pathname, int mode) {
 	if (IS_ERR(tmp))
 		return PTR_ERR(tmp);
 
+	push_root();
 	error = path_lookup(tmp, LOOKUP_PARENT, &nd);
+	pop_root();
 	if (error)
 		goto out;
+	push_root();
 	dentry = lookup_create(&nd, 1);
+	pop_root();
 	error = PTR_ERR(dentry);
 
 	if (!IS_ERR(dentry)) {
 		if (!IS_POSIXACL(nd.dentry->d_inode))
 			mode &= ~current->fs->umask;
+		push_root();
 		error = vfs_mkdir(nd.dentry->d_inode, dentry, mode);
+		pop_root();
 		dput(dentry);
 	}
 	mutex_unlock(&nd.dentry->d_inode->i_mutex);
@@ -392,10 +406,14 @@ long mknod(const char *pathname, int mode, unsigned dev) {
 	if (IS_ERR(tmp))
 		return PTR_ERR(tmp);
 
+	push_root();
 	error = path_lookup(tmp, LOOKUP_PARENT, &nd);
+	pop_root();
 	if (error)
 		goto out;
+	push_root();
 	dentry = lookup_create(&nd, 0);
+	pop_root();
 	error = PTR_ERR(dentry);
 
 	if (!IS_POSIXACL(nd.dentry->d_inode))
@@ -403,13 +421,19 @@ long mknod(const char *pathname, int mode, unsigned dev) {
 	if (!IS_ERR(dentry)) {
 		switch (mode & S_IFMT) {
 			case 0: case S_IFREG:
+				push_root();
 				error = vfs_create(nd.dentry->d_inode,dentry,mode,&nd);
+				pop_root();
 				break;
 			case S_IFCHR: case S_IFBLK:
+				push_root();
 				error = vfs_mknod(nd.dentry->d_inode,dentry,mode, new_decode_dev(dev));
+				pop_root();
 				break;
 			case S_IFIFO: case S_IFSOCK:
+				push_root();
 				error = vfs_mknod(nd.dentry->d_inode,dentry,mode,0);
+				pop_root();
 				break;
 			case S_IFDIR:
 				error = -EPERM;
@@ -450,13 +474,19 @@ long symlink(const char *oldname, const char *newname) {
 		struct dentry *dentry;
 		struct nameidata nd;
 
+		push_root();
 		error = path_lookup(to, LOOKUP_PARENT, &nd);
+		pop_root();
 		if (error)
 			goto out;
+		push_root();
 		dentry = lookup_create(&nd, 0);
+		pop_root();
 		error = PTR_ERR(dentry);
 		if (!IS_ERR(dentry)) {
+			push_root();
 			error = vfs_symlink(nd.dentry->d_inode, dentry, from, S_IALLUGO);
+			pop_root();
 			dput(dentry);
 		}
 		mutex_unlock(&nd.dentry->d_inode->i_mutex);
@@ -479,19 +509,27 @@ long link(const char *oldname, const char *newname) {
 	if (IS_ERR(to))
 		return PTR_ERR(to);
 
+	push_root();
 	error = __user_walk(oldname, 0, &old_nd);
+	pop_root();
 	if (error)
 		goto exit;
+	push_root();
 	error = path_lookup(to, LOOKUP_PARENT, &nd);
+	pop_root();
 	if (error)
 		goto out;
 	error = -EXDEV;
 	if (old_nd.mnt != nd.mnt)
 		goto out_release;
+	push_root();
 	new_dentry = lookup_create(&nd, 0);
+	pop_root();
 	error = PTR_ERR(new_dentry);
 	if (!IS_ERR(new_dentry)) {
+		push_root();
 		error = vfs_link(old_nd.dentry, nd.dentry->d_inode, new_dentry);
+		pop_root();
 		dput(new_dentry);
 	}
 	mutex_unlock(&nd.dentry->d_inode->i_mutex);
@@ -514,16 +552,20 @@ long readlink(const char *path, char *buf, int bufsiz) {
 	if (bufsiz <= 0)
 		return -EINVAL;
 
+	push_root();
 	error = __user_walk(path, 0, &nd);
+	pop_root();
 	if (!error) {
 		inode = nd.dentry->d_inode;
 		error = -EINVAL;
 		if (inode->i_op && inode->i_op->readlink) {
+			push_root();
 			error = security_inode_readlink(nd.dentry);
 			if (!error) {
 				touch_atime(nd.mnt, nd.dentry);
 				error = inode->i_op->readlink(nd.dentry, buf, bufsiz);
 			}
+			pop_root();
 		}
 		path_release(&nd);
 	}
