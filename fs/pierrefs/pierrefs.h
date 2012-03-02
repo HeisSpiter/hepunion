@@ -48,7 +48,14 @@ struct pierrefs_sb_info {
 	 * Contains the GID when switched to root
 	 */
 	gid_t gid;
-	/* Strings big enough to contain a path */
+	/**
+	 * Spin lock to protect uid/gid access
+	 * \warning Only use the push_root() and pop_root()
+	 */
+	spinlock_t id_lock;
+	/**
+	 * Strings big enough to contain a path
+	 */
 	char global1[PATH_MAX];
 	char global2[PATH_MAX];
 };
@@ -199,11 +206,13 @@ extern struct dentry_operations pierrefs_dops;
  */
 #define pop_root()							\
 	current->fsuid = get_context()->uid;	\
-	current->fsgid = get_context()->gid
+	current->fsgid = get_context()->gid;	\
+	spin_unlock(&get_context()->id_lock)
 /**
  * Switch the current context back to real user and real group
  */
 #define push_root()							\
+	spin_lock(&get_context()->id_lock);		\
 	get_context()->uid = current->fsuid;	\
 	get_context()->gid = current->fsgid;	\
 	current->fsuid = 0;						\
