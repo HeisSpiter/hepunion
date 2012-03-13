@@ -28,6 +28,23 @@
 
 int hide_entry(void *buf, const char *name, int namlen, loff_t offset, ino_t ino, unsigned d_type);
 
+static int check_whiteout(void *buf, const char *name, int namlen, loff_t offset, ino_t ino, unsigned d_type) {
+	char wh_path[PATH_MAX];
+	char file_path[PATH_MAX];
+
+	/* Get file path */
+	if (snprintf(file_path, PATH_MAX, "%s%s", (char *)buf, name) > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+
+	/* Look for whiteout - return 1 for non-existant */
+	return (find_whiteout(file_path, wh_path) < 0);
+}
+
+static int check_writable(void *buf, const char *name, int namlen, loff_t offset, ino_t ino, unsigned d_type) {
+	return is_whiteout(name, namlen);
+}
+
 static int create_whiteout_worker(const char *wh_path) {
 	int err;
 	struct iattr attr;
@@ -94,6 +111,33 @@ int create_whiteout(const char *path, char *wh_path) {
 
 	/* Call worker */
 	return create_whiteout_worker(wh_path);
+}
+
+static int delete_whiteout(void *buf, const char *name, int namlen, loff_t offset, ino_t ino, unsigned d_type) {
+	int err;
+	struct dentry *dentry;
+	char wh_path[PATH_MAX];
+
+	/* assert(is_whiteout(name, namlen)); */
+
+	/* Get whiteout path */
+	if (snprintf(wh_path, PATH_MAX, "%s%s", (char *)buf, name) > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+
+	/* Get its dentry */
+	dentry = get_path_dentry(wh_path, LOOKUP_REVAL);
+	if (IS_ERR(dentry)) {
+		return PTR_ERR(dentry);
+	}
+
+	/* Remove file */
+	push_root();
+	err = vfs_unlink(dentry->d_inode, dentry);
+	pop_root();
+	dput(dentry);
+
+	return err;
 }
 
 int find_whiteout(const char *path, char *wh_path) {
@@ -175,7 +219,48 @@ int hide_entry(void *buf, const char *name, int namlen, loff_t offset, ino_t ino
 }
 
 int is_empty_dir(const char *path, const char *ro_path, const char *rw_path) {
-	return -EINVAL;
+	int err;
+	struct file *ro_fd;
+	struct file *rw_fd;
+
+	ro_fd = open_worker(ro_path, O_RDONLY);
+	if (IS_ERR(ro_fd)) {
+		return PTR_ERR(ro_fd);
+	}
+
+	push_root();
+	err = vfs_readdir(ro_fd, check_whiteout, path);
+	filp_close(ro_fd, 0);
+	pop_root();
+
+	/* Return if an error occured or if the RO branch isn't empty */
+	if (err <= 0) {
+		return err;
+	}
+
+	if (rw_path) {
+		rw_fd = open_worker(rw_path, O_RDONLY);
+		if (IS_ERR(rw_fd)) {
+			return PTR_ERR(rw_fd);
+		}
+
+		push_root();
+		err = vfs_readdir(rw_fd, check_writable, 0);
+
+		/* Return if an error occured or if the RW branch isn't empty */
+		if (err <= 0) {
+			filp_close(rw_fd, 0);
+			pop_root();
+			return err;
+		}
+
+		/* Now cleanup all the whiteouts */
+		vfs_readdir(rw_fd, delete_whiteout, rw_path);
+		filp_close(rw_fd, 0);
+		pop_root();
+	}
+
+	return err;
 }
 
 int unlink_rw_file(const char *path, const char *rw_path, char has_ro_sure) {

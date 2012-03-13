@@ -172,6 +172,17 @@ extern struct dentry_operations pierrefs_dops;
 #define is_flag_set(s, f) ((s & f) == f)
 
 /**
+ * Check if the given directory entry is a whiteout file against its name
+ * \param[in]	e	dir_entry structure pointer
+ * \return	1 if that's a whiteout file, 0 otherwise
+ * \warning	You MUST have defined d_reclen field the structure before using this macro
+ * \note	Here, 4 is the length of ".wh."
+ */
+#define is_whiteout(n, l)			\
+	(l > 4 && n[0] == '.' &&		\
+	 n[1] == 'w' &&	n[2] == 'h' &&	\
+	 n[3] == '.')
+/**
  * Check if the given directory entry is a special file (. or ..)
  * \param[in]	e	dir_entry structure pointer
  * \return	1 if that's a special file, 0 otherwise
