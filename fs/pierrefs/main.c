@@ -220,7 +220,7 @@ static int pierrefs_read_super(struct super_block *sb, void *raw_data,
 	}
 
 	/* Init sb_info */
-	spin_lock_init(&sb_info->id_lock);
+	recursive_mutex_init(&sb_info->id_lock);
 
 	/* Get branches */
 	err = get_branches(sb, raw_data);

@@ -26,6 +26,7 @@
 #include <linux/mount.h>
 #include <linux/module.h>
 #include <linux/security.h>
+#include "recursivemutex.h"
 
 struct pierrefs_sb_info {
 	/**
@@ -52,7 +53,7 @@ struct pierrefs_sb_info {
 	 * Spin lock to protect uid/gid access
 	 * \warning Only use the push_root() and pop_root()
 	 */
-	spinlock_t id_lock;
+	recursive_mutex_t id_lock;
 	/**
 	 * Strings big enough to contain a path
 	 */
@@ -204,18 +205,18 @@ extern struct dentry_operations pierrefs_dops;
  * Switch the current context user and group to root to allow
  * modifications on child file systems
  */
-#define pop_root()							\
-	current->fsuid = get_context()->uid;	\
-	current->fsgid = get_context()->gid;	\
-	spin_unlock(&get_context()->id_lock)
+#define pop_root()									\
+	current->fsuid = get_context()->uid;			\
+	current->fsgid = get_context()->gid;			\
+	recursive_mutex_unlock(&get_context()->id_lock)
 /**
  * Switch the current context back to real user and real group
  */
-#define push_root()							\
-	spin_lock(&get_context()->id_lock);		\
-	get_context()->uid = current->fsuid;	\
-	get_context()->gid = current->fsgid;	\
-	current->fsuid = 0;						\
+#define push_root()									\
+	recursive_mutex_lock(&get_context()->id_lock);	\
+	get_context()->uid = current->fsuid;			\
+	get_context()->gid = current->fsgid;			\
+	current->fsuid = 0;								\
 	current->fsgid = 0
 
 #define filp_creat(p, m) filp_open(p, O_CREAT | O_WRONLY | O_TRUNC, m)
