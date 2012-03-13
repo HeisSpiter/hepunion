@@ -26,6 +26,8 @@
 
 #include "pierrefs.h"
 
+int hide_entry(void *buf, const char *name, int namlen, loff_t offset, ino_t ino, unsigned d_type);
+
 static int create_whiteout_worker(const char *wh_path) {
 	int err;
 	struct iattr attr;
@@ -124,7 +126,52 @@ int find_whiteout(const char *path, char *wh_path) {
 }
 
 int hide_directory_contents(const char *path) {
-	return -EINVAL;
+	int err;
+	struct file *ro_fd;
+	struct kstat kstbuf;
+	char rw_path[PATH_MAX];
+	char ro_path[PATH_MAX];
+
+	if (snprintf(ro_path, PATH_MAX, "%s%s", get_context()->read_only_branch, path) > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+
+	/* If RO even does not exist, all correct */
+	err = vfs_lstat(ro_path, &kstbuf);
+	if (err < 0) {
+		if (err == -ENOENT) {
+			return 0;
+		} else {
+			return err;
+		}
+	}
+
+	if (snprintf(rw_path, PATH_MAX, "%s%s", get_context()->read_write_branch, path) > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+
+	ro_fd = open_worker(ro_path, O_RDONLY);
+	if (IS_ERR(ro_fd)) {
+		return PTR_ERR(ro_fd);
+	}
+
+	/* Hide all entries */
+	push_root();
+	err = vfs_readdir(ro_fd, hide_entry, rw_path);
+	filp_close(ro_fd, 0);
+	pop_root();
+
+	return err;
+}
+
+int hide_entry(void *buf, const char *name, int namlen, loff_t offset, ino_t ino, unsigned d_type) {
+	char wh_path[PATH_MAX];
+
+	if (snprintf(wh_path, PATH_MAX, "%s/.wh.%s", (char *)buf, name) > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+
+	return create_whiteout_worker(wh_path);
 }
 
 int is_empty_dir(const char *path, const char *ro_path, const char *rw_path) {
