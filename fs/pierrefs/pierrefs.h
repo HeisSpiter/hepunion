@@ -86,6 +86,7 @@ typedef enum _types {
 extern struct inode_operations pierrefs_iops;
 extern struct super_operations pierrefs_sops;
 extern struct dentry_operations pierrefs_dops;
+extern struct file_operations pierrefs_fops;
 
 /**
  * Rights mask used to handle shifting with st_mode rights definition.

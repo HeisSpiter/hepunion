@@ -1,3 +1,15 @@
+/**
+ * \file recursivemutex.c
+ * \brief Recursive mutex for Linux
+ * \author Pierre Schweitzer <pierre.jean.schweitzer@cern.ch>
+ * \version 1.0
+ * \date 13-Mar-2012
+ * \copyright GNU General Public License - GPL
+ *
+ * Functions to provite a recursive mutex since Linux kernel
+ * doesn't provide any reentrant lock mechanism
+ */
+
 #include "recursivemutex.h"
 
 void recursive_mutex_init(recursive_mutex_t *mutex) {

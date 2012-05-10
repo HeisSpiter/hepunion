@@ -92,6 +92,17 @@ int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *d
 	return 0;
 }
 
+loff_t pierrefs_llseek(struct file *file, loff_t offset, int origin) {
+	int err = -EINVAL;
+	struct file *real_file = (struct file *)file->private_data;
+
+	if (real_file->f_op->llseek) {
+		err = real_file->f_op->llseek(real_file, offset, origin);
+	}
+
+	return err;
+}
+
 struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nameidata) {
 	/* We are looking for "dentry" in "dir" */
 	int err;
@@ -182,6 +193,86 @@ int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 
 	/* Remove possible .wh. */
 	unlink_whiteout(path);
+
+	return 0;
+}
+
+int pierrefs_mknod(struct inode *dir, struct dentry *dentry, int mode, dev_t rdev) {
+	int err;
+	char *path = get_context()->global1;
+	char *real_path = get_context()->global2;
+
+	/* Try to find the node first */
+	err = get_relative_path_for_file(dir, dentry, path, 1);
+	if (err < 0) {
+		return err;
+	}
+
+	/* And ensure it doesn't exist */
+	err = find_file(path, real_path, 0);
+	if (err >= 0) {
+		return -EEXIST;
+	}
+
+	/* Now, create/reuse arborescence */
+	err = find_path(path, real_path);
+	if (err < 0) {
+		return err;
+	}
+
+	/* Just create file now */
+	if (S_ISFIFO(mode)) {
+		err = mkfifo(real_path, mode);
+		if (err < 0) {
+			return err;
+		}
+	}
+	else {
+		err = mknod(real_path, mode, rdev);
+		if (err < 0) {
+			return err;
+		}
+	}
+
+	/* Remove possible whiteout */
+	unlink_whiteout(path);
+
+	return 0;
+}
+
+int pierrefs_open(struct inode *inode, struct file *file) {
+	int err;
+	char *path = get_context()->global1;
+	char *real_path = get_context()->global2;
+
+	/* Don't check for flags here, if we are down here
+	 * the user is allowed to read/write the file, the
+	 * file was created if required (and allowed).
+	 * Here, the only operation required is to open the
+	 * file on the underlying file system
+	 */
+
+	/* Get our file path */
+	err = get_relative_path(inode, file->f_dentry, path, 1);
+
+	/* Get real file path */
+	err = find_file(path, real_path, 0);
+	if (err < 0) {
+		return err;
+	}
+
+	/* Really open the file.
+	 * The associated file object on real file system is stored
+	 * as private data of the PierreFS file object. This is used
+	 * to maintain data consistency and to forward requests on
+	 * the file to the lower file system.
+	 */
+	file->private_data = open_worker_2(real_path, file->f_flags, file->f_mode);
+	if (IS_ERR(file->private_data)) {
+		err = PTR_ERR(file->private_data);
+		file->private_data = 0;
+		return err;
+	}
 
 	return 0;
 }
@@ -288,6 +379,7 @@ struct inode_operations pierrefs_iops = {
 	.link		= pierrefs_link,
 	.lookup		= pierrefs_lookup,
 	.mkdir		= pierrefs_mkdir,
+	.mknod		= pierrefs_mknod,
 	.permission	= pierrefs_permission,
 	.setattr	= pierrefs_setattr,
 	.symlink	= pierrefs_symlink,
@@ -297,4 +389,9 @@ struct super_operations pierrefs_sops = {
 };
 
 struct dentry_operations pierrefs_dops = {
+};
+
+struct file_operations pierrefs_fops = {
+	.llseek		= pierrefs_llseek,
+	.open		= pierrefs_open,
 };
