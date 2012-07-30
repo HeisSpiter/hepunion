@@ -89,10 +89,6 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path) {
 
 	/* Handle the file properly */
 	switch (kstbuf.mode & S_IFMT) {
-		/* Socket - Not supported */
-		case S_IFSOCK:
-			return -EINVAL; /* FIXME */
-
 		/* Symbolic link */
 		case S_IFLNK:
 			/* Read destination */
@@ -167,6 +163,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path) {
 			pop_root();
 			break;
 
+		case S_IFSOCK:
 		case S_IFBLK:
 		case S_IFCHR:
 			/* Recreate a node */
