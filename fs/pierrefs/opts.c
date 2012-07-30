@@ -381,6 +381,7 @@ struct inode_operations pierrefs_iops = {
 	.mkdir		= pierrefs_mkdir,
 	.mknod		= pierrefs_mknod,
 	.permission	= pierrefs_permission,
+	.readlink	= generic_readlink, /* dentry will already point on the right file */
 	.setattr	= pierrefs_setattr,
 	.symlink	= pierrefs_symlink,
 };
@@ -394,4 +395,7 @@ struct dentry_operations pierrefs_dops = {
 struct file_operations pierrefs_fops = {
 	.llseek		= pierrefs_llseek,
 	.open		= pierrefs_open,
+};
+
+struct file_operations pierrefs_drops = {
 };
