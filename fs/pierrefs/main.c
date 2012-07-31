@@ -25,7 +25,8 @@ static int make_path(const char *s, size_t n, char **path) {
 
 	/* First of all, look if it is relative path */
 	if (s[0] != '/') {
-        return -EINVAL;
+		printk(KERN_ERR "Received a relative path - forbidden: %s\n", s);
+		return -EINVAL;
 	}
 
 	/* Tailing has to be removed */
@@ -41,6 +42,8 @@ static int make_path(const char *s, size_t n, char **path) {
         return 0;
 	}
 
+	printk(KERN_CRIT "Failed allocating new path\n");
+
     return -ENOMEM;
 }
 
@@ -53,9 +56,12 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	struct timespec atime, mtime, ctime;
 	struct file *filp;
 
+	printk(KERN_INFO "Parameters for mount operation: %s\n", arg);
+
 	/* We are expecting 2 branches, separated by : */
 	part2 = strchr(arg, ':');
 	if (!part2) {
+		printk(KERN_ERR "Failed finding ':'\n");
 		return -EINVAL;
 	}
 
@@ -73,6 +79,7 @@ static int get_branches(struct super_block *sb, const char *arg) {
 			sb_info->read_write_branch = output;
 		}
 		else if (strncmp(type + 1, "RO", 2)) {
+		printk(KERN_ERR "Unrecognized branch type: %.2s\n", type + 1);
 			return -EINVAL;
 		}
 		else {
@@ -105,15 +112,18 @@ static int get_branches(struct super_block *sb, const char *arg) {
 
 		if (!strncmp(type + 1, "RW", 2)) {
 			if (sb_info->read_write_branch) {
+				printk("Attempted to provide two RW branches\n");
 				return -EINVAL;
 			}
 			sb_info->read_write_branch = output;
 		}
 		else if (strncmp(type + 1, "RO", 2)) {
+			printk(KERN_ERR "Unrecognized branch type: %.2s\n", type + 1);
 			return -EINVAL;
 		}
 		else {
 			if (forced_ro) {
+				printk(KERN_ERR "No RW branch provided\n");
 				return -EINVAL;
 			}
 			sb_info->read_only_branch = output;
@@ -137,12 +147,16 @@ static int get_branches(struct super_block *sb, const char *arg) {
 
 	/* At this point, we should have the two branches set */
 	if (!sb_info->read_only_branch || !sb_info->read_write_branch) {
+		printk(KERN_ERR "One branch missing. Read-write: %s\nRead-only: %s\n", sb_info->read_write_branch, sb_info->read_only_branch);
 		return -EINVAL;
 	}
+
+	printk(KERN_INFO "Read-write: %s\nRead-only: %s\n", sb_info->read_write_branch, sb_info->read_only_branch);
 
 	/* Check for branches */
 	filp = filp_open(sb_info->read_only_branch, O_RDONLY, 0);
 	if (IS_ERR(filp)) {
+		printk(KERN_ERR "Failed opening RO branch!\n");
 		return PTR_ERR(filp);
 	}
 
@@ -165,6 +179,7 @@ static int get_branches(struct super_block *sb, const char *arg) {
 
 	filp = filp_open(sb_info->read_write_branch, O_RDONLY, 0);
 	if (IS_ERR(filp)) {
+		printk(KERN_ERR "Failed opening RW branch!\n");
 		return PTR_ERR(filp);
 	}
 	filp_close(filp, 0);
@@ -172,6 +187,7 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	/* Allocate inode for / */
 	root_i = new_inode(sb);
 	if (IS_ERR(root_i)) {
+		printk(KERN_CRIT "Failed allocating new inode for /!\n");
 		return PTR_ERR(root_i);
 	}
 
@@ -187,6 +203,7 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	/* Create its directory entry */
 	sb->s_root = d_alloc_root(root_i);
 	if (IS_ERR(sb->s_root)) {
+		printk(KERN_CRIT "Failed allocating new dentry for /!\n");
 		clear_inode(root_i);
 		return PTR_ERR(sb->s_root);
 	}
@@ -207,8 +224,11 @@ static int pierrefs_read_super(struct super_block *sb, void *raw_data,
 	int err;
 	struct pierrefs_sb_info *sb_info;
 
+	printk(KERN_INFO "Mount started\n");
+
 	/* Check for parameters */
 	if (!raw_data) {
+		printk(KERN_ERR "No mount parameters provided!\n");
 		return -EINVAL;
 	}
 
@@ -216,6 +236,7 @@ static int pierrefs_read_super(struct super_block *sb, void *raw_data,
 	sb_info =
 	sb->s_fs_info = kzalloc(sizeof(struct pierrefs_sb_info), GFP_KERNEL);
 	if (unlikely(!sb->s_fs_info)) {
+		printk(KERN_CRIT "Failed allocating super block info structure!\n");
 		return -ENOMEM;
 	}
 
@@ -225,6 +246,7 @@ static int pierrefs_read_super(struct super_block *sb, void *raw_data,
 	/* Get branches */
 	err = get_branches(sb, raw_data);
 	if (err) {
+		printk(KERN_ERR "Error while getting branches!\n");
 		if (sb_info->read_only_branch) {
 			kfree(sb_info->read_only_branch);
 		}
@@ -235,6 +257,8 @@ static int pierrefs_read_super(struct super_block *sb, void *raw_data,
 		sb->s_fs_info = NULL;
 		return err;
 	}
+
+	printk(KERN_INFO "Mount OK\n");
 
 	return 0;
 }
@@ -253,12 +277,14 @@ static void pierrefs_kill_sb(struct super_block *sb) {
 
 	sb_info = sb->s_fs_info;
 
+#if 0
 	if (sb_info->read_only_branch) {
 		kfree(sb_info->read_only_branch);
 	}
 	if (sb_info->read_write_branch) {
 		kfree(sb_info->read_write_branch);
 	}
+#endif
 
 	kill_litter_super(sb);
 }
