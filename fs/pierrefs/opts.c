@@ -376,13 +376,29 @@ int pierrefs_symlink(struct inode *dir, struct dentry *dentry, const char *symna
 
 static int pierrefs_statfs(struct dentry *dentry, struct kstatfs *buf) {
 	struct super_block *sb = dentry->d_sb;
-	u64 id = huge_encode_dev(sb->s_bdev->bd_dev);
+	struct pierrefs_sb_info * sb_info = sb->s_fs_info;
+	struct file *filp;
+	int err;
 
-	memset(buf, 0, sizeof(struct kstatfs));
+	memset(buf, 0, sizeof(*buf));
 
+	/* First, get RO data */
+	filp = filp_open(sb_info->read_only_branch, O_RDONLY, 0);
+	if (IS_ERR(filp)) {
+		pr_err("Failed opening RO branch!\n");
+		return PTR_ERR(filp);
+	}
+
+	err = vfs_statfs(filp->f_dentry, buf);
+	filp_close(filp, 0);
+
+	if (unlikely(err)) {
+		return err;
+	}
+
+	/* Return them, but ensure we mark our stuff */
 	buf->f_type = sb->s_magic;
-	buf->f_fsid.val[0] = (u32)id;
-	buf->f_fsid.val[1] = (u32)(id >> 32);
+	memset(&buf->f_fsid, 0, sizeof(buf->f_fsid));
 
 	return 0;
 }
