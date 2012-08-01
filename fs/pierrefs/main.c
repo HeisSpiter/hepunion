@@ -164,7 +164,7 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	sb->s_blocksize = filp->f_vfsmnt->mnt_sb->s_blocksize;
 	sb->s_blocksize_bits = filp->f_vfsmnt->mnt_sb->s_blocksize_bits;
 	/* Root modes - those can't be changed */
-	root_m = S_IRUSR | S_IXUSR | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH;
+	root_m = S_IRUSR | S_IXUSR | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH | S_IFDIR;
 	atime = filp->f_vfsmnt->mnt_sb->s_root->d_inode->i_atime;
 	mtime = filp->f_vfsmnt->mnt_sb->s_root->d_inode->i_mtime;
 	ctime = filp->f_vfsmnt->mnt_sb->s_root->d_inode->i_ctime;
@@ -172,10 +172,12 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	/* Finally close */
 	filp_close(filp, 0);
 
+#if 0
 	/* Check for consistent data */
-	if (!is_flag_set(root_m, S_IFDIR)) {
+	if (!is_flag_set(filp->f_vfsmnt->mnt_sb->s_root->d_inode->i_mode, S_IFDIR)) {
 		return -EINVAL;
 	}
+#endif
 
 	filp = filp_open(sb_info->read_write_branch, O_RDONLY, 0);
 	if (IS_ERR(filp)) {

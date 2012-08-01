@@ -381,7 +381,9 @@ struct inode_operations pierrefs_iops = {
 	.mkdir		= pierrefs_mkdir,
 	.mknod		= pierrefs_mknod,
 	.permission	= pierrefs_permission,
+#if 0
 	.readlink	= generic_readlink, /* dentry will already point on the right file */
+#endif
 	.setattr	= pierrefs_setattr,
 	.symlink	= pierrefs_symlink,
 };
