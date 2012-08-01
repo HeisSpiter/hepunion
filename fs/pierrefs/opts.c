@@ -11,7 +11,7 @@
 
 #include "pierrefs.h"
 
-int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *kstbuf) {
+static int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *kstbuf) {
 	int err;
 	char *path = get_context()->global1;
 
@@ -25,7 +25,7 @@ int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *
 	return get_file_attr(path, kstbuf);
 }
 
-int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *dentry) {
+static int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *dentry) {
 	int err, origin;
 	char *from = get_context()->global1;
 	char *to = get_context()->global2;
@@ -92,7 +92,7 @@ int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *d
 	return 0;
 }
 
-loff_t pierrefs_llseek(struct file *file, loff_t offset, int origin) {
+static loff_t pierrefs_llseek(struct file *file, loff_t offset, int origin) {
 	int err = -EINVAL;
 	struct file *real_file = (struct file *)file->private_data;
 
@@ -103,7 +103,7 @@ loff_t pierrefs_llseek(struct file *file, loff_t offset, int origin) {
 	return err;
 }
 
-struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nameidata) {
+static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nameidata) {
 	/* We are looking for "dentry" in "dir" */
 	int err;
 	char *path = get_context()->global1;
@@ -132,7 +132,7 @@ struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry, struct
 	return NULL;
 }
 
-int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
+static int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 	int err;
 	char *path = get_context()->global1;
 	char *real_path = get_context()->global2;
@@ -197,7 +197,7 @@ int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 	return 0;
 }
 
-int pierrefs_mknod(struct inode *dir, struct dentry *dentry, int mode, dev_t rdev) {
+static int pierrefs_mknod(struct inode *dir, struct dentry *dentry, int mode, dev_t rdev) {
 	int err;
 	char *path = get_context()->global1;
 	char *real_path = get_context()->global2;
@@ -240,7 +240,7 @@ int pierrefs_mknod(struct inode *dir, struct dentry *dentry, int mode, dev_t rde
 	return 0;
 }
 
-int pierrefs_open(struct inode *inode, struct file *file) {
+static int pierrefs_open(struct inode *inode, struct file *file) {
 	int err;
 	char *path = get_context()->global1;
 	char *real_path = get_context()->global2;
@@ -277,7 +277,7 @@ int pierrefs_open(struct inode *inode, struct file *file) {
 	return 0;
 }
 
-int pierrefs_permission(struct inode *inode, int mask, struct nameidata *nd) {
+static int pierrefs_permission(struct inode *inode, int mask, struct nameidata *nd) {
 	int err;
 	char *path = get_context()->global1;
 	char *real_path = get_context()->global2;
@@ -298,7 +298,7 @@ int pierrefs_permission(struct inode *inode, int mask, struct nameidata *nd) {
 	return can_access(path, real_path, mask);
 }
 
-int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
+static int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
 	int err;
 	char *path = get_context()->global1;
 	char *real_path = get_context()->global2;
@@ -327,7 +327,7 @@ int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
 	return set_me_worker(path, real_path, attr);
 }
 
-int pierrefs_symlink(struct inode *dir, struct dentry *dentry, const char *symname) {
+static int pierrefs_symlink(struct inode *dir, struct dentry *dentry, const char *symname) {
 	/* Create the link on the RW branch */
 	int err;
 	char *to = get_context()->global1;
