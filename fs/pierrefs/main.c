@@ -277,14 +277,15 @@ static void pierrefs_kill_sb(struct super_block *sb) {
 
 	sb_info = sb->s_fs_info;
 
-#if 0
-	if (sb_info->read_only_branch) {
-		kfree(sb_info->read_only_branch);
+	/* In case mounting failed, sb_info can be null */
+	if (sb_info) {
+		if (sb_info->read_only_branch) {
+			kfree(sb_info->read_only_branch);
+		}
+		if (sb_info->read_write_branch) {
+			kfree(sb_info->read_write_branch);
+		}
 	}
-	if (sb_info->read_write_branch) {
-		kfree(sb_info->read_write_branch);
-	}
-#endif
 
 	kill_litter_super(sb);
 }
