@@ -199,7 +199,7 @@ extern struct file_operations pierrefs_fops;
  * Get current context associated with mount point
  * \return	It returns super block info structure (pierrefs_sb_info)
  */
-#define get_context() ((struct pierrefs_sb_info *)current->fs->rootmnt->mnt_sb->s_fs_info)
+#define get_context() ((struct pierrefs_sb_info *)current->fs->pwdmnt->mnt_sb->s_fs_info)
 /**
  * Generate the string matching the given path for a full RO path
  * \param[in]	p	The path for which full path is required
