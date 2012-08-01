@@ -374,6 +374,19 @@ int pierrefs_symlink(struct inode *dir, struct dentry *dentry, const char *symna
 	return 0;
 }
 
+static int pierrefs_statfs(struct dentry *dentry, struct kstatfs *buf) {
+	struct super_block *sb = dentry->d_sb;
+	u64 id = huge_encode_dev(sb->s_bdev->bd_dev);
+
+	memset(buf, 0, sizeof(struct kstatfs));
+
+	buf->f_type = sb->s_magic;
+	buf->f_fsid.val[0] = (u32)id;
+	buf->f_fsid.val[1] = (u32)(id >> 32);
+
+	return 0;
+}
+
 struct inode_operations pierrefs_iops = {
 	.getattr	= pierrefs_getattr,
 	.link		= pierrefs_link,
@@ -389,6 +402,7 @@ struct inode_operations pierrefs_iops = {
 };
 
 struct super_operations pierrefs_sops = {
+	.statfs		= pierrefs_statfs,
 };
 
 struct dentry_operations pierrefs_dops = {

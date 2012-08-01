@@ -25,6 +25,7 @@
 #include <linux/namei.h>
 #include <linux/mount.h>
 #include <linux/module.h>
+#include <linux/statfs.h>
 #include <linux/security.h>
 #include "recursivemutex.h"
 
