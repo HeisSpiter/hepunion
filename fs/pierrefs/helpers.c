@@ -16,6 +16,8 @@ int can_access(const char *path, const char *real_path, int mode) {
 	struct kstat stbuf;
 	int err;
 
+	pr_info("can_access: %s, %s, %x\n", path, real_path, mode);
+
 	/* Get file attributes */
 	err = get_file_attr_worker(path, real_path, &stbuf);
 	if (err) {
@@ -79,6 +81,8 @@ int can_remove(const char *path, const char *real_path) {
 	/* Find parent directory */
 	char *parent = strrchr(real_path, '/');
 
+	pr_info("can_remove: %s, %s\n", path, real_path);
+
 	/* Caller wants to remove /! */
 	if (parent == real_path) {
 		return -EACCES;
@@ -96,6 +100,8 @@ int can_traverse(const char *path) {
 	char long_path[PATH_MAX];
 	int err;
 	char *last, *old_directory, *directory;
+
+	pr_info("can_traverse: %s\n", path);
 
 	/* Prepare strings */
 	snprintf(short_path, PATH_MAX, "%c", '/');
@@ -135,6 +141,8 @@ int find_file(const char *path, char *real_path, char flags) {
 	struct kstat kstbuf;
 	char tmp_path[PATH_MAX];
 	char wh_path[PATH_MAX];
+
+	pr_info("find_file: %s, %p, %x\n", path, real_path, flags);
 
 	/* Do not check flags validity
 	 * Caller can only be internal
@@ -233,11 +241,12 @@ int find_file(const char *path, char *real_path, char flags) {
 }
 
 /* Adapted from nfs_path function */
-int get_full_path(const struct inode *inode, const struct dentry *dentry, char *real_path)
-{
+int get_full_path(const struct inode *inode, const struct dentry *dentry, char *real_path) {
 	char tmp_path[PATH_MAX];
 	char *end = tmp_path+sizeof(tmp_path);
 	int namelen = 0, buflen = PATH_MAX;
+
+	pr_info("get_full_path: %p, %p, %p\n", inode, dentry, real_path);
 
 	/* If we don't have any dentry, then, let's find one */
 	if (!dentry) {
@@ -284,6 +293,8 @@ struct dentry * get_path_dentry(const char *pathname, int flag) {
 	struct dentry *dentry;
 	struct nameidata nd;
 
+	pr_info("get_path_dentry: %s, %x\n", pathname, flag);
+
 	push_root();
 	err = __user_walk(pathname, flag, &nd);
 	pop_root();
@@ -302,6 +313,8 @@ int get_relative_path(const struct inode *inode, const struct dentry *dentry, ch
 	int len;
 	char real_path[PATH_MAX];
 	struct pierrefs_sb_info *sb_info;
+
+	pr_info("get_relative_path: %p, %p, %p, %d\n", inode, dentry, path, is_ours);
 
 	/* First, get full path */
 	len = get_full_path(inode, dentry, real_path);
@@ -338,6 +351,8 @@ int get_relative_path_for_file(const struct inode *dir, const struct dentry *den
 	int err;
 	size_t len;
 
+	pr_info("get_relative_path_for_file: %p, %p, %p, %d\n", dir, dentry, path, is_ours);
+
 	/* First get path of the directory */
 	err = get_relative_path(dir, 0, path, is_ours);
 	if (err < 0) {
@@ -362,6 +377,8 @@ long mkdir(const char *pathname, int mode) {
 	char * tmp;
 	struct dentry *dentry;
 	struct nameidata nd;
+
+	pr_info("mkdir: %s, %x\n", pathname, mode);
 
 	tmp = getname(pathname);
 	if (IS_ERR(tmp))
@@ -399,6 +416,8 @@ long mknod(const char *pathname, int mode, unsigned dev) {
 	char * tmp;
 	struct dentry * dentry;
 	struct nameidata nd;
+
+	pr_info("mknod: %s, %x, %u\n", pathname, mode, dev);
 
 	if (S_ISDIR(mode))
 		return -EPERM;
@@ -452,6 +471,8 @@ out:
 }
 
 int mkfifo(const char *pathname, int mode) {
+	pr_info("mkfifo: %s, %x\n", pathname, mode);
+
 	/* Ensure FIFO mode is set */
 	mode |= S_IFIFO;
 
@@ -464,6 +485,8 @@ long symlink(const char *oldname, const char *newname) {
 	int error = 0;
 	char * from;
 	char * to;
+
+	pr_info("symlink: %s, %s\n", oldname, newname);
 
 	from = getname(oldname);
 	if(IS_ERR(from))
@@ -504,6 +527,8 @@ long link(const char *oldname, const char *newname) {
 	struct nameidata nd, old_nd;
 	int error;
 	char * to;
+
+	pr_info("link: %s, %s\n", oldname, newname);
 
 	to = getname(newname);
 	if (IS_ERR(to))
@@ -548,6 +573,8 @@ long readlink(const char *path, char *buf, int bufsiz) {
 	struct inode *inode;
 	struct nameidata nd;
 	int error;
+
+	pr_info("readlink: %s, %p, %d\n", path, buf, bufsiz);
 
 	if (bufsiz <= 0)
 		return -EINVAL;
