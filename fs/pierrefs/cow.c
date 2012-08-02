@@ -32,7 +32,7 @@
 
 #include "pierrefs.h"
 
-int copy_child(void *buf, const char *name, int namlen, loff_t offset, ino_t ino, unsigned d_type) {
+static int copy_child(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
 	char tmp_path[PATH_MAX];
 	char tmp_ro_path[PATH_MAX];
 	char tmp_rw_path[PATH_MAX];

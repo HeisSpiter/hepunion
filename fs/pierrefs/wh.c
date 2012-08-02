@@ -26,9 +26,9 @@
 
 #include "pierrefs.h"
 
-int hide_entry(void *buf, const char *name, int namlen, loff_t offset, ino_t ino, unsigned d_type);
+static int hide_entry(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type);
 
-static int check_whiteout(void *buf, const char *name, int namlen, loff_t offset, ino_t ino, unsigned d_type) {
+static int check_whiteout(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
 	char wh_path[PATH_MAX];
 	char file_path[PATH_MAX];
 	struct readdir_context *ctx = (struct readdir_context*)buf;
@@ -42,7 +42,7 @@ static int check_whiteout(void *buf, const char *name, int namlen, loff_t offset
 	return (find_whiteout(file_path, ctx->context, wh_path) < 0);
 }
 
-static int check_writable(void *buf, const char *name, int namlen, loff_t offset, ino_t ino, unsigned d_type) {
+static int check_writable(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
 	return is_whiteout(name, namlen);
 }
 
@@ -114,7 +114,7 @@ int create_whiteout(const char *path, char *wh_path, struct pierrefs_sb_info *co
 	return create_whiteout_worker(wh_path, context);
 }
 
-static int delete_whiteout(void *buf, const char *name, int namlen, loff_t offset, ino_t ino, unsigned d_type) {
+static int delete_whiteout(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
 	int err;
 	struct dentry *dentry;
 	char wh_path[PATH_MAX];
@@ -211,7 +211,7 @@ int hide_directory_contents(const char *path, struct pierrefs_sb_info *context) 
 	return err;
 }
 
-int hide_entry(void *buf, const char *name, int namlen, loff_t offset, ino_t ino, unsigned d_type) {
+static int hide_entry(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
 	char wh_path[PATH_MAX];
 	struct readdir_context *ctx = (struct readdir_context*)buf;
 
