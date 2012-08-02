@@ -63,7 +63,7 @@ static int create_whiteout_worker(const char *wh_path, struct pierrefs_sb_info *
 	attr.ia_uid = 0;
 
 	push_root();
-	err = notify_change(fd->f_dentry->d_inode, &attr);
+	err = notify_change(fd->f_dentry, &attr);
 	pop_root();
 	if (err == 0) {
 		return err;

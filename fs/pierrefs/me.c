@@ -71,7 +71,7 @@ int create_me(const char *me_path, struct kstat *kstbuf, struct pierrefs_sb_info
 
 	/* Set all the attributes */
 	push_root();
-	err = notify_change(fd->f_dentry->d_inode, &attr);
+	err = notify_change(fd->f_dentry, &attr);
 	filp_close(fd, 0);
 	pop_root();
 
@@ -237,7 +237,7 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr, s
 		}
 
 		push_root();
-		err = notify_change(fd->f_dentry->d_inode, attr);
+		err = notify_change(fd->f_dentry, attr);
 
 		filp_close(fd, 0);
 		pop_root();
@@ -251,7 +251,7 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr, s
 		/* Only change if there are changes */
 		if (attr->ia_valid) {
 			push_root();
-			err = notify_change(fd->f_dentry->d_inode, attr);
+			err = notify_change(fd->f_dentry, attr);
 			pop_root();
 		}
 		else {

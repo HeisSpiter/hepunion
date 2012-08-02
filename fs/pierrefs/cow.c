@@ -239,7 +239,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
 	attr.ia_mode = kstbuf.mode;
 
 	push_root();
-	err = notify_change(dentry->d_inode, &attr);
+	err = notify_change(dentry, &attr);
 	pop_root();
 
 	if (err < 0) {
@@ -361,7 +361,7 @@ int find_path_worker(const char *path, char *real_path, struct pierrefs_sb_info 
 			attr.ia_gid = kstbuf.gid;
 
 			push_root();
-			err = notify_change(dentry->d_inode, &attr);
+			err = notify_change(dentry, &attr);
 
 			if (err < 0) {
 				vfs_rmdir(dentry->d_inode, dentry);
