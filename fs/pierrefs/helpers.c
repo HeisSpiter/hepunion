@@ -243,7 +243,7 @@ int find_file(const char *path, char *real_path, struct pierrefs_sb_info *contex
 /* Adapted from nfs_path function */
 int get_full_path(const struct inode *inode, const struct dentry *dentry, char *real_path) {
 	char tmp_path[PATH_MAX];
-	char *end = tmp_path+sizeof(tmp_path);
+	char *end = tmp_path + PATH_MAX;
 	int namelen = 0, buflen = PATH_MAX;
 
 	pr_info("get_full_path: %p, %p, %p\n", inode, dentry, real_path);
@@ -257,6 +257,8 @@ int get_full_path(const struct inode *inode, const struct dentry *dentry, char *
 			dentry = list_entry(inode->i_dentry.next, struct dentry, d_alias);
 		}
 	}
+
+	pr_info("Getting full path of: %s\n", dentry->d_name.name);
 
 	*--end = '\0';
 	buflen--;
@@ -272,19 +274,17 @@ int get_full_path(const struct inode *inode, const struct dentry *dentry, char *
 		dentry = dentry->d_parent;
 	}
 	spin_unlock(&dcache_lock);
-	buflen -= sizeof(char);
-	if (buflen < 0)
-		goto Elong;
-	end -= namelen;
-	memcpy(end, "/", namelen);
+	*--end = '/';
 
 	/* Copy back name */
 	memcpy(real_path, end, buflen);
+
+	pr_info("Full path: %s\n", real_path);
+
 	return buflen;
 
 Elong_unlock:
 	spin_unlock(&dcache_lock);
-Elong:
 	return -ENAMETOOLONG;
 }
 
