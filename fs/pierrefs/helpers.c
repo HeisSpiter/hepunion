@@ -275,6 +275,7 @@ int get_full_path(const struct inode *inode, const struct dentry *dentry, char *
 	}
 	spin_unlock(&dcache_lock);
 	*--end = '/';
+	buflen--;
 
 	/* Copy back name */
 	memcpy(real_path, end, buflen);
@@ -325,6 +326,7 @@ int get_relative_path(const struct inode *inode, const struct dentry *dentry, co
 	 * need to skip the branch part
 	 */
 	if (is_ours) {
+		memcpy(path, real_path, len);
 		return 0;
 	}
 
