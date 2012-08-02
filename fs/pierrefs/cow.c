@@ -32,17 +32,11 @@
 
 #include "pierrefs.h"
 
-typedef struct {
-	const char *ro_path;
-	const char *path;
-	struct pierrefs_sb_info *context;
-} readdir_context;
-
 int copy_child(void *buf, const char *name, int namlen, loff_t offset, ino_t ino, unsigned d_type) {
 	char tmp_path[PATH_MAX];
 	char tmp_ro_path[PATH_MAX];
 	char tmp_rw_path[PATH_MAX];
-	readdir_context *ctx = (readdir_context*)buf;
+	struct readdir_context *ctx = (struct readdir_context*)buf;
 
 	/* Don't copy special entries */
 	if (is_special(name, namlen)) {
@@ -74,7 +68,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
 	unsigned char buf[MAXSIZE];
 	struct dentry *dentry;
 	struct iattr attr;
-	readdir_context ctx;
+	struct readdir_context ctx;
 
 	/* Get file attributes */
 	err = get_file_attr_worker(path, ro_path, context, &kstbuf);

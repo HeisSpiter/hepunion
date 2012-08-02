@@ -26,18 +26,12 @@
 
 #include "pierrefs.h"
 
-typedef struct {
-	const char *ro_path;
-	const char *path;
-	struct pierrefs_sb_info *context;
-} readdir_context;
-
 int hide_entry(void *buf, const char *name, int namlen, loff_t offset, ino_t ino, unsigned d_type);
 
 static int check_whiteout(void *buf, const char *name, int namlen, loff_t offset, ino_t ino, unsigned d_type) {
 	char wh_path[PATH_MAX];
 	char file_path[PATH_MAX];
-	readdir_context *ctx = (readdir_context*)buf;
+	struct readdir_context *ctx = (struct readdir_context*)buf;
 
 	/* Get file path */
 	if (snprintf(file_path, PATH_MAX, "%s%s", ctx->path, name) > PATH_MAX) {
@@ -124,7 +118,7 @@ static int delete_whiteout(void *buf, const char *name, int namlen, loff_t offse
 	int err;
 	struct dentry *dentry;
 	char wh_path[PATH_MAX];
-	readdir_context *ctx = (readdir_context*)buf;
+	struct readdir_context *ctx = (struct readdir_context*)buf;
 	struct pierrefs_sb_info *context = ctx->context;
 
 	/* assert(is_whiteout(name, namlen)); */
@@ -219,7 +213,7 @@ int hide_directory_contents(const char *path, struct pierrefs_sb_info *context) 
 
 int hide_entry(void *buf, const char *name, int namlen, loff_t offset, ino_t ino, unsigned d_type) {
 	char wh_path[PATH_MAX];
-	readdir_context *ctx = (readdir_context*)buf;
+	struct readdir_context *ctx = (struct readdir_context*)buf;
 
 	if (snprintf(wh_path, PATH_MAX, "%s/.wh.%s", ctx->path, name) > PATH_MAX) {
 		return -ENAMETOOLONG;
@@ -232,7 +226,7 @@ int is_empty_dir(const char *path, const char *ro_path, const char *rw_path, str
 	int err;
 	struct file *ro_fd;
 	struct file *rw_fd;
-	readdir_context ctx;
+	struct readdir_context ctx;
 
 	ro_fd = open_worker(ro_path, O_RDONLY);
 	if (IS_ERR(ro_fd)) {

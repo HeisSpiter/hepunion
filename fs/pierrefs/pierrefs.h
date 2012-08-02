@@ -62,6 +62,21 @@ struct pierrefs_sb_info {
 	char global2[PATH_MAX];
 };
 
+struct readdir_context {
+	/**
+	 * Read-only path string that may be used in callback function
+	 */
+	const char *ro_path;
+	/**
+	 * Any path (likely read-write) string that may be used in callback function
+	 */
+	const char *path;
+	/**
+     * Context with which vfs_readdir was called
+	 */
+	struct pierrefs_sb_info *context;
+};
+
 /**
  * \brief Enumeration defining all the possible returns of the find_file() function
  * \sa find_file
