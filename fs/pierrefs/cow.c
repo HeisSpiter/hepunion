@@ -35,6 +35,7 @@
 typedef struct {
 	const char *ro_path;
 	const char *path;
+	struct pierrefs_sb_info *context;
 } readdir_context;
 
 int copy_child(void *buf, const char *name, int namlen, loff_t offset, ino_t ino, unsigned d_type) {
@@ -57,10 +58,10 @@ int copy_child(void *buf, const char *name, int namlen, loff_t offset, ino_t ino
 	}
 
 	/* Recreate everything recursively */
-	return create_copyup(tmp_path, tmp_ro_path, tmp_rw_path);
+	return create_copyup(tmp_path, tmp_ro_path, tmp_rw_path, ctx->context);
 }
 
-int create_copyup(const char *path, const char *ro_path, char *rw_path) {
+int create_copyup(const char *path, const char *ro_path, char *rw_path, struct pierrefs_sb_info *context) {
 	/* Once here, two things are sure:
 	 * RO exists, RW does not
 	 */
@@ -76,13 +77,13 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path) {
 	readdir_context ctx;
 
 	/* Get file attributes */
-	err = get_file_attr_worker(path, ro_path, &kstbuf);
+	err = get_file_attr_worker(path, ro_path, context, &kstbuf);
 	if (err < 0) {
 		return err;
 	}
 
 	/* Copyup dirs if required */
-	err = find_path(path, rw_path);
+	err = find_path(path, rw_path, context);
 	if (err < 0) {
 		return err;
 	}
@@ -92,14 +93,14 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path) {
 		/* Symbolic link */
 		case S_IFLNK:
 			/* Read destination */
-			len = readlink(ro_path, tmp, sizeof(tmp) - 1);
+			len = readlink(ro_path, tmp, context, sizeof(tmp) - 1);
 			if (len < 0) {
 				return len;
 			}
 			tmp[len] = '\0';
 
 			/* And create a new symbolic link */
-			err = symlink_worker(tmp, rw_path);
+			err = symlink_worker(tmp, rw_path, context);
 			if (err < 0) {
 				return err;
 			}
@@ -143,7 +144,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path) {
 						pop_root();
 
 						/* Delete copyup */
-						dentry = get_path_dentry(rw_path, LOOKUP_REVAL);
+						dentry = get_path_dentry(rw_path, context, LOOKUP_REVAL);
 						if (!IS_ERR(dentry)) {
 							push_root();
 							vfs_unlink(dentry->d_inode, dentry);
@@ -167,7 +168,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path) {
 		case S_IFBLK:
 		case S_IFCHR:
 			/* Recreate a node */
-			err = mknod_worker(rw_path, kstbuf.mode, kstbuf.rdev);
+			err = mknod_worker(rw_path, context, kstbuf.mode, kstbuf.rdev);
 			if (err < 0) {
 				return err;
 			}
@@ -175,7 +176,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path) {
 
 		case S_IFDIR:
 			/* Recreate a dir */
-			err = mkdir_worker(rw_path, kstbuf.mode);
+			err = mkdir_worker(rw_path, context, kstbuf.mode);
 			if (err < 0) {
 				return err;
 			}
@@ -183,7 +184,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path) {
 			/* Recreate dir structure */
 			ro_fd = open_worker(ro_path, O_RDONLY);
 			if (IS_ERR(ro_fd)) {
-				dentry = get_path_dentry(rw_path, LOOKUP_REVAL);
+				dentry = get_path_dentry(rw_path, context, LOOKUP_REVAL);
 				if (IS_ERR(dentry)) {
 					return PTR_ERR(ro_fd);
 				}
@@ -198,6 +199,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path) {
 			/* Create a copyup of each file & dir */
 			ctx.ro_path = ro_path;
 			ctx.path = path;
+			ctx.context = context;
 			push_root();
 			err = vfs_readdir(ro_fd, copy_child, &ctx);
 			filp_close(ro_fd, 0);
@@ -205,7 +207,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path) {
 
 			/* Handle failure */
 			if (err < 0) {
-				dentry = get_path_dentry(rw_path, LOOKUP_REVAL);
+				dentry = get_path_dentry(rw_path, context, LOOKUP_REVAL);
 				if (IS_ERR(dentry)) {
 					return err;
 				}
@@ -221,7 +223,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path) {
 
 		case S_IFIFO:
 			/* Recreate FIFO */
-			err = mkfifo_worker(rw_path, kstbuf.mode);
+			err = mkfifo_worker(rw_path, context, kstbuf.mode);
 			if (err < 0) {
 				return err;
 			}
@@ -229,7 +231,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path) {
 	}
 
 	/* Get dentry for the copyup */
-	dentry = get_path_dentry(rw_path, LOOKUP_REVAL);
+	dentry = get_path_dentry(rw_path, context, LOOKUP_REVAL);
 	if (IS_ERR(dentry)) {
 		return PTR_ERR(dentry);
 	}
@@ -257,8 +259,8 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path) {
 	dput(dentry);
 
 	/* Check if there was a me and remove */
-	if (find_me(path, me_path, &kstbuf) >= 0) {
-		dentry = get_path_dentry(me_path, LOOKUP_REVAL);
+	if (find_me(path, context, me_path, &kstbuf) >= 0) {
+		dentry = get_path_dentry(me_path, context, LOOKUP_REVAL);
 		if (IS_ERR(dentry)) {
 			return 0;
 		}
@@ -272,7 +274,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path) {
 	return 0;
 }
 
-int find_path_worker(const char *path, char *real_path) {
+int find_path_worker(const char *path, char *real_path, struct pierrefs_sb_info *context) {
 	/* Try to find that tree */
 	int err;
 	char read_only[PATH_MAX];
@@ -293,7 +295,7 @@ int find_path_worker(const char *path, char *real_path) {
 
 	memcpy(tree_path, path, last - path + 1);
 	tree_path[last - path + 1] = '\0';
-	tree_path_present = find_file(tree_path, real_tree_path, 0);
+	tree_path_present = find_file(tree_path, real_tree_path, context, 0);
 	/* Path should at least exist RO */
 	if (tree_path_present < 0) {
 		return -tree_path_present;
@@ -301,7 +303,7 @@ int find_path_worker(const char *path, char *real_path) {
 	/* Path is already present, nothing to do */
 	else if (tree_path_present == READ_WRITE) {
 		/* Execpt filing in output buffer */
-		if (snprintf(real_path, PATH_MAX, "%s%s", get_context()->read_write_branch, path) > PATH_MAX) {
+		if (snprintf(real_path, PATH_MAX, "%s%s", context->read_write_branch, path) > PATH_MAX) {
 			return -ENAMETOOLONG;
 		}
 
@@ -309,18 +311,18 @@ int find_path_worker(const char *path, char *real_path) {
 	}
 
 	/* Once here, recreating tree by COW is mandatory */
-	if (snprintf(real_path, PATH_MAX, "%s/", get_context()->read_write_branch) > PATH_MAX) {
+	if (snprintf(real_path, PATH_MAX, "%s/", context->read_write_branch) > PATH_MAX) {
 		return -ENAMETOOLONG;
 	}
 
 	/* Also prepare for RO branch */
-	if (snprintf(read_only, PATH_MAX, "%s/", get_context()->read_only_branch) > PATH_MAX) {
+	if (snprintf(read_only, PATH_MAX, "%s/", context->read_only_branch) > PATH_MAX) {
 		return -ENAMETOOLONG;
 	}
 
 	/* If that's last (creating dir at root) */
 	if (last == path) {
-		if (snprintf(real_path, PATH_MAX, "%s/", get_context()->read_write_branch) > PATH_MAX) {
+		if (snprintf(real_path, PATH_MAX, "%s/", context->read_write_branch) > PATH_MAX) {
 			return -ENAMETOOLONG;
 		}
 
@@ -346,13 +348,13 @@ int find_path_worker(const char *path, char *real_path) {
 			}
 
 			/* Create directory */
-			err = mkdir_worker(real_path, kstbuf.mode);
+			err = mkdir_worker(real_path, context, kstbuf.mode);
 			if (err < 0) {
 				return err;
 			}
 
 			/* Now, set all the previous attributes */
-			dentry = get_path_dentry(real_path, LOOKUP_DIRECTORY);
+			dentry = get_path_dentry(real_path, context, LOOKUP_DIRECTORY);
 			if (IS_ERR(dentry)) {
 				/* FIXME: Should delete in case of failure */
 				return PTR_ERR(dentry);
@@ -390,12 +392,12 @@ int find_path_worker(const char *path, char *real_path) {
 	return 0;
 }
 
-int find_path(const char *path, char *real_path) {
+int find_path(const char *path, char *real_path, struct pierrefs_sb_info *context) {
 	if (real_path) {
-		return find_path_worker(path, real_path);
+		return find_path_worker(path, real_path, context);
 	}
 	else {
 		char tmp_path[PATH_MAX];
-		return find_path_worker(path, tmp_path);
+		return find_path_worker(path, tmp_path, context);
 	}
 }

@@ -13,63 +13,65 @@
 
 static int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *kstbuf) {
 	int err;
-	char *path = get_context()->global1;
+	struct pierrefs_sb_info *context = get_context_d(dentry);
+	char *path = context->global1;
 
 	/* Get path */
-	err = get_relative_path(0, dentry, path, 1);
+	err = get_relative_path(0, dentry, context, path, 1);
 	if (err < 0) {
 		return err;
 	}
 
 	/* Call worker */
-	return get_file_attr(path, kstbuf);
+	return get_file_attr(path, context, kstbuf);
 }
 
 static int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *dentry) {
 	int err, origin;
-	char *from = get_context()->global1;
-	char *to = get_context()->global2;
+	struct pierrefs_sb_info *context = get_context_d(old_dentry);
+	char *from = context->global1;
+	char *to = context->global2;
 	char real_from[PATH_MAX];
 	char real_to[PATH_MAX];
 
 	/* First, find file */
-	err = get_relative_path(0, old_dentry, from, 1);
+	err = get_relative_path(0, old_dentry, context, from, 1);
 	if (err < 0) {
 		return err;
 	}
 
-	origin = find_file(from, real_from, 0);
+	origin = find_file(from, real_from, context, 0);
 	if (origin < 0) {
 		return origin;
 	}
 
 	/* Find destination */
-	err = get_relative_path_for_file(dir, dentry, to, 1);
+	err = get_relative_path_for_file(dir, dentry, context, to, 1);
 	if (err < 0) {
 		return err;
 	}
 
 	/* And ensure it doesn't exist */
-	err = find_file(to, real_to, 0);
+	err = find_file(to, real_to, context, 0);
 	if (err >= 0) {
 		return -EEXIST;
 	}
 
 	/* Check access */
-	err = can_create(to, real_to);
+	err = can_create(to, real_to, context);
 	if (err < 0) {
 		return err;
 	}
 
 	/* Create path if needed */
-	err = find_path(to, real_to);
+	err = find_path(to, real_to, context);
 	if (err < 0) {
 		return err;
 	}
 
 	if (origin == READ_ONLY) {
 		/* Here, fallback to a symlink */
-		err = symlink_worker(real_from, real_to);
+		err = symlink_worker(real_from, real_to, context);
 		if (err < 0) {
 			return err;
 		}
@@ -80,14 +82,14 @@ static int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct de
 			return -ENAMETOOLONG;
 		}
 
-		err = link_worker(real_from, real_to);
+		err = link_worker(real_from, real_to, context);
 		if (err < 0) {
 			return err;
 		}
 	}
 
 	/* Remove possible whiteout */
-	unlink_whiteout(to);
+	unlink_whiteout(to, context);
 
 	return 0;
 }
@@ -106,18 +108,19 @@ static loff_t pierrefs_llseek(struct file *file, loff_t offset, int origin) {
 static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nameidata) {
 	/* We are looking for "dentry" in "dir" */
 	int err;
-	char *path = get_context()->global1;
-	char *real_path = get_context()->global2;
+	struct pierrefs_sb_info *context = get_context_i(dir);
+	char *path = context->global1;
+	char *real_path = context->global2;
 	struct inode *inode = NULL;
 
 	/* First get path of the file */
-	err = get_relative_path_for_file(dir, dentry, path, 1);
+	err = get_relative_path_for_file(dir, dentry, context, path, 1);
 	if (err < 0) {
 		return ERR_PTR(err);
 	}
 
 	/* Now, look for the file */
-	err = find_file(path, real_path, 0);
+	err = find_file(path, real_path, context, 0);
 	if (err < 0) {
 		return ERR_PTR(err);
 	}
@@ -134,17 +137,18 @@ static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry,
 
 static int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 	int err;
-	char *path = get_context()->global1;
-	char *real_path = get_context()->global2;
+	struct pierrefs_sb_info *context = get_context_i(dir);
+	char *path = context->global1;
+	char *real_path = context->global2;
 
 	/* Try to find the directory first */
-	err = get_relative_path_for_file(dir, dentry, path, 1);
+	err = get_relative_path_for_file(dir, dentry, context, path, 1);
 	if (err < 0) {
 		return err;
 	}
 
 	/* And ensure it doesn't exist */
-	err = find_file(path, real_path, 0);
+	err = find_file(path, real_path, context, 0);
 	if (err >= 0) {
 		return -EEXIST;
 	}
@@ -155,13 +159,13 @@ static int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 	}
 
 	/* Check access */
-	err = can_create(path, real_path);
+	err = can_create(path, real_path, context);
 	if (err < 0) {
 		return err;
 	}
 
 	/* Now, create/reuse arborescence */
-	err = find_path(path, real_path);
+	err = find_path(path, real_path, context);
 	if (err < 0) {
 		return err;
 	}
@@ -170,15 +174,15 @@ static int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 	mode |= S_IFDIR;
 
 	/* Just create dir now */
-	err = mkdir_worker(real_path, mode);
+	err = mkdir_worker(real_path, context, mode);
 	if (err < 0) {
 		return err;
 	}
 
 	/* Hide contents */
-	err = hide_directory_contents(path);
+	err = hide_directory_contents(path, context);
 	if (err < 0) {
-		dentry = get_path_dentry(real_path, LOOKUP_REVAL);
+		dentry = get_path_dentry(real_path, context, LOOKUP_REVAL);
 		if (IS_ERR(dentry)) {
 			return err;
 		}
@@ -192,58 +196,61 @@ static int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 	}
 
 	/* Remove possible .wh. */
-	unlink_whiteout(path);
+	unlink_whiteout(path, context);
 
 	return 0;
 }
 
 static int pierrefs_mknod(struct inode *dir, struct dentry *dentry, int mode, dev_t rdev) {
 	int err;
-	char *path = get_context()->global1;
-	char *real_path = get_context()->global2;
+	struct pierrefs_sb_info *context = get_context_i(dir);
+	char *path = context->global1;
+	char *real_path = context->global2;
 
 	/* Try to find the node first */
-	err = get_relative_path_for_file(dir, dentry, path, 1);
+	err = get_relative_path_for_file(dir, dentry, context, path, 1);
 	if (err < 0) {
 		return err;
 	}
 
 	/* And ensure it doesn't exist */
-	err = find_file(path, real_path, 0);
+	err = find_file(path, real_path, context, 0);
 	if (err >= 0) {
 		return -EEXIST;
 	}
 
 	/* Now, create/reuse arborescence */
-	err = find_path(path, real_path);
+	err = find_path(path, real_path, context);
 	if (err < 0) {
 		return err;
 	}
 
 	/* Just create file now */
 	if (S_ISFIFO(mode)) {
-		err = mkfifo(real_path, mode);
+		err = mkfifo_worker(real_path, context, mode);
 		if (err < 0) {
 			return err;
 		}
 	}
 	else {
-		err = mknod(real_path, mode, rdev);
+		err = mknod_worker(real_path, context, mode, rdev);
 		if (err < 0) {
 			return err;
 		}
 	}
 
 	/* Remove possible whiteout */
-	unlink_whiteout(path);
+	unlink_whiteout(path, context);
 
 	return 0;
 }
 
 static int pierrefs_open(struct inode *inode, struct file *file) {
 	int err;
-	char *path = get_context()->global1;
-	char *real_path = get_context()->global2;
+	struct pierrefs_sb_info *context = get_context_i(inode);
+	char *path = context->global1;
+	char *real_path = context->global2;
+
 
 	/* Don't check for flags here, if we are down here
 	 * the user is allowed to read/write the file, the
@@ -253,10 +260,10 @@ static int pierrefs_open(struct inode *inode, struct file *file) {
 	 */
 
 	/* Get our file path */
-	err = get_relative_path(inode, file->f_dentry, path, 1);
+	err = get_relative_path(inode, file->f_dentry, context, path, 1);
 
 	/* Get real file path */
-	err = find_file(path, real_path, 0);
+	err = find_file(path, real_path, context, 0);
 	if (err < 0) {
 		return err;
 	}
@@ -279,38 +286,40 @@ static int pierrefs_open(struct inode *inode, struct file *file) {
 
 static int pierrefs_permission(struct inode *inode, int mask, struct nameidata *nd) {
 	int err;
-	char *path = get_context()->global1;
-	char *real_path = get_context()->global2;
+	struct pierrefs_sb_info *context = get_context_i(inode);
+	char *path = context->global1;
+	char *real_path = context->global2;
 
 	/* Get path */
-	err = get_relative_path(0, nd->dentry, path, 1);
+	err = get_relative_path(0, nd->dentry, context, path, 1);
 	if (err) {
 		return err;
 	}
 
 	/* Get file */
-	err = find_file(path, real_path, 0);
+	err = find_file(path, real_path, context, 0);
 	if (err < 0) {
 		return err;
 	}
 
 	/* And call worker */
-	return can_access(path, real_path, mask);
+	return can_access(path, real_path, context, mask);
 }
 
 static int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
 	int err;
-	char *path = get_context()->global1;
-	char *real_path = get_context()->global2;
+	struct pierrefs_sb_info *context = get_context_d(dentry);
+	char *path = context->global1;
+	char *real_path = context->global2;
 
 	/* Get path */
-	err = get_relative_path(0, dentry, path, 1);
+	err = get_relative_path(0, dentry, context, path, 1);
 	if (err) {
 		return err;
 	}
 
 	/* Get file */
-	err = find_file(path, real_path, 0);
+	err = find_file(path, real_path, context, 0);
 	if (err < 0) {
 		return err;
 	}
@@ -324,23 +333,25 @@ static int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
 	 * Don't clear flags, set_me_worker will do
 	 * So, only call the worker
 	 */
-	return set_me_worker(path, real_path, attr);
+	return set_me_worker(path, real_path, attr, context);
 }
 
 static int pierrefs_symlink(struct inode *dir, struct dentry *dentry, const char *symname) {
 	/* Create the link on the RW branch */
 	int err;
-	char *to = get_context()->global1;
-	char *real_to = get_context()->global2;
+	struct pierrefs_sb_info *context = get_context_i(dir);
+	char *to = context->global1;
+	char *real_to = context->global2;
+
 
 	/* Find destination */
-	err = get_relative_path_for_file(dir, dentry, to, 1);
+	err = get_relative_path_for_file(dir, dentry, context, to, 1);
 	if (err < 0) {
 		return err;
 	}
 
 	/* And ensure it doesn't exist */
-	err = find_file(to, real_to, 0);
+	err = find_file(to, real_to, context, 0);
 	if (err >= 0) {
 		return -EEXIST;
 	}
@@ -351,25 +362,25 @@ static int pierrefs_symlink(struct inode *dir, struct dentry *dentry, const char
 	}
 
 	/* Check access */
-	err = can_create(to, real_to);
+	err = can_create(to, real_to, context);
 	if (err < 0) {
 		return err;
 	}
 
 	/* Create path if needed */
-	err = find_path(to, real_to);
+	err = find_path(to, real_to, context);
 	if (err < 0) {
 		return err;
 	}
 
 	/* Now it's sure the link does not exist, create it */
-	err = symlink_worker(symname, real_to);
+	err = symlink_worker(symname, real_to, context);
 	if (err < 0) {
 		return err;
 	}
 
 	/* Remove possible whiteout */
-	unlink_whiteout(to);
+	unlink_whiteout(to, context);
 
 	return 0;
 }

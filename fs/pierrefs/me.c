@@ -45,7 +45,7 @@
 
 #include "pierrefs.h"
 
-int create_me(const char *me_path, struct kstat *kstbuf) {
+int create_me(const char *me_path, struct kstat *kstbuf, struct pierrefs_sb_info *context) {
 	int err;
 	struct file *fd;
 	struct iattr attr;
@@ -78,7 +78,7 @@ int create_me(const char *me_path, struct kstat *kstbuf) {
 	return err;
 }
 
-int find_me(const char *path, char *me_path, struct kstat *kstbuf) {
+int find_me(const char *path, struct pierrefs_sb_info *context, char *me_path, struct kstat *kstbuf) {
 	int err;
 	/* Find name */
 	char *tree_path = strrchr(path, '/');
@@ -86,7 +86,7 @@ int find_me(const char *path, char *me_path, struct kstat *kstbuf) {
 		return -EINVAL;
 	}
 
-	if (snprintf(me_path, PATH_MAX, "%s", get_context()->read_write_branch) > PATH_MAX) {
+	if (snprintf(me_path, PATH_MAX, "%s", context->read_write_branch) > PATH_MAX) {
 		return -ENAMETOOLONG;
 	}
 
@@ -105,28 +105,28 @@ int find_me(const char *path, char *me_path, struct kstat *kstbuf) {
 	return err;
 }
 
-int get_file_attr(const char *path, struct kstat *kstbuf) {
+int get_file_attr(const char *path, struct pierrefs_sb_info *context, struct kstat *kstbuf) {
 	char real_path[PATH_MAX];
 	int err;
 
 	/* First, find file */
-	err = find_file(path, real_path, 0);
+	err = find_file(path, real_path, context, 0);
 	if (err < 0) {
 		return err;
 	}
 
 	/* Call worker */
-	return get_file_attr_worker(path, real_path, kstbuf);
+	return get_file_attr_worker(path, real_path, context, kstbuf);
 }
 
-int get_file_attr_worker(const char *path, const char *real_path, struct kstat *kstbuf) {
+int get_file_attr_worker(const char *path, const char *real_path, struct pierrefs_sb_info *context, struct kstat *kstbuf) {
 	int err;
 	char me;
 	struct kstat kstme;
 	char me_file[PATH_MAX];
 
 	/* Look for a me file */
-	me = (find_me(path, me_file, &kstme) > 0);
+	me = (find_me(path, context, me_file, &kstme) > 0);
 
 	/* Get attributes */
 	push_root();
@@ -154,7 +154,7 @@ int get_file_attr_worker(const char *path, const char *real_path, struct kstat *
 	return 0;
 }
 
-int set_me(const char *path, const char *real_path, struct kstat *kstbuf, int flags) {
+int set_me(const char *path, const char *real_path, struct kstat *kstbuf, struct pierrefs_sb_info *context, int flags) {
 	struct iattr attr;
 
 	/* Convert the kstbuf to a iattr struct */
@@ -178,10 +178,10 @@ int set_me(const char *path, const char *real_path, struct kstat *kstbuf, int fl
 	}
 
 	/* Call the real worker */
-	return set_me_worker(path, real_path, &attr);
+	return set_me_worker(path, real_path, &attr, context);
 }
 
-int set_me_worker(const char *path, const char *real_path, struct iattr *attr) {
+int set_me_worker(const char *path, const char *real_path, struct iattr *attr, struct pierrefs_sb_info *context) {
 	int err;
 	char me;
 	char me_path[PATH_MAX];
@@ -193,7 +193,7 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr) {
 	attr->ia_valid &= ATTR_UID | ATTR_GID | ATTR_ATIME | ATTR_MTIME | ATTR_MODE;
 
 	/* Look for a me file */
-	me = (find_me(path, me_path, &kstme) > 0);
+	me = (find_me(path, context, me_path, &kstme) > 0);
 
 	if (!me) {
 		/* Read real file info */
@@ -205,7 +205,7 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr) {
 		}
 
 		/* Recreate path up to the .me. file */
-		err = find_path(path, NULL);
+		err = find_path(path, NULL, context);
 		if (err < 0) {
 			return err;
 		}
@@ -243,7 +243,7 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr) {
 		pop_root();
 	}
 	else {
-		fd = dbg_open(me_path, O_RDWR);
+		fd = dbg_open(me_path, context, O_RDWR);
 		if (IS_ERR(fd)) {
 			return PTR_ERR(fd);
 		}

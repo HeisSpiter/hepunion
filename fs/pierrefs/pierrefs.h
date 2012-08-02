@@ -196,40 +196,47 @@ extern struct file_operations pierrefs_fops;
 	  n[1] == '.'))
 
 /**
- * Get current context associated with mount point
+ * Get current context associated with dentry
+ * \param[in]	d	dentry pointer
  * \return	It returns super block info structure (pierrefs_sb_info)
  */
-#define get_context() ((struct pierrefs_sb_info *)current->fs->pwdmnt->mnt_sb->s_fs_info)
+#define get_context_d(d) ((struct pierrefs_sb_info *)d->d_sb->s_fs_info)
+/**
+ * Get current context associated with inode
+ * \param[in]	i	inode pointer
+ * \return	It returns super block info structure (pierrefs_sb_info)
+ */
+#define get_context_i(i) ((struct pierrefs_sb_info *)i->i_sb->s_fs_info)
 /**
  * Generate the string matching the given path for a full RO path
  * \param[in]	p	The path for which full path is required
  * \param[out]	r	The string that will contain the full RO path
  * \return	The number of caracters written to r
  */
-#define make_ro_path(p, r) snprintf(r, PATH_MAX, "%s%s", get_context()->read_only_branch, p)
+#define make_ro_path(p, r) snprintf(r, PATH_MAX, "%s%s", context->read_only_branch, p)
 /**
  * Generate the string matching the given path for a full RW path
  * \param[in]	p	The path for which full path is required
  * \param[out]	r	The string that will contain the full RW path
  * \return	The number of caracters written to r
  */
-#define make_rw_path(p, r) snprintf(r, PATH_MAX, "%s%s", get_context()->read_write_branch, p)
+#define make_rw_path(p, r) snprintf(r, PATH_MAX, "%s%s", context->read_write_branch, p)
 /**
  * Switch the current context user and group to root to allow
  * modifications on child file systems
  */
-#define pop_root()									\
-	current->fsuid = get_context()->uid;			\
-	current->fsgid = get_context()->gid;			\
-	recursive_mutex_unlock(&get_context()->id_lock)
+#define pop_root()								\
+	current->fsuid = context->uid;				\
+	current->fsgid = context->gid;				\
+	recursive_mutex_unlock(&context->id_lock)
 /**
  * Switch the current context back to real user and real group
  */
-#define push_root()									\
-	recursive_mutex_lock(&get_context()->id_lock);	\
-	get_context()->uid = current->fsuid;			\
-	get_context()->gid = current->fsgid;			\
-	current->fsuid = 0;								\
+#define push_root()								\
+	recursive_mutex_lock(&context->id_lock);	\
+	context->uid = current->fsuid;				\
+	context->gid = current->fsgid;				\
+	current->fsuid = 0;							\
 	current->fsgid = 0
 
 #define filp_creat(p, m) filp_open(p, O_CREAT | O_WRONLY | O_TRUNC, m)
@@ -238,20 +245,20 @@ extern struct file_operations pierrefs_fops;
 #define open_worker(p, f) dbg_open(p, f)
 #define open_worker_2(p, f, m) dbg_open_2(p, f, m)
 #define creat_worker(p, m) dbg_creat(p, m)
-#define mkdir_worker(p, m) dbg_mkdir(p, m)
-#define mknod_worker(p, m, d) dbg_mknod(p, m, d)
-#define mkfifo_worker(p, m) dbg_mkfifo(p, m)
-#define symlink_worker(o, n) dbg_symlink(o, n)
-#define link_worker(o, n) dbg_link(o, n)
+#define mkdir_worker(p, c, m) dbg_mkdir(p, c, m)
+#define mknod_worker(p, c, m, d) dbg_mknod(p, c, m, d)
+#define mkfifo_worker(p, c, m) dbg_mkfifo(p, c, m)
+#define symlink_worker(o, n, c) dbg_symlink(o, n, c)
+#define link_worker(o, n, c) dbg_link(o, n, c)
 #else
 #define open_worker(p, f) filp_open(p, f, 0)
 #define open_worker_2(p, f, m) filp_open(p, f, m)
 #define creat_worker(p, m) filp_creat(p, m)
-#define mkdir_worker(p, m) mkdir(p, m)
-#define mknod_worker(p, m, d) mknod(p, m, d)
-#define mkfifo_worker(p, m) mkfifo(p, m)
-#define symlink_worker(o, n) symlink(o, n)
-#define link_worker(o, n) link(o, n)
+#define mkdir_worker(p, c, m) mkdir(p, c, m)
+#define mknod_worker(p, c, m, d) mknod(p, c, m, d)
+#define mkfifo_worker(p, c, m) mkfifo(p, c, m)
+#define symlink_worker(o, n, c) symlink(o, n, c)
+#define link_worker(o, n, c) link(o, n, c)
 #endif
 
 /* Functions in cow.c */
@@ -261,18 +268,20 @@ extern struct file_operations pierrefs_fops;
  * \param[in]	path	Relative path of the file to copy
  * \param[in]	ro_path	Full path of the file to copy
  * \param[out]	rw_path Full path of the copied file
+ * \param[in]	context	Calling context of the FS
  * \return	0 in case of a success, -1 otherwise. errno is set
  */
-int create_copyup(const char *path, const char *ro_path, char *rw_path);
+int create_copyup(const char *path, const char *ro_path, char *rw_path, struct pierrefs_sb_info *context);
 /**
  * Find a path that is available in RW.
  * If none exists, but RO path exists, then a copyup of the
  * path will be done
  * \param[in]	path		Relative path of the path to check
  * \param[out]	real_path	Optionnal full path available in RW
+ * \param[in]	context		Calling context of the FS
  * \return	0 in case of a success, -err in case of error
  */
-int find_path(const char *path, char *real_path);
+int find_path(const char *path, char *real_path, struct pierrefs_sb_info *context);
 
 /* Functions in me.c */
 /**
@@ -280,107 +289,118 @@ int find_path(const char *path, char *real_path);
  * and metadata.
  * \param[in]	me_path	Full path of the metadata file to create
  * \param[in]	kstbuf	Structure containing all the metadata to use
+ * \param[in]	context	Calling context of the FS
  * \return	0 in case of a success, -err in case of an error
  * \note	To set metadata of a file, use set_me() instead
  */
-int create_me(const char *me_path, struct kstat *kstbuf);
+int create_me(const char *me_path, struct kstat *kstbuf, struct pierrefs_sb_info *context);
 /**
  * Find the metadata file associated with a file and query
  * its properties.
  * \param[in]	path	Relative path of the file to check
+ * \param[in]	context	Calling context of the FS
  * \param[out]	me_path	Full path of the possible metadata file
  * \param[out]	kstbuf	Structure containing extracted metadata in case of a success
  * \return	0 in case of a success, -err in case of error
  */
-int find_me(const char *path, char *me_path, struct kstat *kstbuf);
+int find_me(const char *path, struct pierrefs_sb_info *context, char *me_path, struct kstat *kstbuf);
 /**
  * Query the unioned metadata of a file. This can include the read
  * of a metadata file.
  * \param[in]	path		Relative path of the file to check
+ * \param[in]	context		Calling context of the FS
  * \param[out]	kstbuf		Structure containing extracted metadata in case of a success
  * \return	0 in case of a success, -err in case of error
  * \note	In case you already have full path, prefer using get_file_attr_worker()
  */
-int get_file_attr(const char *path, struct kstat * kstbuf);
+int get_file_attr(const char *path, struct pierrefs_sb_info *context, struct kstat *kstbuf);
 /**
  * Query the unioned metadata of a file. This can include the read
  * of a metadata file.
  * \param[in]	path		Relative path of the file to check
  * \param[in]	real_path	Full path of the file to check
+ * \param[in]	context		Calling context of the FS
  * \param[out]	kstbuf		Structure containing extracted metadata in case of a success
  * \return	0 in case of a success, -err in case of error
  * \note	In case you don't have full path, use get_file_attr() that will find it for you
  */
-int get_file_attr_worker(const char *path, const char *real_path, struct kstat *kstbuf);
+int get_file_attr_worker(const char *path, const char *real_path, struct pierrefs_sb_info *context, struct kstat *kstbuf);
 /**
  * Set the metadata for a file, using a metadata file.
  * \param[in]	path		Relative path of the file to set
  * \param[in]	real_path	Full path of the file to set
  * \param[in]	kstbuf		Structure containing the metadata to set
+ * \param[in]	context		Calling context of the FS
  * \param[in]	flags		ORed set of flags defining which metadata set (OWNER, MODE, TIME)
  * \return	0 in case of a success, -err in case of error
  * \warning	Never ever use that function on a RW file! This would lead to file system inconsistency
  * \note	In case you have an iattr struct, use set_me_worker() function
  * \todo	Would deserve a check for equality and .me. removal
  */
-int set_me(const char *path, const char *real_path, struct kstat *kstbuf, int flags);
+int set_me(const char *path, const char *real_path, struct kstat *kstbuf, struct pierrefs_sb_info *context, int flags);
 /**
  * Set the metadata for a file, using a metadata file.
  * \param[in]	path		Relative path of the file to set
  * \param[in]	real_path	Full path of the file to set
  * \param[in]	attr		Structure containing the metadata to set
+ * \param[in]	context		Calling context of the FS
  * \return	0 in case of a success, -err in case of error
  * \warning	Never ever use that function on a RW file! This would lead to file system inconsistency
  * \note	If you have a kstat structure, you should use set_me() instead
  * \note	Only ATTR_UID, ATTR_GID, ATTR_ATIME, ATTR_MTIME, ATTR_MODE flags are supported
  * \todo	Would deserve a check for equality and .me. removal
  */
-int set_me_worker(const char *path, const char *real_path, struct iattr *attr);
+int set_me_worker(const char *path, const char *real_path, struct iattr *attr, struct pierrefs_sb_info *context);
 
 /* Functions in helpers.c */
 /**
  * Check Read/Write/Execute permissions on a file for calling process.
  * \param[in]	path		Relative path of the file to check
  * \param[in]	real_path	Full path of the file to check
+ * \param[in]	context		Calling context of the FS
  * \param[in]	mode		ORed set of modes to check (R_OK, W_OK, X_OK)
  * \return	1 if calling process can access, -err in case of error
  * \note	This is checked against user, group, others permissions
  */
-int can_access(const char *path, const char *real_path, int mode);
+int can_access(const char *path, const char *real_path, struct pierrefs_sb_info *context, int mode);
 /**
  * Check permission for the calling process to create a file.
  * \param[in]	p	Relative path of the file to create
  * \param[in]	rp	Full path of the file to create
+ * \param[in]	c	Calling context of the FS
  * \return	1 if calling process can create, -err in case of error
  * \note	This is just a wrapper to can_remove since required rights the same
  */
-#define can_create(p, rp) can_remove(p, rp)
+#define can_create(p, rp, c) can_remove(p, rp, c)
 /**
  * Check permission for the calling process to remove a file.
  * \param[in]	path		Relative path of the file to remove
  * \param[in]	real_path	Full path of the file to remove
+ * \param[in]	context		Calling context of the FS
  * \return	1 if calling process can remove, -err in case of error
  * \note	This is checked against user, group, others permissions for writing in parent directory
  */
-int can_remove(const char *path, const char *real_path);
+int can_remove(const char *path, const char *real_path, struct pierrefs_sb_info *context);
 /**
  * Check permission for the calling process to go through a tree.
  * \param[in]	path	Relative path of the tree to traverse
+ * \param[in]	context	Calling context of the FS
  * \return	1 if calling process can remove, 0 otherwise. errno is set
  * \note	This is checked against user, group, others permissions for execute in traverse directories
  */
-int can_traverse(const char *path);
+int can_traverse(const char *path, struct pierrefs_sb_info *context);
 /**
  * Find a file either in RW or RO branch, taking into account whiteout files. It can copyup files if needed.
  * \param[in]	path		Relative path of the file to find
  * \param[out]	real_path	Full path of the file, if found
+ * \param[in]	context		Calling context of the FS
  * \param[in]	flags		ORed set of flags defining where and how finding file (CREATE_COPYUP, MUST_READ_WRITE, MUST_READ_ONLY, IGNORE_WHITEOUT)
  * \return	-err in case of a failure, an unsigned integer describing where the file was found in case of a success
  * \note	Unless flags state the contrary, the RW branch is the first checked for the file
  * \note	In case you called the function with CREATE_COPYUP flag, and it succeded, then returned path is to RW file
  * \warning	There is absolutely no checks for flags consistency!
  */
-int find_file(const char *path, char *real_path, char flags);
+int find_file(const char *path, char *real_path, struct pierrefs_sb_info *context, char flags);
 /**
  * Get the full path (ie, on the lower FS) of the provided file.
  * \param[in]	inode		Inode that refers to the file
@@ -396,6 +416,7 @@ int get_full_path(const struct inode *inode, const struct dentry *dentry, char *
  * Get the relative path (to / of PierreFS) of the provided file.
  * \param[in]	inode	Inode that refers to the file
  * \param[in]	dentry	Dentry that refers to the file
+ * \param[in]	context		Calling context of the FS
  * \param[out]	path	The relative path that has been found
  * \param[in]	is_ours	Set to 1, it means that dentry & inode are local to PierreFS
  * \return 0 in case of a success, an error code otherwise
@@ -403,178 +424,199 @@ int get_full_path(const struct inode *inode, const struct dentry *dentry, char *
  * \note	It is possible not to provide an inode. A dentry must be provided then
  * \warning	If no dentry is provided, the function might fail to find the path to the file even if it is on the PierreFS volume
  */
-int get_relative_path(const struct inode *inode, const struct dentry *dentry, char *path, int is_ours);
+int get_relative_path(const struct inode *inode, const struct dentry *dentry, const struct pierrefs_sb_info *context, char *path, int is_ours);
 /**
  * Get the relative path (to / of PierreFS) for the creation of the provided file.
  * \param[in]	dir		Inode that refers to the directory in which the file is to be created
  * \param[in]	dentry	Dentry that refers to the file to create in the directory
+ * \param[in]	context	Calling context of the FS
  * \param[out]	path	The relative path that has been found
  * \param[in]	is_ours	Set to 1, it means that dentry & inode are local to PierreFS
  * \return 0 in case of a success, an error code otherwise
  * \warning	This fuction relies on get_relative_path() and its limitations apply here
  */
-int get_relative_path_for_file(const struct inode *dir, const struct dentry *dentry, char *path, int is_ours);
+int get_relative_path_for_file(const struct inode *dir, const struct dentry *dentry, const struct pierrefs_sb_info *context, char *path, int is_ours);
 /**
  * Get the dentry representing the given path.
  * \param[in]	pathname	Pathname to lookup
+ * \param[in]	context		Calling context of the FS
  * \param[in]	flag		Flag to use for opening
  * \return dentry, or -err in case of error
  */
-struct dentry* get_path_dentry(const char *pathname, int flag);
+struct dentry* get_path_dentry(const char *pathname, struct pierrefs_sb_info *context, int flag);
 /**
  * Implementation taken from Linux kernel (and simplified). It's here to allow creation
  * of a link using pathname.
  * \param[in]	oldname	Target of the link
  * \param[in]	newname	Link path
+ * \param[in]	context	Calling context of the FS
  * \return	0 in case of a success, -err otherwise
  */
-long link(const char *oldname, const char *newname);
+long link(const char *oldname, const char *newname, struct pierrefs_sb_info *context);
 /**
  * Implementation taken from Linux kernel. It's here to allow creation of a directory
  * using pathname.
  * \param[in]	pathname	Directory to create
+ * \param[in]	context		Calling context of the FS
  * \param[in]	mode		Mode to set to the directory (see mkdir man page)
  * \return	0 in case of a success, -err otherwise
  */
-long mkdir(const char *pathname, int mode);
+long mkdir(const char *pathname, struct pierrefs_sb_info *context, int mode);
 /**
  * Wrapper for mknod that allows creation of a FIFO file using pathname.
  * \param[in]	pathname	FIFO file to create
+ * \param[in]	context		Calling context of the FS
  * \param[in]	mode		Mode to set to the file (see mkfifo man page)
  * \return 	0 in case of a success, -err otherwise
  */
-int mkfifo(const char *pathname, int mode);
+int mkfifo(const char *pathname, struct pierrefs_sb_info *context, int mode);
 /**
  * Implementation taken from Linux kernel. It's here to allow creation of a special
  * file using pathname.
  * \param[in]	pathname	File to create
+ * \param[in]	context		Calling context of the FS
  * \param[in]	mode		Mode to set to the file (see mknod man page)
  * \param[in]	dev			Special device
  * \return	0 in case of a success, -err otherwise
  */
-long mknod(const char *pathname, int mode, unsigned dev);
+long mknod(const char *pathname, struct pierrefs_sb_info *context, int mode, unsigned dev);
 /**
  * Implementation taken from Linux kernel. It's here to allow link readding (seems like
  * that's not the job vfs_readdlink is doing).
  * \param[in]	path	Link to read
  * \param[out]	buf		Link target
+ * \param[in]	context	Calling context of the FS
  * \param[in]	bufsiz	Output buffer size
  * \return	0 in case of a success, -err otherwise 
  */
-long readlink(const char *path, char *buf, int bufsiz);
+long readlink(const char *path, char *buf, struct pierrefs_sb_info *context, int bufsiz);
 /**
  * Implementation taken from Linux kernel. It's here to allow creation of a symlink
  * using pathname.
  * \param[in]	oldname	Target of the symlink
  * \param[in]	newname	Symlink path
+ * \param[in]	context	Calling context of the FS
  * \return	0 in case of a success, -err otherwise
  */
-long symlink(const char *oldname, const char *newname);
+long symlink(const char *oldname, const char *newname, struct pierrefs_sb_info *context);
 /**
  * Worker for debug purpose. It first checks opening mode and branch, and then call open.
  * This is used to catch bad calls to RO branch
  * \param[in]	pathname	File to open
+ * \param[in]	context		Calling context of the FS
  * \param[in]	flags		Flags for file opening (see open man page)
  * \return	-1 in case of a failure, 0 otherwise. errno is set
  */
-struct file* dbg_open(const char *pathname, int flags);
+struct file* dbg_open(const char *pathname, const struct pierrefs_sb_info *context, int flags);
 /**
  * Worker for debug purpose. It first checks opening mode and branch, and then call open.
  * This is used to catch bad calls to RO branch
  * \param[in]	pathname	File to open
+ * \param[in]	context		Calling context of the FS
  * \param[in]	flags		Flags for file opening (see open man page)
  * \param[in]	mode		Mode to set to the file (see open man page)
  * \return	-1 in case of a failure, 0 otherwise. errno is set
  */
-struct file* dbg_open_2(const char *pathname, int flags, mode_t mode);
+struct file* dbg_open_2(const char *pathname, const struct pierrefs_sb_info *context, int flags, mode_t mode);
 /**
  * Worker for debug purpose. It checks if the file is to be created on the right branch
  * and then call creat
  * \param[in]	pathname	File to create
+ * \param[in]	context		Calling context of the FS
  * \param[in]	mode		Mode to set to the file (see open man page)
  * \return	-1 in case of a failure, 0 otherwise. errno is set
  */
-struct file* dbg_creat(const char *pathname, mode_t mode);
+struct file* dbg_creat(const char *pathname, const struct pierrefs_sb_info *context, mode_t mode);
 /**
  * Worker for debug purpose. It checks if the directory is to be created on the right branch
  * and then call mkdir
  * \param[in]	pathname	Directory to create
+ * \param[in]	context		Calling context of the FS
  * \param[in]	mode		Mode to set to the directory (see mkdir man page)
  * \return	-1 in case of a failure, 0 otherwise. errno is set
  */
-int dbg_mkdir(const char *pathname, mode_t mode);
+int dbg_mkdir(const char *pathname, struct pierrefs_sb_info *context, mode_t mode);
 /**
  * Worker for debug purpose. It checks if the special file is to be created on the right branch
  * and then call mknod
  * \param[in]	pathname	Special file to create
+ * \param[in]	context		Calling context of the FS
  * \param[in]	mode		Mode to set to the directory (see mknod man page)
- * \param[in]	dev		Attributes of the device (see mknod man page)
+ * \param[in]	dev			Attributes of the device (see mknod man page)
  * \return	-1 in case of a failure, 0 otherwise. errno is set
  */
-int dbg_mknod(const char *pathname, mode_t mode, dev_t dev);
+int dbg_mknod(const char *pathname, struct pierrefs_sb_info *context, mode_t mode, dev_t dev);
 /**
  * Worker for debug purpose. It checks if the FIFO is to be created on the right branch
  * and then call mkfifo
  * \param[in]	pathname	FIFO to create
+ * \param[in]	context		Calling context of the FS
  * \param[in]	mode		Mode to set to the directory (see mkfifo man page)
  * \return	-1 in case of a failure, 0 otherwise. errno is set
  */
-int dbg_mkfifo(const char *pathname, mode_t mode);
+int dbg_mkfifo(const char *pathname, struct pierrefs_sb_info *context, mode_t mode);
 /**
  * Worker for debug purpose. It checks if the symlink is to be created on the right branch
  * and then call symlink
  * \param[in]	oldpath	Target of the symlink
  * \param[in]	newpath	Symlink to create
+ * \param[in]	context	Calling context of the FS
  * \return	-1 in case of a failure, 0 otherwise. errno is set
  */
-int dbg_symlink(const char *oldpath, const char *newpath);
+int dbg_symlink(const char *oldpath, const char *newpath, struct pierrefs_sb_info *context);
 /**
  * Worker for debug purpose. It checks if the link is to be created on the right branch
  * and then call link
  * \param[in]	oldpath	Target of the link
  * \param[in]	newpath	Link to create
+ * \param[in]	context	Calling context of the FS
  * \return	-1 in case of a failure, 0 otherwise. errno is set
  */
-int dbg_link(const char *oldpath, const char *newpath);
+int dbg_link(const char *oldpath, const char *newpath, struct pierrefs_sb_info *context);
 
 /* Functions in wh.c */
 /**
  * Find the whiteout that might hide a file.
  * \param[in]	path	Relative path of the file to check
+ * \param[in]	context	Calling context of the FS
  * \param[out]	wh_path	Full path of the found whiteout
  * \return	0 in case of a success, -1 otherwise. errno is set
  */
-int find_whiteout(const char *path, char *wh_path);
+int find_whiteout(const char *path, struct pierrefs_sb_info *context, char *wh_path);
 /**
  * Create a whiteout for each file contained in a directory.
  * \param[in]	path	Relative path of the directory where to hide files
+ * \param[in]	context	Calling context of the FS
  * \return	0 in case of a success, -err otherwise.
  * \note	In case directory doesn't exist on RO branch, it's a success
  */
-int hide_directory_contents(const char *path);
+int hide_directory_contents(const char *path, struct pierrefs_sb_info *context);
 /**
  * Check, using unionion, whether is directory is empty. If regarding union it's, ensure it really is.
  * \param[in]	path	Relative path of the directory to check
  * \param[in]	ro_path	Full path on RO branch of the directory
  * \param[in]	rw_path	Optional, full path on RW branch of the directory
+ * \param[in]	context	Calling context of the FS
  * \return	1 if empty, -err otherwise
  * \note	If you don't provide RW branch, no union will be done, it will just check for RO emptyness
  */
-int is_empty_dir(const char *path, const char *ro_path, const char *rw_path);
+int is_empty_dir(const char *path, const char *ro_path, const char *rw_path, struct pierrefs_sb_info *context);
 /**
  * Unlink a file on RW branch, and whiteout possible file on RO branch.
  * \param[in]	path		Relative path of the file to unlink
  * \param[in]	rw_path		Full path of the file on RW branch to unlink
+ * \param[in]	context		Calling context of the FS
  * \param[in]	has_ro_sure	Optional, set to 1 if you check that file exists on RO
  * \return	0 in case of a success, -1 otherwise. errno is set
  */
-int unlink_rw_file(const char *path, const char *rw_path, char has_ro_sure);
+int unlink_rw_file(const char *path, const char *rw_path, struct pierrefs_sb_info *context, char has_ro_sure);
 /**
  * Unlink the whiteout hidding a file.
  * \param[in]	path	Relative path of the file to "restore"
+ * \param[in]	context	Calling context of the FS
  * \return	0 in case of a success, -1 otherwise. errno is set
  */
-int unlink_whiteout(const char *path);
+int unlink_whiteout(const char *path, struct pierrefs_sb_info *context);
 
 #endif /* #ifdef __KERNEL__ */
 

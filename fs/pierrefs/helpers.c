@@ -12,14 +12,14 @@
 
 #include "pierrefs.h"
 
-int can_access(const char *path, const char *real_path, int mode) {
+int can_access(const char *path, const char *real_path, struct pierrefs_sb_info *context, int mode) {
 	struct kstat stbuf;
 	int err;
 
-	pr_info("can_access: %s, %s, %x\n", path, real_path, mode);
+	pr_info("can_access: %s, %s, %p, %x\n", path, real_path, context, mode);
 
 	/* Get file attributes */
-	err = get_file_attr_worker(path, real_path, &stbuf);
+	err = get_file_attr_worker(path, real_path, context, &stbuf);
 	if (err) {
 		return err;
 	}
@@ -75,13 +75,13 @@ int can_access(const char *path, const char *real_path, int mode) {
 	}
 }
 
-int can_remove(const char *path, const char *real_path) {
+int can_remove(const char *path, const char *real_path, struct pierrefs_sb_info *context) {
 	char parent_path[PATH_MAX];
 
 	/* Find parent directory */
 	char *parent = strrchr(real_path, '/');
 
-	pr_info("can_remove: %s, %s\n", path, real_path);
+	pr_info("can_remove: %s, %s, %p\n", path, real_path, context);
 
 	/* Caller wants to remove /! */
 	if (parent == real_path) {
@@ -92,20 +92,20 @@ int can_remove(const char *path, const char *real_path) {
 	parent_path[parent - real_path] = '\0';
 
 	/* Caller must be able to write in parent dir */
-	return can_access(path, parent_path, MAY_WRITE);
+	return can_access(path, parent_path, context, MAY_WRITE);
 }
 
-int can_traverse(const char *path) {
+int can_traverse(const char *path, struct pierrefs_sb_info *context) {
 	char short_path[PATH_MAX];
 	char long_path[PATH_MAX];
 	int err;
 	char *last, *old_directory, *directory;
 
-	pr_info("can_traverse: %s\n", path);
+	pr_info("can_traverse: %s, %p\n", path, context);
 
 	/* Prepare strings */
 	snprintf(short_path, PATH_MAX, "%c", '/');
-	if (snprintf(long_path, PATH_MAX, "%s/", get_context()->read_only_branch) > PATH_MAX) {
+	if (snprintf(long_path, PATH_MAX, "%s/", context->read_only_branch) > PATH_MAX) {
 		return -ENAMETOOLONG;
 	}
 
@@ -122,7 +122,7 @@ int can_traverse(const char *path) {
 	while (directory) {
 		strncat(short_path, old_directory, (directory - old_directory) / sizeof(char));
 		strncat(long_path, old_directory, (directory - old_directory) / sizeof(char));
-		err = can_access(short_path, long_path, MAY_EXEC);
+		err = can_access(short_path, long_path, context, MAY_EXEC);
 		if (err < 0) {
 			return err;
 		}
@@ -136,13 +136,13 @@ int can_traverse(const char *path) {
 	return 0;
 }
 
-int find_file(const char *path, char *real_path, char flags) {
+int find_file(const char *path, char *real_path, struct pierrefs_sb_info *context, char flags) {
 	int err;
 	struct kstat kstbuf;
 	char tmp_path[PATH_MAX];
 	char wh_path[PATH_MAX];
 
-	pr_info("find_file: %s, %p, %x\n", path, real_path, flags);
+	pr_info("find_file: %s, %p, %p, %x\n", path, real_path, context, flags);
 
 	/* Do not check flags validity
 	 * Caller can only be internal
@@ -164,7 +164,7 @@ int find_file(const char *path, char *real_path, char flags) {
 		}
 		else {
 			/* Check for access */
-			err = can_traverse(path);
+			err = can_traverse(path, context);
 			if (err < 0) {
 				return err;
 			}
@@ -189,19 +189,19 @@ int find_file(const char *path, char *real_path, char flags) {
 
 		if (!is_flag_set(flags, IGNORE_WHITEOUT)) {
 			/* Check whether it was deleted */
-			err = find_whiteout(path, wh_path);
+			err = find_whiteout(path, context, wh_path);
 			if (err < 0) {
 				return err;
 			}
 		}
 
 		/* Check for access */
-		err = can_traverse(path);
+		err = can_traverse(path, context);
 		if (err < 0) {
 			return err;
 		}
 
-		err = create_copyup(path, tmp_path, real_path);
+		err = create_copyup(path, tmp_path, real_path, context);
 		if (err == 0) {
 			return READ_WRITE_COPYUP;
 		}
@@ -221,14 +221,14 @@ int find_file(const char *path, char *real_path, char flags) {
 
 		if (!is_flag_set(flags, IGNORE_WHITEOUT)) {
 			/* Check whether it was deleted */
-			err = find_whiteout(path, wh_path);
+			err = find_whiteout(path, context, wh_path);
 			if (err == 0) {
 				return -ENOENT;
 			}
 		}
 
 		/* Check for access */
-		err = can_traverse(path);
+		err = can_traverse(path, context);
 		if (err < 0) {
 			return err;
 		}
@@ -288,12 +288,12 @@ Elong:
 	return -ENAMETOOLONG;
 }
 
-struct dentry * get_path_dentry(const char *pathname, int flag) {
+struct dentry * get_path_dentry(const char *pathname, struct pierrefs_sb_info *context, int flag) {
 	int err;
 	struct dentry *dentry;
 	struct nameidata nd;
 
-	pr_info("get_path_dentry: %s, %x\n", pathname, flag);
+	pr_info("get_path_dentry: %s, %p, %x\n", pathname, context, flag);
 
 	push_root();
 	err = __user_walk(pathname, flag, &nd);
@@ -309,12 +309,11 @@ struct dentry * get_path_dentry(const char *pathname, int flag) {
 	return dentry;
 }
 
-int get_relative_path(const struct inode *inode, const struct dentry *dentry, char *path, int is_ours) {
+int get_relative_path(const struct inode *inode, const struct dentry *dentry, const struct pierrefs_sb_info *context, char *path, int is_ours) {
 	int len;
 	char real_path[PATH_MAX];
-	struct pierrefs_sb_info *sb_info;
 
-	pr_info("get_relative_path: %p, %p, %p, %d\n", inode, dentry, path, is_ours);
+	pr_info("get_relative_path: %p, %p, %p, %p, %d\n", inode, dentry, context, path, is_ours);
 
 	/* First, get full path */
 	len = get_full_path(inode, dentry, real_path);
@@ -329,32 +328,29 @@ int get_relative_path(const struct inode *inode, const struct dentry *dentry, ch
 		return 0;
 	}
 
-	/* Get branches info */
-	sb_info = get_context();
-
 	/* Check if it's on RO */
-	if (strncmp(sb_info->read_only_branch, real_path, sb_info->ro_len) == 0) {
-		memcpy(path, real_path + 1 + sb_info->ro_len, len - 1 - sb_info->ro_len);
+	if (strncmp(context->read_only_branch, real_path, context->ro_len) == 0) {
+		memcpy(path, real_path + 1 + context->ro_len, len - 1 - context->ro_len);
 		return 0;
 	}
 
 	/* Check if it's on RW */
-	if (strncmp(sb_info->read_write_branch, real_path, sb_info->rw_len) == 0) {
-		memcpy(path, real_path + 1 + sb_info->rw_len, len - 1 - sb_info->rw_len);
+	if (strncmp(context->read_write_branch, real_path, context->rw_len) == 0) {
+		memcpy(path, real_path + 1 + context->rw_len, len - 1 - context->rw_len);
 		return 0;
 	}
 
 	return -EINVAL;
 }
 
-int get_relative_path_for_file(const struct inode *dir, const struct dentry *dentry, char *path, int is_ours) {
+int get_relative_path_for_file(const struct inode *dir, const struct dentry *dentry, const struct pierrefs_sb_info *context, char *path, int is_ours) {
 	int err;
 	size_t len;
 
-	pr_info("get_relative_path_for_file: %p, %p, %p, %d\n", dir, dentry, path, is_ours);
+	pr_info("get_relative_path_for_file: %p, %p, %p, %p, %d\n", dir, dentry, context, path, is_ours);
 
 	/* First get path of the directory */
-	err = get_relative_path(dir, 0, path, is_ours);
+	err = get_relative_path(dir, 0, context, path, is_ours);
 	if (err < 0) {
 		return err;
 	}
@@ -372,13 +368,13 @@ int get_relative_path_for_file(const struct inode *dir, const struct dentry *den
 }
 
 /* Imported for Linux kernel */
-long mkdir(const char *pathname, int mode) {
+long mkdir(const char *pathname, struct pierrefs_sb_info *context, int mode) {
 	int error = 0;
 	char * tmp;
 	struct dentry *dentry;
 	struct nameidata nd;
 
-	pr_info("mkdir: %s, %x\n", pathname, mode);
+	pr_info("mkdir: %s, %p, %x\n", pathname, context, mode);
 
 	tmp = getname(pathname);
 	if (IS_ERR(tmp))
@@ -411,13 +407,13 @@ out:
 }
 
 /* Imported from Linux kernel */
-long mknod(const char *pathname, int mode, unsigned dev) {
+long mknod(const char *pathname, struct pierrefs_sb_info *context, int mode, unsigned dev) {
 	int error = 0;
 	char * tmp;
 	struct dentry * dentry;
 	struct nameidata nd;
 
-	pr_info("mknod: %s, %x, %u\n", pathname, mode, dev);
+	pr_info("mknod: %s, %p, %x, %u\n", pathname, context, mode, dev);
 
 	if (S_ISDIR(mode))
 		return -EPERM;
@@ -470,23 +466,23 @@ out:
 	return error;
 }
 
-int mkfifo(const char *pathname, int mode) {
-	pr_info("mkfifo: %s, %x\n", pathname, mode);
+int mkfifo(const char *pathname, struct pierrefs_sb_info *context, int mode) {
+	pr_info("mkfifo: %s, %p, %x\n", pathname, context, mode);
 
 	/* Ensure FIFO mode is set */
 	mode |= S_IFIFO;
 
 	/* Call mknod */
-	return mknod(pathname, mode, 0);
+	return mknod(pathname, context, mode, 0);
 }
 
 /* Imported from Linux kernel */
-long symlink(const char *oldname, const char *newname) {
+long symlink(const char *oldname, const char *newname, struct pierrefs_sb_info *context) {
 	int error = 0;
 	char * from;
 	char * to;
 
-	pr_info("symlink: %s, %s\n", oldname, newname);
+	pr_info("symlink: %s, %s, %p\n", oldname, newname, context);
 
 	from = getname(oldname);
 	if(IS_ERR(from))
@@ -522,13 +518,13 @@ out:
 }
 
 /* Imported from Linux kernel - simplified */
-long link(const char *oldname, const char *newname) {
+long link(const char *oldname, const char *newname, struct pierrefs_sb_info *context) {
 	struct dentry *new_dentry;
 	struct nameidata nd, old_nd;
 	int error;
 	char * to;
 
-	pr_info("link: %s, %s\n", oldname, newname);
+	pr_info("link: %s, %s, %p\n", oldname, newname, context);
 
 	to = getname(newname);
 	if (IS_ERR(to))
@@ -569,12 +565,12 @@ exit:
 }
 
 /* Imported from Linux kernel */
-long readlink(const char *path, char *buf, int bufsiz) {
+long readlink(const char *path, char *buf, struct pierrefs_sb_info *context, int bufsiz) {
 	struct inode *inode;
 	struct nameidata nd;
 	int error;
 
-	pr_info("readlink: %s, %p, %d\n", path, buf, bufsiz);
+	pr_info("readlink: %s, %p, %p, %d\n", path, buf, context, bufsiz);
 
 	if (bufsiz <= 0)
 		return -EINVAL;
@@ -599,9 +595,9 @@ long readlink(const char *path, char *buf, int bufsiz) {
 	return error;
 }
 
-struct file* dbg_open(const char *pathname, int flags) {
+struct file* dbg_open(const char *pathname, const struct pierrefs_sb_info *context, int flags) {
 	if (flags & (O_CREAT | O_WRONLY | O_RDWR)) {
-		if (strncmp(pathname, get_context()->read_only_branch, get_context()->ro_len) == 0) {
+		if (strncmp(pathname, context->read_only_branch, context->ro_len) == 0) {
 			return ERR_PTR(-EINVAL);
 		}
 	}
@@ -609,9 +605,9 @@ struct file* dbg_open(const char *pathname, int flags) {
 	return filp_open(pathname, flags, 0);
 }
 
-struct file* dbg_open_2(const char *pathname, int flags, mode_t mode) {
+struct file* dbg_open_2(const char *pathname, const struct pierrefs_sb_info *context, int flags, mode_t mode) {
 	if (flags & (O_CREAT | O_WRONLY | O_RDWR)) {
-		if (strncmp(pathname, get_context()->read_only_branch, get_context()->ro_len) == 0) {
+		if (strncmp(pathname, context->read_only_branch, context->ro_len) == 0) {
 			return ERR_PTR(-EINVAL);
 		}
 	}
@@ -619,50 +615,50 @@ struct file* dbg_open_2(const char *pathname, int flags, mode_t mode) {
 	return filp_open(pathname, flags, mode);
 }
 
-struct file* dbg_creat(const char *pathname, mode_t mode) {
-	if (strncmp(pathname, get_context()->read_only_branch, get_context()->ro_len) == 0) {
+struct file* dbg_creat(const char *pathname, const struct pierrefs_sb_info *context, mode_t mode) {
+	if (strncmp(pathname, context->read_only_branch, context->ro_len) == 0) {
 		return ERR_PTR(-EINVAL);
 	}
 
 	return filp_creat(pathname, mode);
 }
 
-int dbg_mkdir(const char *pathname, mode_t mode) {
-	if (strncmp(pathname, get_context()->read_only_branch, get_context()->ro_len) == 0) {
+int dbg_mkdir(const char *pathname, struct pierrefs_sb_info *context, mode_t mode) {
+	if (strncmp(pathname, context->read_only_branch, context->ro_len) == 0) {
 		return -EINVAL;
 	}
 
-	return mkdir(pathname, mode);
+	return mkdir(pathname, context, mode);
 }
 
-int dbg_mknod(const char *pathname, mode_t mode, dev_t dev) {
-	if (strncmp(pathname, get_context()->read_only_branch, get_context()->ro_len) == 0) {
+int dbg_mknod(const char *pathname, struct pierrefs_sb_info *context, mode_t mode, dev_t dev) {
+	if (strncmp(pathname, context->read_only_branch, context->ro_len) == 0) {
 		return -EINVAL;
 	}
 
-	return mknod(pathname, mode, dev);
+	return mknod(pathname, context, mode, dev);
 }
 
-int dbg_mkfifo(const char *pathname, mode_t mode) {
-	if (strncmp(pathname, get_context()->read_only_branch, get_context()->ro_len) == 0) {
+int dbg_mkfifo(const char *pathname, struct pierrefs_sb_info *context, mode_t mode) {
+	if (strncmp(pathname, context->read_only_branch, context->ro_len) == 0) {
 		return -EINVAL;
 	}
 
-	return mkfifo(pathname, mode);
+	return mkfifo(pathname, context, mode);
 }
 
-int dbg_symlink(const char *oldpath, const char *newpath) {
-	if (strncmp(newpath, get_context()->read_only_branch, get_context()->ro_len) == 0) {
+int dbg_symlink(const char *oldpath, const char *newpath, struct pierrefs_sb_info *context) {
+	if (strncmp(newpath, context->read_only_branch, context->ro_len) == 0) {
 		return -EINVAL;
 	}
 
-	return symlink(oldpath, newpath);
+	return symlink(oldpath, newpath, context);
 }
 
-int dbg_link(const char *oldpath, const char *newpath) {
-	if (strncmp(newpath, get_context()->read_only_branch, get_context()->ro_len) == 0) {
+int dbg_link(const char *oldpath, const char *newpath, struct pierrefs_sb_info *context) {
+	if (strncmp(newpath, context->read_only_branch, context->ro_len) == 0) {
 		return -EINVAL;
 	}
 
-	return link(oldpath, newpath);
+	return link(oldpath, newpath, context);
 }

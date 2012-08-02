@@ -26,26 +26,33 @@
 
 #include "pierrefs.h"
 
+typedef struct {
+	const char *ro_path;
+	const char *path;
+	struct pierrefs_sb_info *context;
+} readdir_context;
+
 int hide_entry(void *buf, const char *name, int namlen, loff_t offset, ino_t ino, unsigned d_type);
 
 static int check_whiteout(void *buf, const char *name, int namlen, loff_t offset, ino_t ino, unsigned d_type) {
 	char wh_path[PATH_MAX];
 	char file_path[PATH_MAX];
+	readdir_context *ctx = (readdir_context*)buf;
 
 	/* Get file path */
-	if (snprintf(file_path, PATH_MAX, "%s%s", (char *)buf, name) > PATH_MAX) {
+	if (snprintf(file_path, PATH_MAX, "%s%s", ctx->path, name) > PATH_MAX) {
 		return -ENAMETOOLONG;
 	}
 
 	/* Look for whiteout - return 1 for non-existant */
-	return (find_whiteout(file_path, wh_path) < 0);
+	return (find_whiteout(file_path, ctx->context, wh_path) < 0);
 }
 
 static int check_writable(void *buf, const char *name, int namlen, loff_t offset, ino_t ino, unsigned d_type) {
 	return is_whiteout(name, namlen);
 }
 
-static int create_whiteout_worker(const char *wh_path) {
+static int create_whiteout_worker(const char *wh_path, struct pierrefs_sb_info *context) {
 	int err;
 	struct iattr attr;
 	struct dentry *dentry;
@@ -83,7 +90,7 @@ static int create_whiteout_worker(const char *wh_path) {
 	return err;
 }
 
-int create_whiteout(const char *path, char *wh_path) {
+int create_whiteout(const char *path, char *wh_path, struct pierrefs_sb_info *context) {
 	int err;
 
 	/* Find name */
@@ -92,7 +99,7 @@ int create_whiteout(const char *path, char *wh_path) {
 		return -EINVAL;
 	}
 
-	if (snprintf(wh_path, PATH_MAX, "%s", get_context()->read_write_branch) > PATH_MAX) {
+	if (snprintf(wh_path, PATH_MAX, "%s", context->read_write_branch) > PATH_MAX) {
 		return -ENAMETOOLONG;
 	}
 
@@ -104,29 +111,31 @@ int create_whiteout(const char *path, char *wh_path) {
 	strcat(wh_path, tree_path + 1);
 
 	/* Ensure path exists */
-	err = find_path(path, NULL);
+	err = find_path(path, NULL, context);
 	if (err < 0) {
 		return err;
 	}
 
 	/* Call worker */
-	return create_whiteout_worker(wh_path);
+	return create_whiteout_worker(wh_path, context);
 }
 
 static int delete_whiteout(void *buf, const char *name, int namlen, loff_t offset, ino_t ino, unsigned d_type) {
 	int err;
 	struct dentry *dentry;
 	char wh_path[PATH_MAX];
+	readdir_context *ctx = (readdir_context*)buf;
+	struct pierrefs_sb_info *context = ctx->context;
 
 	/* assert(is_whiteout(name, namlen)); */
 
 	/* Get whiteout path */
-	if (snprintf(wh_path, PATH_MAX, "%s%s", (char *)buf, name) > PATH_MAX) {
+	if (snprintf(wh_path, PATH_MAX, "%s%s", ctx->path, name) > PATH_MAX) {
 		return -ENAMETOOLONG;
 	}
 
 	/* Get its dentry */
-	dentry = get_path_dentry(wh_path, LOOKUP_REVAL);
+	dentry = get_path_dentry(wh_path, context, LOOKUP_REVAL);
 	if (IS_ERR(dentry)) {
 		return PTR_ERR(dentry);
 	}
@@ -140,7 +149,7 @@ static int delete_whiteout(void *buf, const char *name, int namlen, loff_t offse
 	return err;
 }
 
-int find_whiteout(const char *path, char *wh_path) {
+int find_whiteout(const char *path, struct pierrefs_sb_info *context, char *wh_path) {
 	int err;
 	struct kstat kstbuf;
 
@@ -150,7 +159,7 @@ int find_whiteout(const char *path, char *wh_path) {
 		return -EINVAL;
 	}
 
-	if (snprintf(wh_path, PATH_MAX, "%s", get_context()->read_write_branch) > PATH_MAX) {
+	if (snprintf(wh_path, PATH_MAX, "%s", context->read_write_branch) > PATH_MAX) {
 		return -ENAMETOOLONG;
 	}
 
@@ -169,14 +178,14 @@ int find_whiteout(const char *path, char *wh_path) {
 	return err;
 }
 
-int hide_directory_contents(const char *path) {
+int hide_directory_contents(const char *path, struct pierrefs_sb_info *context) {
 	int err;
 	struct file *ro_fd;
 	struct kstat kstbuf;
 	char rw_path[PATH_MAX];
 	char ro_path[PATH_MAX];
 
-	if (snprintf(ro_path, PATH_MAX, "%s%s", get_context()->read_only_branch, path) > PATH_MAX) {
+	if (snprintf(ro_path, PATH_MAX, "%s%s", context->read_only_branch, path) > PATH_MAX) {
 		return -ENAMETOOLONG;
 	}
 
@@ -190,7 +199,7 @@ int hide_directory_contents(const char *path) {
 		}
 	}
 
-	if (snprintf(rw_path, PATH_MAX, "%s%s", get_context()->read_write_branch, path) > PATH_MAX) {
+	if (snprintf(rw_path, PATH_MAX, "%s%s", context->read_write_branch, path) > PATH_MAX) {
 		return -ENAMETOOLONG;
 	}
 
@@ -210,26 +219,30 @@ int hide_directory_contents(const char *path) {
 
 int hide_entry(void *buf, const char *name, int namlen, loff_t offset, ino_t ino, unsigned d_type) {
 	char wh_path[PATH_MAX];
+	readdir_context *ctx = (readdir_context*)buf;
 
-	if (snprintf(wh_path, PATH_MAX, "%s/.wh.%s", (char *)buf, name) > PATH_MAX) {
+	if (snprintf(wh_path, PATH_MAX, "%s/.wh.%s", ctx->path, name) > PATH_MAX) {
 		return -ENAMETOOLONG;
 	}
 
-	return create_whiteout_worker(wh_path);
+	return create_whiteout_worker(wh_path, ctx->context);
 }
 
-int is_empty_dir(const char *path, const char *ro_path, const char *rw_path) {
+int is_empty_dir(const char *path, const char *ro_path, const char *rw_path, struct pierrefs_sb_info *context) {
 	int err;
 	struct file *ro_fd;
 	struct file *rw_fd;
+	readdir_context ctx;
 
 	ro_fd = open_worker(ro_path, O_RDONLY);
 	if (IS_ERR(ro_fd)) {
 		return PTR_ERR(ro_fd);
 	}
 
+	ctx.path = path;
+	ctx.context = context;
 	push_root();
-	err = vfs_readdir(ro_fd, check_whiteout, path);
+	err = vfs_readdir(ro_fd, check_whiteout, &ctx);
 	filp_close(ro_fd, 0);
 	pop_root();
 
@@ -255,7 +268,9 @@ int is_empty_dir(const char *path, const char *ro_path, const char *rw_path) {
 		}
 
 		/* Now cleanup all the whiteouts */
-		vfs_readdir(rw_fd, delete_whiteout, rw_path);
+		ctx.path = rw_path;
+		ctx.context = context;
+		vfs_readdir(rw_fd, delete_whiteout, &ctx);
 		filp_close(rw_fd, 0);
 		pop_root();
 	}
@@ -263,7 +278,7 @@ int is_empty_dir(const char *path, const char *ro_path, const char *rw_path) {
 	return err;
 }
 
-int unlink_rw_file(const char *path, const char *rw_path, char has_ro_sure) {
+int unlink_rw_file(const char *path, const char *rw_path, struct pierrefs_sb_info *context, char has_ro_sure) {
 	int err;
 	char has_ro = 0;
 	char ro_path[PATH_MAX];
@@ -272,7 +287,7 @@ int unlink_rw_file(const char *path, const char *rw_path, char has_ro_sure) {
 
 
 	/* Check if RO exists */
-	if (!has_ro_sure && find_file(path, ro_path, MUST_READ_ONLY) >= 0) {
+	if (!has_ro_sure && find_file(path, ro_path, context, MUST_READ_ONLY) >= 0) {
 		has_ro = 1;
 	}
 	else if (has_ro_sure) {
@@ -280,13 +295,13 @@ int unlink_rw_file(const char *path, const char *rw_path, char has_ro_sure) {
 	}
 
 	/* Check if user can unlink file */
-	err = can_remove(path, rw_path);
+	err = can_remove(path, rw_path, context);
 	if (err < 0) {
 		return err;
 	}
 
 	/* Get file dentry */
-	dentry = get_path_dentry(rw_path, LOOKUP_REVAL);
+	dentry = get_path_dentry(rw_path, context, LOOKUP_REVAL);
 	if (IS_ERR(dentry)) {
 		return PTR_ERR(dentry);
 	}
@@ -303,13 +318,13 @@ int unlink_rw_file(const char *path, const char *rw_path, char has_ro_sure) {
 
 	/* Whiteout potential RO file */
 	if (has_ro) {
-		create_whiteout(path, wh_path);
+		create_whiteout(path, wh_path, context);
 	}
 
 	return 0;
 }
 
-int unlink_whiteout(const char *path) {
+int unlink_whiteout(const char *path, struct pierrefs_sb_info *context) {
 	int err;
 	char wh_path[PATH_MAX];
 	struct dentry *dentry;
@@ -320,7 +335,7 @@ int unlink_whiteout(const char *path) {
 		return -EINVAL;
 	}
 
-	if (snprintf(wh_path, PATH_MAX, "%s", get_context()->read_write_branch) > PATH_MAX) {
+	if (snprintf(wh_path, PATH_MAX, "%s", context->read_write_branch) > PATH_MAX) {
 		return -ENAMETOOLONG;
 	}
 
@@ -332,7 +347,7 @@ int unlink_whiteout(const char *path) {
 	strcat(wh_path, tree_path + 1);
 
 	/* Get file dentry */
-	dentry = get_path_dentry(wh_path, LOOKUP_REVAL);
+	dentry = get_path_dentry(wh_path, context, LOOKUP_REVAL);
 	if (IS_ERR(dentry)) {
 		return PTR_ERR(dentry);
 	}
