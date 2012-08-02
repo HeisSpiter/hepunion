@@ -38,6 +38,8 @@ static int copy_child(void *buf, const char *name, int namlen, loff_t offset, u6
 	char tmp_rw_path[PATH_MAX];
 	struct readdir_context *ctx = (struct readdir_context*)buf;
 
+	pr_info("copy_child: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
+
 	/* Don't copy special entries */
 	if (is_special(name, namlen)) {
 		return 0;
@@ -69,6 +71,8 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
 	struct dentry *dentry;
 	struct iattr attr;
 	struct readdir_context ctx;
+
+	pr_info("create_copyup: %s, %s, %s, %p\n", path, ro_path, rw_path, context);
 
 	/* Get file attributes */
 	err = get_file_attr_worker(path, ro_path, context, &kstbuf);
@@ -271,6 +275,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
 int find_path_worker(const char *path, char *real_path, struct pierrefs_sb_info *context) {
 	/* Try to find that tree */
 	int err;
+	mm_segment_t oldfs;
 	char read_only[PATH_MAX];
 	char tree_path[PATH_MAX];
 	char real_tree_path[PATH_MAX];
@@ -280,9 +285,11 @@ int find_path_worker(const char *path, char *real_path, struct pierrefs_sb_info 
 	struct kstat kstbuf;
 	struct iattr attr;
 	struct dentry *dentry;
-
 	/* Get path without rest */
 	char *last = strrchr(path, '/');
+
+	pr_info("find_path_worker: %s, %s, %p\n", path, real_path, context);
+
 	if (!last) {
 		return -EINVAL;
 	}
@@ -333,9 +340,11 @@ int find_path_worker(const char *path, char *real_path, struct pierrefs_sb_info 
 
 		/* Only create if it doesn't already exist */
 		push_root();
+		call_usermode();
 		if (vfs_lstat(real_path, &kstbuf) < 0) {
 			/* Get previous dir properties */
 			err = vfs_lstat(read_only, &kstbuf);
+			restore_kernelmode();
 			pop_root();
 			if (err < 0) {
 				return err;
@@ -370,8 +379,10 @@ int find_path_worker(const char *path, char *real_path, struct pierrefs_sb_info 
 			}
 
 			dput(dentry);
+			call_usermode();
 		}
 
+		restore_kernelmode();
 		pop_root();
 
 		/* Next iteration (skip /) */
@@ -387,6 +398,8 @@ int find_path_worker(const char *path, char *real_path, struct pierrefs_sb_info 
 }
 
 int find_path(const char *path, char *real_path, struct pierrefs_sb_info *context) {
+	pr_info("find_path: %s, %s, %p\n", path, real_path, context);
+
 	if (real_path) {
 		return find_path_worker(path, real_path, context);
 	}

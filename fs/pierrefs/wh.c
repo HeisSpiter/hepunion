@@ -33,6 +33,8 @@ static int check_whiteout(void *buf, const char *name, int namlen, loff_t offset
 	char file_path[PATH_MAX];
 	struct readdir_context *ctx = (struct readdir_context*)buf;
 
+	pr_info("check_whiteout: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
+
 	/* Get file path */
 	if (snprintf(file_path, PATH_MAX, "%s%s", ctx->path, name) > PATH_MAX) {
 		return -ENAMETOOLONG;
@@ -43,6 +45,7 @@ static int check_whiteout(void *buf, const char *name, int namlen, loff_t offset
 }
 
 static int check_writable(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
+	pr_info("check_writable: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
 	return is_whiteout(name, namlen);
 }
 
@@ -53,6 +56,9 @@ static int create_whiteout_worker(const char *wh_path, struct pierrefs_sb_info *
 
 	/* Create file */
 	struct file *fd = creat_worker(wh_path, S_IRUSR);
+
+	pr_info("create_whiteout_worker: %s, %p\n", wh_path, context);
+
 	if (IS_ERR(fd)) {
 		return PTR_ERR(fd);
 	}
@@ -89,6 +95,9 @@ int create_whiteout(const char *path, char *wh_path, struct pierrefs_sb_info *co
 
 	/* Find name */
 	char *tree_path = strrchr(path, '/');
+
+	pr_info("create_whiteout: %s, %p, %p\n", path, wh_path, context);
+
 	if (!tree_path) {
 		return -EINVAL;
 	}
@@ -121,6 +130,8 @@ static int delete_whiteout(void *buf, const char *name, int namlen, loff_t offse
 	struct readdir_context *ctx = (struct readdir_context*)buf;
 	struct pierrefs_sb_info *context = ctx->context;
 
+	pr_info("delete_whiteout: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
+
 	/* assert(is_whiteout(name, namlen)); */
 
 	/* Get whiteout path */
@@ -146,9 +157,13 @@ static int delete_whiteout(void *buf, const char *name, int namlen, loff_t offse
 int find_whiteout(const char *path, struct pierrefs_sb_info *context, char *wh_path) {
 	int err;
 	struct kstat kstbuf;
+	mm_segment_t oldfs;
 
 	/* Find name */
 	char *tree_path = strrchr(path, '/');
+
+	pr_info("find_whiteout: %s, %p, %p\n", path, context, wh_path);
+
 	if (!tree_path) {
 		return -EINVAL;
 	}
@@ -165,9 +180,7 @@ int find_whiteout(const char *path, struct pierrefs_sb_info *context, char *wh_p
 	strcat(wh_path, tree_path + 1);
 
 	/* Does it exists */
-	push_root();
-	err = vfs_lstat(wh_path, &kstbuf);
-	pop_root();
+	super_lstat(wh_path, &kstbuf);
 
 	return err;
 }
@@ -178,13 +191,16 @@ int hide_directory_contents(const char *path, struct pierrefs_sb_info *context) 
 	struct kstat kstbuf;
 	char rw_path[PATH_MAX];
 	char ro_path[PATH_MAX];
+	mm_segment_t oldfs;
+
+	pr_info("hide_directory_contents: %s, %p\n", path, context);
 
 	if (snprintf(ro_path, PATH_MAX, "%s%s", context->read_only_branch, path) > PATH_MAX) {
 		return -ENAMETOOLONG;
 	}
 
 	/* If RO even does not exist, all correct */
-	err = vfs_lstat(ro_path, &kstbuf);
+	super_lstat(ro_path, &kstbuf);
 	if (err < 0) {
 		if (err == -ENOENT) {
 			return 0;
@@ -215,6 +231,8 @@ static int hide_entry(void *buf, const char *name, int namlen, loff_t offset, u6
 	char wh_path[PATH_MAX];
 	struct readdir_context *ctx = (struct readdir_context*)buf;
 
+	pr_info("hide_entry: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
+
 	if (snprintf(wh_path, PATH_MAX, "%s/.wh.%s", ctx->path, name) > PATH_MAX) {
 		return -ENAMETOOLONG;
 	}
@@ -227,6 +245,8 @@ int is_empty_dir(const char *path, const char *ro_path, const char *rw_path, str
 	struct file *ro_fd;
 	struct file *rw_fd;
 	struct readdir_context ctx;
+
+	pr_info("is_empty_dir: %s, %s, %s, %p\n", path, ro_path, rw_path, context);
 
 	ro_fd = open_worker(ro_path, O_RDONLY);
 	if (IS_ERR(ro_fd)) {
@@ -279,6 +299,7 @@ int unlink_rw_file(const char *path, const char *rw_path, struct pierrefs_sb_inf
 	char wh_path[PATH_MAX];
 	struct dentry *dentry;
 
+	pr_info("unlink_rw_file: %s, %s, %p, %u\n", path, rw_path, context, has_ro_sure);
 
 	/* Check if RO exists */
 	if (!has_ro_sure && find_file(path, ro_path, context, MUST_READ_ONLY) >= 0) {
@@ -325,6 +346,9 @@ int unlink_whiteout(const char *path, struct pierrefs_sb_info *context) {
 
 	/* Find name */
 	char *tree_path = strrchr(path, '/');
+
+	pr_info("unlink_whiteout: %s, %p\n", path, context);
+
 	if (!tree_path) {
 		return -EINVAL;
 	}

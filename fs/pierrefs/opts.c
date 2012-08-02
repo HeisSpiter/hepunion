@@ -16,6 +16,8 @@ static int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct 
 	struct pierrefs_sb_info *context = get_context_d(dentry);
 	char *path = context->global1;
 
+	pr_info("pierrefs_getattr: %p, %p, %p\n", mnt, dentry, kstbuf);
+
 	/* Get path */
 	err = get_relative_path(0, dentry, context, path, 1);
 	if (err < 0) {
@@ -33,6 +35,8 @@ static int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct de
 	char *to = context->global2;
 	char real_from[PATH_MAX];
 	char real_to[PATH_MAX];
+
+	pr_info("pierrefs_link: %p, %p, %p\n", old_dentry, dir, dentry);
 
 	/* First, find file */
 	err = get_relative_path(0, old_dentry, context, from, 1);
@@ -98,6 +102,8 @@ static loff_t pierrefs_llseek(struct file *file, loff_t offset, int origin) {
 	int err = -EINVAL;
 	struct file *real_file = (struct file *)file->private_data;
 
+	pr_info("pierrefs_llseek: %p, %llx, %x\n", file, offset, origin);
+
 	if (real_file->f_op->llseek) {
 		err = real_file->f_op->llseek(real_file, offset, origin);
 	}
@@ -112,6 +118,8 @@ static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry,
 	char *path = context->global1;
 	char *real_path = context->global2;
 	struct inode *inode = NULL;
+
+	pr_info("pierrefs_lookup: %p, %p, %p\n", dir, dentry, nameidata);
 
 	/* First get path of the file */
 	err = get_relative_path_for_file(dir, dentry, context, path, 1);
@@ -140,6 +148,8 @@ static int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 	struct pierrefs_sb_info *context = get_context_i(dir);
 	char *path = context->global1;
 	char *real_path = context->global2;
+
+	pr_info("pierrefs_mkdir: %p, %p, %x\n", dir, dentry, mode);
 
 	/* Try to find the directory first */
 	err = get_relative_path_for_file(dir, dentry, context, path, 1);
@@ -207,6 +217,8 @@ static int pierrefs_mknod(struct inode *dir, struct dentry *dentry, int mode, de
 	char *path = context->global1;
 	char *real_path = context->global2;
 
+	pr_info("pierrefs_mknod: %p, %p, %x, %x\n", dir, dentry, mode, rdev);
+
 	/* Try to find the node first */
 	err = get_relative_path_for_file(dir, dentry, context, path, 1);
 	if (err < 0) {
@@ -251,6 +263,7 @@ static int pierrefs_open(struct inode *inode, struct file *file) {
 	char *path = context->global1;
 	char *real_path = context->global2;
 
+	pr_info("pierrefs_open: %p, %p\n", inode, file);
 
 	/* Don't check for flags here, if we are down here
 	 * the user is allowed to read/write the file, the
@@ -290,6 +303,8 @@ static int pierrefs_permission(struct inode *inode, int mask, struct nameidata *
 	char *path = context->global1;
 	char *real_path = context->global2;
 
+	pr_info("pierrefs_permission: %p, %x, %p\n", inode, mask, nd);
+
 	/* Get path */
 	err = get_relative_path(0, nd->dentry, context, path, 1);
 	if (err) {
@@ -311,6 +326,8 @@ static int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
 	struct pierrefs_sb_info *context = get_context_d(dentry);
 	char *path = context->global1;
 	char *real_path = context->global2;
+
+	pr_info("pierrefs_setattr: %p, %p\n", dentry, attr);
 
 	/* Get path */
 	err = get_relative_path(0, dentry, context, path, 1);
@@ -343,6 +360,7 @@ static int pierrefs_symlink(struct inode *dir, struct dentry *dentry, const char
 	char *to = context->global1;
 	char *real_to = context->global2;
 
+	pr_info("pierrefs_symlink: %p, %p, %s\n", dir, dentry, symname);
 
 	/* Find destination */
 	err = get_relative_path_for_file(dir, dentry, context, to, 1);
@@ -390,6 +408,8 @@ static int pierrefs_statfs(struct dentry *dentry, struct kstatfs *buf) {
 	struct pierrefs_sb_info * sb_info = sb->s_fs_info;
 	struct file *filp;
 	int err;
+
+	pr_info("pierrefs_statfs: %p, %p\n", dentry, buf);
 
 	memset(buf, 0, sizeof(*buf));
 

@@ -52,6 +52,9 @@ int create_me(const char *me_path, struct kstat *kstbuf, struct pierrefs_sb_info
 
 	/* Get creation modes */
 	umode_t mode = kstbuf->mode;
+
+	pr_info("create_me: %s, %p, %p\n", me_path, kstbuf, context);
+
 	clear_mode_flags(mode);
 
 	/* Create file */
@@ -80,8 +83,12 @@ int create_me(const char *me_path, struct kstat *kstbuf, struct pierrefs_sb_info
 
 int find_me(const char *path, struct pierrefs_sb_info *context, char *me_path, struct kstat *kstbuf) {
 	int err;
+	mm_segment_t oldfs;
 	/* Find name */
 	char *tree_path = strrchr(path, '/');
+
+	pr_info("find_me: %s, %p, %p, %p\n", path, context, me_path, kstbuf);
+
 	if (!tree_path) {
 		return -EINVAL;
 	}
@@ -98,9 +105,7 @@ int find_me(const char *path, struct pierrefs_sb_info *context, char *me_path, s
 	strcat(me_path, tree_path + 1);
 
 	/* Now, try to get properties */
-	push_root();
-	err = vfs_lstat(me_path, kstbuf);
-	pop_root();
+	super_lstat(me_path, kstbuf);
 
 	return err;
 }
@@ -108,6 +113,8 @@ int find_me(const char *path, struct pierrefs_sb_info *context, char *me_path, s
 int get_file_attr(const char *path, struct pierrefs_sb_info *context, struct kstat *kstbuf) {
 	char real_path[PATH_MAX];
 	int err;
+
+	pr_info("get_file_attr: %s, %p, %p\n", path, context, kstbuf);
 
 	/* First, find file */
 	err = find_file(path, real_path, context, 0);
@@ -124,14 +131,15 @@ int get_file_attr_worker(const char *path, const char *real_path, struct pierref
 	char me;
 	struct kstat kstme;
 	char me_file[PATH_MAX];
+	mm_segment_t oldfs;
+
+	pr_info("get_file_attr_worker: %s, %s, %p, %p\n", path, real_path, context, kstbuf);
 
 	/* Look for a me file */
 	me = (find_me(path, context, me_file, &kstme) > 0);
 
 	/* Get attributes */
-	push_root();
-	err = vfs_lstat(real_path, kstbuf);
-	pop_root();
+	super_lstat(real_path, kstbuf);
 	if (err < 0) {
 		return err;
 	}
@@ -156,6 +164,8 @@ int get_file_attr_worker(const char *path, const char *real_path, struct pierref
 
 int set_me(const char *path, const char *real_path, struct kstat *kstbuf, struct pierrefs_sb_info *context, int flags) {
 	struct iattr attr;
+
+	pr_info("set_me: %s, %s, %p, %p, %x\n", path, real_path, kstbuf, context, flags);
 
 	/* Convert the kstbuf to a iattr struct */
 	attr.ia_valid = 0;
@@ -188,6 +198,9 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr, s
 	struct kstat kstme;
 	struct file *fd;
 	umode_t mode;
+	mm_segment_t oldfs;
+
+	pr_info("set_me: %s, %s, %p, %p\n", path, real_path, attr, context);
 
 	/* Ensure input is correct */
 	attr->ia_valid &= ATTR_UID | ATTR_GID | ATTR_ATIME | ATTR_MTIME | ATTR_MODE;
@@ -197,9 +210,7 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr, s
 
 	if (!me) {
 		/* Read real file info */
-		push_root();
-		err = vfs_lstat(real_path, &kstme);
-		pop_root();
+		super_lstat(real_path, &kstme);
 		if (err < 0) {
 			return err;
 		}
