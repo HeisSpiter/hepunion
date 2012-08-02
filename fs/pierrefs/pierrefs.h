@@ -26,6 +26,7 @@
 #include <linux/mount.h>
 #include <linux/module.h>
 #include <linux/statfs.h>
+#include <linux/uaccess.h>
 #include <linux/security.h>
 #include "recursivemutex.h"
 
@@ -253,6 +254,37 @@ extern struct file_operations pierrefs_fops;
 	context->gid = current->fsgid;				\
 	current->fsuid = 0;							\
 	current->fsgid = 0
+
+/**
+ * Switch the current data segment to disable buffers checking
+ * To be used when calling a VFS function wanting an usermode
+ * buffer
+ */
+#define call_usermode()	\
+	oldfs = get_fs();	\
+	set_fs(KERNEL_DS)
+
+/**
+ * Switch back to previous data segment, thanks to the stored value
+ */
+#define restore_kernelmode()	\
+	set_fs(oldfs)
+
+/**
+ * Wrapper to the vfs_lstat syscall.
+ * It first switches user to root
+ * and then switches data segment
+ * \warning Use it REALLY carefully
+ * \param[in]	p	The path to stat
+ * \param[out]	b	The kstat struct to fill
+ * \return	Nothing, but fills err
+ */
+#define super_lstat(p, b)	\
+	push_root();			\
+	call_usermode();		\
+	err = vfs_lstat(p, b);	\
+	restore_kernelmode();	\
+	pop_root()
 
 #define filp_creat(p, m) filp_open(p, O_CREAT | O_WRONLY | O_TRUNC, m)
 
