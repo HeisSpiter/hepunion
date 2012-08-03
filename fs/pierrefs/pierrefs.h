@@ -28,6 +28,7 @@
 #include <linux/statfs.h>
 #include <linux/uaccess.h>
 #include <linux/security.h>
+#include "hash.h"
 #include "recursivemutex.h"
 
 struct pierrefs_sb_info {
@@ -163,6 +164,11 @@ extern struct file_operations pierrefs_fops;
  * Defines the maximum size that will be used for buffers to manipulate files
  */
 #define MAXSIZE 4096
+
+/**
+  * Defines the seed key for the inode numbers
+ */
+#define PIERREFS_SEED 0x9F5109F5109F510BLLU
 
 /**
  * Mask that defines all the modes of a file that can be changed using the
