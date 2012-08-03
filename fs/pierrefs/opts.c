@@ -321,6 +321,41 @@ static int pierrefs_permission(struct inode *inode, int mask, struct nameidata *
 	return can_access(path, real_path, context, mask);
 }
 
+static void pierrefs_read_inode(struct inode *inode) {
+	int err;
+	char path[PATH_MAX];
+	struct kstat kstbuf;
+	struct pierrefs_sb_info *context = get_context_i(inode);
+
+	pr_info("pierrefs_read_inode: %p\n", inode);
+
+	/* Get path */
+	err = get_relative_path(inode, 0, context, path, 1);
+	if (err < 0) {
+		pr_info("read_inode: %d\n", err);
+		return;
+	}
+
+	/* Call worker */
+	err = get_file_attr(path, context, &kstbuf);
+	if (err < 0) {
+		pr_info("read_inode: %d\n", err);
+		return;
+	}
+
+	/* Set inode */
+	inode->i_mode = kstbuf.mode;
+	inode->i_atime = kstbuf.atime;
+	inode->i_mtime = kstbuf.mtime;
+	inode->i_ctime = kstbuf.ctime;
+	inode->i_uid = kstbuf.uid;
+	inode->i_gid = kstbuf.gid;
+	inode->i_size = kstbuf.size;
+	inode->i_nlink = kstbuf.nlink;
+	inode->i_blocks = kstbuf.blocks;
+	inode->i_blkbits = kstbuf.blksize;
+}
+
 static int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
 	int err;
 	struct pierrefs_sb_info *context = get_context_d(dentry);
@@ -429,7 +464,8 @@ static int pierrefs_statfs(struct dentry *dentry, struct kstatfs *buf) {
 
 	/* Return them, but ensure we mark our stuff */
 	buf->f_type = sb->s_magic;
-	memset(&buf->f_fsid, 0, sizeof(buf->f_fsid));
+	buf->f_fsid.val[0] = (u32)PIERREFS_SEED;
+	buf->f_fsid.val[1] = (u32)(PIERREFS_SEED >> 32);
 
 	return 0;
 }
@@ -449,6 +485,7 @@ struct inode_operations pierrefs_iops = {
 };
 
 struct super_operations pierrefs_sops = {
+	.read_inode	= pierrefs_read_inode,
 	.statfs		= pierrefs_statfs,
 };
 
