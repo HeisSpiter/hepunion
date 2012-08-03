@@ -253,6 +253,10 @@ int get_full_path(const struct inode *inode, const struct dentry *dentry, char *
 		}
 	}
 
+	if (!dentry) {
+		return -EBADF;
+	}
+
 	pr_info("Getting full path of: %s\n", dentry->d_name.name);
 
 	*--end = '\0';
