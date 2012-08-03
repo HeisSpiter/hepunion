@@ -236,15 +236,15 @@ int find_file(const char *path, char *real_path, struct pierrefs_sb_info *contex
 }
 
 int get_full_path_i(const struct inode *inode, char *real_path) {
-	int len;
+	int len = -EBADF;
 	struct dentry *dentry;
-	struct list_head *next = inode->i_dentry.next;
+	struct list_head *entry = inode->i_dentry.next;
 
 	pr_info("get_full_path_i: %p, %p\n", inode, real_path);
 
 	/* Try to browse all the dentry, till we find one nice */
-	while (next != &inode->i_dentry) {
-		dentry = list_entry(next, struct dentry, d_alias);
+	while (entry != &inode->i_dentry) {
+		dentry = list_entry(entry, struct dentry, d_alias);
 		/* Get full path for the given inode */
 		len = get_full_path_d(dentry, real_path);
 		if (len > 0) {
@@ -255,7 +255,7 @@ int get_full_path_i(const struct inode *inode, char *real_path) {
 		}
 
 		/* Jump to next dentry */
-		next = next->next;
+		entry = entry->next;
 	}
 
 	return len;

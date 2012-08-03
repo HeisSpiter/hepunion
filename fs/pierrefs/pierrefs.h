@@ -35,7 +35,7 @@ struct read_inode_context {
 	/**
 	 * Entry in the read_inode list
 	 */
-	struct list_head read_inode_item;
+	struct list_head read_inode_entry;
 	/**
 	 * Inode number
 	 */

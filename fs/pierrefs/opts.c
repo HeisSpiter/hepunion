@@ -145,7 +145,7 @@ static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry,
 	ctx->ino = ino;
 	memcpy(ctx->name, path, namelen * sizeof(path[0]));
 	ctx->name[namelen] = 0;
-	list_add(&ctx->read_inode_item, &context->read_inode_head);
+	list_add(&ctx->read_inode_entry, &context->read_inode_head);
 
 	/* Get inode */
 	inode = iget(dir->i_sb, ino);
@@ -154,7 +154,7 @@ static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry,
 	 * If inode was new, read_inode has been called and the context used
 	 * otherwise it was just useless
 	 */
-	list_del(&ctx->read_inode_item);
+	list_del(&ctx->read_inode_entry);
 	kfree(ctx);
 
 	/* Set dentry operations */
@@ -346,25 +346,25 @@ static int pierrefs_permission(struct inode *inode, int mask, struct nameidata *
 static void pierrefs_read_inode(struct inode *inode) {
 	int err;
 	struct kstat kstbuf;
-	struct list_head *next;
+	struct list_head *entry;
 	struct read_inode_context *ctx;
 	struct pierrefs_sb_info *context = get_context_i(inode);
 
 	pr_info("pierrefs_read_inode: %p\n", inode);
 
 	/* Get path */
-	next = context->read_inode_head.next;
-	while (next != &context->read_inode_head) {
-		ctx = list_entry(next, struct read_inode_context, read_inode_item);
+	entry = context->read_inode_head.next;
+	while (entry != &context->read_inode_head) {
+		ctx = list_entry(entry, struct read_inode_context, read_inode_entry);
 		if (ctx->ino == inode->i_ino) {
 			break;
 		}
 
-		next = next->next;
+		entry = entry->next;
 	}
 
 	/* Quit if no context found */
-	if (next == &context->read_inode_head) {
+	if (entry == &context->read_inode_head) {
 		pr_info("Context not found for: %lu\n", inode->i_ino);
 		return;
 	}
