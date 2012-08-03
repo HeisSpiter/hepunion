@@ -31,6 +31,22 @@
 #include "hash.h"
 #include "recursivemutex.h"
 
+struct read_inode_context {
+	/**
+	 * Entry in the read_inode list
+	 */
+	struct list_head read_inode_item;
+	/**
+	 * Inode number
+	 */
+	unsigned long ino;
+	/**
+	 * Associated path. It is null terminated
+	 * \warning This is variable length structure
+	 */
+	char name[1];
+};
+
 struct pierrefs_sb_info {
 	/**
 	 * Contains the full path of the RW branch
@@ -62,6 +78,11 @@ struct pierrefs_sb_info {
 	 */
 	char global1[PATH_MAX];
 	char global2[PATH_MAX];
+	/**
+	 * Head for the read_inode contexts list used during
+	 * lookup
+	 */
+	struct list_head read_inode_head;
 };
 
 struct readdir_context {

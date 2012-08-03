@@ -118,6 +118,9 @@ static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry,
 	char *path = context->global1;
 	char *real_path = context->global2;
 	struct inode *inode = NULL;
+	struct read_inode_context * ctx;
+	size_t namelen;
+	unsigned long ino;
 
 	pr_info("pierrefs_lookup: %p, %p, %p\n", dir, dentry, nameidata);
 
@@ -134,13 +137,32 @@ static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry,
 	}
 
 	/* We've got it!
-	 * Set dentry operations
+	 * Prepare a read_inode context for further read
 	 */
+	namelen = strlen(path); 
+	ino = name_to_ino(path);
+	ctx = kmalloc(sizeof(struct read_inode_context) + (namelen + 1) * sizeof(path[0]), GFP_KERNEL);
+	ctx->ino = ino;
+	memcpy(ctx->name, path, namelen * sizeof(path[0]));
+	ctx->name[namelen] = 0;
+	list_add(&ctx->read_inode_item, &context->read_inode_head);
+
+	/* Get inode */
+	inode = iget(dir->i_sb, ino);
+
+	/* Release the context, whatever happened
+	 * If inode was new, read_inode has been called and the context used
+	 * otherwise it was just useless
+	 */
+	list_del(&ctx->read_inode_item);
+	kfree(ctx);
+
+	/* Set dentry operations */
 	dentry->d_op = &pierrefs_dops;
 	/* Set our inode */
 	d_add(dentry, inode);
 
-	return NULL;
+	return (struct dentry *)inode;
 }
 
 static int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
@@ -323,21 +345,30 @@ static int pierrefs_permission(struct inode *inode, int mask, struct nameidata *
 
 static void pierrefs_read_inode(struct inode *inode) {
 	int err;
-	char path[PATH_MAX];
 	struct kstat kstbuf;
+	struct list_head *next;
+	struct read_inode_context *ctx;
 	struct pierrefs_sb_info *context = get_context_i(inode);
 
 	pr_info("pierrefs_read_inode: %p\n", inode);
 
 	/* Get path */
-	err = get_relative_path(inode, 0, context, path, 1);
-	if (err < 0) {
-		pr_info("read_inode: %d\n", err);
+	next = context->read_inode_head.next;
+	while (next != &context->read_inode_head) {
+		ctx = list_entry(next, struct read_inode_context, read_inode_item);
+		if (ctx->ino == inode->i_ino) {
+			break;
+		}
+	}
+
+	/* Quit if no context found */
+	if (next == &context->read_inode_head) {
+		pr_info("Context not found for: %lu\n", inode->i_ino);
 		return;
 	}
 
 	/* Call worker */
-	err = get_file_attr(path, context, &kstbuf);
+	err = get_file_attr(ctx->name, context, &kstbuf);
 	if (err < 0) {
 		pr_info("read_inode: %d\n", err);
 		return;
@@ -354,6 +385,9 @@ static void pierrefs_read_inode(struct inode *inode) {
 	inode->i_nlink = kstbuf.nlink;
 	inode->i_blocks = kstbuf.blocks;
 	inode->i_blkbits = kstbuf.blksize;
+
+	/* Set operations */
+	inode->i_op = &pierrefs_iops;
 }
 
 static int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
