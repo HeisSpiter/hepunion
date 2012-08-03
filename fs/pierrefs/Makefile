@@ -10,7 +10,7 @@ ccflags-y += -DDEBUG
 ccflags-y += -D'pr_fmt(fmt)=PIERREFS_NAME"\040%s:%d:%s[%d]:\040"fmt,__func__,__LINE__,current->comm,current->pid'
 
 obj-$(CONFIG_PIERREFS_FS) += pierrefs.o
-pierrefs-y := cow.o helpers.o main.o opts.o me.o recursivemutex.o wh.o
+pierrefs-y := cow.o hash.o helpers.o main.o opts.o me.o recursivemutex.o wh.o
 
 # all are boolean
 
