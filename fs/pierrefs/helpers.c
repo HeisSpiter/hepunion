@@ -235,27 +235,39 @@ int find_file(const char *path, char *real_path, struct pierrefs_sb_info *contex
 	return err;
 }
 
+int get_full_path_i(const struct inode *inode, char *real_path) {
+	int len;
+	struct dentry *dentry;
+	struct list_head *next = inode->i_dentry.next;
+
+	pr_info("get_full_path_i: %p, %p\n", inode, real_path);
+
+	/* Try to browse all the dentry, till we find one nice */
+	while (next != &inode->i_dentry) {
+		dentry = list_entry(next, struct dentry, d_alias);
+		/* Get full path for the given inode */
+		len = get_full_path_d(dentry, real_path);
+		if (len > 0) {
+			/* We found the dentry! Break out */
+			if (name_to_ino(real_path) == inode->i_ino) {
+				break;
+			}
+		}
+
+		/* Jump to next dentry */
+		next = next->next;
+	}
+
+	return len;
+}
+
 /* Adapted from nfs_path function */
-int get_full_path(const struct inode *inode, const struct dentry *dentry, char *real_path) {
+int get_full_path_d(const struct dentry *dentry, char *real_path) {
 	char tmp_path[PATH_MAX];
 	char *end = tmp_path + PATH_MAX;
 	int namelen = 0, buflen = PATH_MAX;
 
-	pr_info("get_full_path: %p, %p, %p\n", inode, dentry, real_path);
-
-	/* If we don't have any dentry, then, let's find one */
-	if (!dentry) {
-		/* FIXME: For the moment only~~ */
-		/* assert(inode->i_nlink == 0); */
-
-		if (inode->i_dentry.next) {
-			dentry = list_entry(inode->i_dentry.next, struct dentry, d_alias);
-		}
-	}
-
-	if (!dentry) {
-		return -EBADF;
-	}
+	pr_info("get_full_path: %p, %p\n", dentry, real_path);
 
 	pr_info("Getting full path of: %s\n", dentry->d_name.name);
 
@@ -316,7 +328,11 @@ int get_relative_path(const struct inode *inode, const struct dentry *dentry, co
 	pr_info("get_relative_path: %p, %p, %p, %p, %d\n", inode, dentry, context, path, is_ours);
 
 	/* First, get full path */
-	len = get_full_path(inode, dentry, real_path);
+	if (dentry) {
+		len = get_full_path_d(dentry, real_path);
+	} else {
+		len = get_full_path_i(inode, real_path);
+	}
 	if (len < 0) {
 		return len;
 	}

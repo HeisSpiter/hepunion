@@ -480,16 +480,22 @@ int can_traverse(const char *path, struct pierrefs_sb_info *context);
  */
 int find_file(const char *path, char *real_path, struct pierrefs_sb_info *context, char flags);
 /**
- * Get the full path (ie, on the lower FS) of the provided file.
- * \param[in]	inode		Inode that refers to the file
+ * Get the full path of a dentry (might it be on PierreFS or lower file system).
  * \param[in]	dentry		Dentry that refers to the file
  * \param[out]	real_path	The real path that has been found
- * \return 0 in case of a success, an error code otherwise
- * \note	It is possible not to provide a dentry (but not recommended). An inode must be provided then
- * \note	It is possible not to provide an inode. A dentry must be provided then
- * \warning	If no dentry is provided, the function will return the path associated to the first dentry it finds
+ * \return Length written in real_path in case of a success, an error code otherwise
  */
-int get_full_path(const struct inode *inode, const struct dentry *dentry, char *real_path);
+int get_full_path_d(const struct dentry *dentry, char *real_path);
+/**
+ * Get the full path of an inode
+ * \param[in]	inode		Inode that refers to the file
+ * \param[out]	real_path	The real path that has been found
+ * \return Length written in real_path in case of a success, an error code otherwise
+ * \warning	The function will try to get the best dentry possible by browsing them all
+ * \warning	It will compute the full path for each dentry and then, get its ino and compare with inode ino
+ * \warning It will work best with PierreFS inode. For the rest, the last dentry will be used
+ */
+int get_full_path_i(const struct inode *inode, char *real_path);
 /**
  * Get the relative path (to / of PierreFS) of the provided file.
  * \param[in]	inode	Inode that refers to the file
