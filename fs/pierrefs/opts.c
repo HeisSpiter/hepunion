@@ -359,6 +359,8 @@ static void pierrefs_read_inode(struct inode *inode) {
 		if (ctx->ino == inode->i_ino) {
 			break;
 		}
+
+		next = next->next;
 	}
 
 	/* Quit if no context found */
