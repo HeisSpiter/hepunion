@@ -194,7 +194,7 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	}
 
 	/* Init it */
-	root_i->i_ino = 1;
+	root_i->i_ino = name_to_ino("/");
 	root_i->i_mode = root_m;
 	root_i->i_atime = atime;
 	root_i->i_mtime = mtime;
