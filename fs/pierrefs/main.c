@@ -20,6 +20,8 @@ MODULE_DESCRIPTION("PierreFS " PIERREFS_VERSION
 MODULE_LICENSE("GPL");
 
 static int make_path(const char *s, size_t n, char **path) {
+	pr_info("make_path: %s, %zu, %p\n", s, n, path);
+
     /* Zero output */
     *path = 0;
 
@@ -31,14 +33,14 @@ static int make_path(const char *s, size_t n, char **path) {
 
 	/* Tailing has to be removed */
 	if (s[n - 1] == '/') {
-		n--;
+		--n;
 	}
 
 	/* Allocate one more ('\0') */
 	*path = kmalloc((n + 1) * sizeof(char), GFP_NOFS);
 	if (*path) {
 		memcpy(*path, s, n);
-		*path[n] = '\0';
+		(*path)[n] = '\0';
         return 0;
 	}
 
@@ -56,7 +58,7 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	struct timespec atime, mtime, ctime;
 	struct file *filp;
 
-	pr_info("Parameters for mount operation: %s\n", arg);
+	pr_info("get_branches: %p, %s\n", sb, arg);
 
 	/* We are expecting 2 branches, separated by : */
 	part2 = strchr(arg, ':');
@@ -226,7 +228,7 @@ static int pierrefs_read_super(struct super_block *sb, void *raw_data,
 	int err;
 	struct pierrefs_sb_info *sb_info;
 
-	printk(KERN_INFO "Mount started\n");
+	pr_info("pierrefs_read_super: %p, %p, %d\n", sb, raw_data, silent);
 
 	/* Check for parameters */
 	if (!raw_data) {
