@@ -11,6 +11,105 @@
 
 #include "pierrefs.h"
 
+static int pierrefs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nameidata) {
+	int err;
+	struct pierrefs_sb_info *context = get_context_i(dir);
+	char *path = context->global1;
+	char *real_path = context->global2;
+	struct file* filp;
+	struct iattr attr;
+	struct inode *inode;
+
+	pr_info("pierrefs_create: %p, %p, %x, %p\n", dir, dentry, mode, nameidata);
+
+	/* Try to find the file first */
+	err = get_relative_path_for_file(dir, dentry, context, path, 1);
+	if (err < 0) {
+		return err;
+	}
+
+	/* And ensure it doesn't exist */
+	err = find_file(path, real_path, context, 0);
+	if (err >= 0) {
+		return -EEXIST;
+	}
+
+	/* Once we are here, we know that the file does not exist
+	 * And that we can create it (thanks to lookup)
+	 */
+	/* Create path if needed */
+	err = find_path(path, real_path, context);
+	if (err < 0) {
+		return err;
+	}
+
+	/* Be paranoid, check access */
+	err = can_create(path, real_path, context);
+	if (err < 0) {
+		return err;
+	}
+
+	/* Open the file */
+	filp = creat_worker(real_path, mode);
+	if (IS_ERR(filp)) {
+		return PTR_ERR(filp);
+	}
+
+	/* Set its correct owner in case of creation */
+	attr.ia_uid = current->uid;
+	attr.ia_gid = current->gid;
+	attr.ia_valid = ATTR_UID | ATTR_GID;
+
+	push_root();
+	err = notify_change(filp->f_dentry, &attr);
+	filp_close(filp, 0);
+	pop_root();
+
+	if (err < 0) {
+		dentry = get_path_dentry(real_path, context, LOOKUP_REVAL);
+		if (IS_ERR(dentry)) {
+			return err;
+		}
+
+		push_root();
+		vfs_unlink(dentry->d_inode, dentry);
+		pop_root();
+		dput(dentry);
+
+		return err;
+	}
+
+	/* Now we're done, create the inode */
+	inode = new_inode(dir->i_sb);
+	if (!inode) {
+		return -ENOMEM;
+	}
+
+	/* And fill it in */
+	dir->i_nlink++;
+	inode->i_uid = current->fsuid;
+	inode->i_gid = current->fsgid;
+	inode->i_mtime = CURRENT_TIME;
+	inode->i_atime = CURRENT_TIME;
+	inode->i_ctime = CURRENT_TIME;
+	inode->i_blocks = 0;
+	inode->i_blkbits = 0;
+	inode->i_op = &pierrefs_iops;
+	inode->i_mode = mode;
+	inode->i_nlink = 1;
+	inode->i_ino = name_to_ino(path);
+	insert_inode_hash(inode); 
+
+	d_instantiate(dentry, inode);
+	mark_inode_dirty(dir);
+	mark_inode_dirty(inode);
+
+	/* Remove whiteout if any */
+	unlink_whiteout(path, context);
+
+	return 0;
+}
+
 static int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *kstbuf) {
 	int err;
 	struct pierrefs_sb_info *context = get_context_d(dentry);
@@ -149,6 +248,12 @@ static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry,
 
 	/* Get inode */
 	inode = iget(dir->i_sb, ino);
+	if (!inode) {
+		inode = ERR_PTR(-EACCES);
+	} else {
+		/* Set our inode */
+		d_add(dentry, inode);
+	}
 
 	/* Release the context, whatever happened
 	 * If inode was new, read_inode has been called and the context used
@@ -156,11 +261,6 @@ static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry,
 	 */
 	list_del(&ctx->read_inode_entry);
 	kfree(ctx);
-
-	/* Set dentry operations */
-	dentry->d_op = &pierrefs_dops;
-	/* Set our inode */
-	d_add(dentry, inode);
 
 	return (struct dentry *)inode;
 }
@@ -507,6 +607,7 @@ static int pierrefs_statfs(struct dentry *dentry, struct kstatfs *buf) {
 }
 
 struct inode_operations pierrefs_iops = {
+	.create		= pierrefs_create,
 	.getattr	= pierrefs_getattr,
 	.link		= pierrefs_link,
 	.lookup		= pierrefs_lookup,
