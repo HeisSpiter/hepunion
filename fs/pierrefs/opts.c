@@ -229,10 +229,19 @@ static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry,
 		return ERR_PTR(err);
 	}
 
+	/* Set our operations before we continue */
+	dentry->d_op = &pierrefs_dops;
+
 	/* Now, look for the file */
 	err = find_file(path, real_path, context, 0);
 	if (err < 0) {
-		return ERR_PTR(err);
+		if (err == -ENOENT) {
+			d_add(dentry, inode);
+			return NULL;
+		} else {
+			pr_info("Err: %d\n", err);
+			return ERR_PTR(err);
+		}
 	}
 
 	/* We've got it!
@@ -492,6 +501,12 @@ static void pierrefs_read_inode(struct inode *inode) {
 	inode->i_op = &pierrefs_iops;
 }
 
+static int pierrefs_revalidate(struct dentry *dentry, struct nameidata *nd) {
+	pr_info("pierrefs_revalidate: %p, %p\n", dentry, nd);
+
+	return 1;
+}
+
 static int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
 	int err;
 	struct pierrefs_sb_info *context = get_context_d(dentry);
@@ -627,6 +642,7 @@ struct super_operations pierrefs_sops = {
 };
 
 struct dentry_operations pierrefs_dops = {
+	.d_revalidate	= pierrefs_revalidate,
 };
 
 struct file_operations pierrefs_fops = {
