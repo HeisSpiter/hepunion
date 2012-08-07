@@ -428,6 +428,84 @@ static int pierrefs_open(struct inode *inode, struct file *file) {
 	return 0;
 }
 
+static int pierrefs_opendir(struct inode *inode, struct file *file) {
+	int err;
+	struct pierrefs_sb_info *context = get_context_i(inode);
+	char *path = context->global1;
+	char *real_path = context->global2;
+	struct opendir_context *ctx;
+	char ro_path[PATH_MAX];
+	char rw_path[PATH_MAX];
+	size_t ro_len = 0;
+	size_t rw_len = 0;
+
+	pr_info("pierrefs_opendir: %p, %p\n", inode, file);
+
+	/* Don't check for flags here, if we are down here
+	 * the user is allowed to read/write the dir, the
+	 * dir was created if required (and allowed).
+	 * Here, the only operation required is to open the
+	 * dir on the underlying file system
+	 */
+
+	/* Get our directory path */
+	err = get_relative_path(inode, file->f_dentry, context, path, 1);
+
+	/* Get real directory path */
+	err = find_file(path, real_path, context, 0);
+	if (err < 0) {
+		return err;
+	}
+
+	if (find_file(path, rw_path, context, MUST_READ_WRITE) >= 0) {
+		rw_len = strlen(rw_path);
+	}
+
+	if (find_file(path, ro_path, context, MUST_READ_ONLY) >= 0) {
+		ro_len = strlen(ro_path);
+	}
+
+	/* Allocate readdir context */
+	ctx = kmalloc(sizeof(struct opendir_context) + rw_len + ro_len + 2 * sizeof(char), GFP_KERNEL);
+	if (!ctx) {
+		return -ENOMEM;
+	}
+
+	/* Copy strings - RO first */
+	if (ro_len) {
+		ctx->ro_len = ro_len;
+		ctx->ro_off = sizeof(struct opendir_context);
+
+		strncpy((char *)(ctx->ro_off + (unsigned long)ctx), ro_path, ro_len);
+		*((char *)(ctx->ro_off + ro_len + (unsigned long)ctx)) = '\0';
+	}
+	else {
+		ctx->ro_len =
+		ctx->ro_off = 0;
+	}
+
+	/* Then RW */
+	if (rw_len) {
+		ctx->rw_len = rw_len;
+		ctx->rw_off = sizeof(struct opendir_context) + ro_len;
+		// Don't forget \0
+		if (ro_len) {
+			ctx->rw_off += sizeof(char);
+		}
+
+		strncpy((char *)(ctx->rw_off + (unsigned long)ctx), rw_path, rw_len);
+		*((char *)(ctx->rw_off + rw_len + (unsigned long)ctx)) = '\0';
+	}
+	else {
+		ctx->rw_len =
+		ctx->rw_off = 0;
+	}
+
+	file->private_data = ctx;
+
+	return 0;
+}
+
 static int pierrefs_permission(struct inode *inode, int mask, struct nameidata *nd) {
 	int err;
 	struct pierrefs_sb_info *context = get_context_i(inode);
@@ -498,7 +576,11 @@ static void pierrefs_read_inode(struct inode *inode) {
 	inode->i_blkbits = kstbuf.blksize;
 
 	/* Set operations */
-	inode->i_op = &pierrefs_iops;
+	if (inode->i_mode & S_IFDIR) {
+		inode->i_op = &pierrefs_dir_iops;
+	} else {
+		inode->i_op = &pierrefs_iops;
+	}
 }
 
 static int pierrefs_revalidate(struct dentry *dentry, struct nameidata *nd) {
@@ -622,6 +704,16 @@ static int pierrefs_statfs(struct dentry *dentry, struct kstatfs *buf) {
 }
 
 struct inode_operations pierrefs_iops = {
+	.getattr	= pierrefs_getattr,
+	.permission	= pierrefs_permission,
+#if 0
+	.readlink	= generic_readlink, /* dentry will already point on the right file */
+#endif
+	.setattr	= pierrefs_setattr,
+
+};
+
+struct inode_operations pierrefs_dir_iops = {
 	.create		= pierrefs_create,
 	.getattr	= pierrefs_getattr,
 	.link		= pierrefs_link,
@@ -629,9 +721,6 @@ struct inode_operations pierrefs_iops = {
 	.mkdir		= pierrefs_mkdir,
 	.mknod		= pierrefs_mknod,
 	.permission	= pierrefs_permission,
-#if 0
-	.readlink	= generic_readlink, /* dentry will already point on the right file */
-#endif
 	.setattr	= pierrefs_setattr,
 	.symlink	= pierrefs_symlink,
 };
@@ -650,5 +739,6 @@ struct file_operations pierrefs_fops = {
 	.open		= pierrefs_open,
 };
 
-struct file_operations pierrefs_drops = {
+struct file_operations pierrefs_dir_fops = {
+	.open		= pierrefs_opendir,
 };

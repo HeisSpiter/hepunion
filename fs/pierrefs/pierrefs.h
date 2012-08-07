@@ -101,6 +101,42 @@ struct readdir_context {
 };
 
 /**
+ * \brief Structure defining a directory browsing context
+ *
+ * It optionaly contains the full path of the RO branch to browse
+ * and/or the full path of the RW to browse.
+ * First, you set strings length and offset (both to 0 if not set)
+ * and after those data, you put the strings.
+ * \warning This is a non-fixed sized structure
+ */
+struct opendir_context {
+	/**
+	 * Length of the string containing the RO branch directory.
+	 * Set it to 0 if there is no RO branch directory
+	 * \note You shouldn't count NULL char in it
+	 */
+	size_t ro_len;
+	/**
+	 * This is the offset at which the RO brach directory string
+	 * starts AFTER the address of the structure
+	 * Set it to 0 if there is no RO branch directory
+	 */
+	size_t ro_off;
+	/**
+	 * Length of the string containing the RW branch directory
+	 * Set it to 0 if there is no RW branch directory
+	 * \note You shouldn't count NULL char in it
+	 */
+	size_t rw_len;
+	/**
+	 * This is the offset at which the RW brach directory string
+	 * starts AFTER the address of the structure
+	 * Set it to 0 if there is no RW branch directory
+	 */
+	size_t rw_off;
+};
+
+/**
  * \brief Enumeration defining all the possible returns of the find_file() function
  * \sa find_file
  *
@@ -123,9 +159,11 @@ typedef enum _types {
 } types;
 
 extern struct inode_operations pierrefs_iops;
+extern struct inode_operations pierrefs_dir_iops;
 extern struct super_operations pierrefs_sops;
 extern struct dentry_operations pierrefs_dops;
 extern struct file_operations pierrefs_fops;
+extern struct file_operations pierrefs_dir_fops
 
 /**
  * Rights mask used to handle shifting with st_mode rights definition.
