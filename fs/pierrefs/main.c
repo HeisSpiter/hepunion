@@ -202,6 +202,7 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	root_i->i_mtime = mtime;
 	root_i->i_ctime = ctime;
 	root_i->i_op = &pierrefs_dir_iops;
+	root_i->i_fop = &pierrefs_dir_fops;
 	root_i->i_nlink = 2;
 
 	/* Create its directory entry */
