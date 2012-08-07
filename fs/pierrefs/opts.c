@@ -124,7 +124,11 @@ static int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct 
 	}
 
 	/* Call worker */
-	return get_file_attr(path, context, kstbuf);
+	err = get_file_attr(path, context, kstbuf);
+	if (err >= 0) {
+		/* Set our inode number */
+		kstbuf->ino = dentry->d_inode->i_ino;
+	}
 }
 
 static int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *dentry) {

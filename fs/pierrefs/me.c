@@ -159,6 +159,7 @@ int get_file_attr_worker(const char *path, const char *real_path, struct pierref
 		/* Finally, apply .me. modes */
 		kstbuf->mode |= kstme.mode;
 	}
+
 	return 0;
 }
 
