@@ -591,10 +591,195 @@ static void pierrefs_read_inode(struct inode *inode) {
 	}
 }
 
-static int pierrefs_readdir(struct file *filp, void *dirent, filldir_t filldir) {
-	pr_info("pierrefs_readdir: %p, %p, %p\n", filp, dirent, filldir);
+static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
+	struct list_entry *entry;
+	struct opendir_context *ctx = (struct opendir_context *)buf;
+
+	/* Ignore metadata */
+	if (is_me(name, namlen)) {
+		return 0;
+	}
+
+	/* Handle whiteouts */
+	if (is_whiteout(name, namlen)) {
+		/* Just work if there's a RO branch */
+		if (ctx->ro_len) {
+			/* Fix name len. Don't take .wh. into account
+			 * It will be removed
+			 * Prefix isn't mandatory, since context makes it obvious
+			 */
+			namlen -= 4; /* strlen(".wh."); */
+
+			/* Allocate a list big enough to contain data and null terminated name */
+			entry = kmalloc(sizeof(struct list_entry) + (namlen + 1) * sizeof(char), GFP_KERNEL);
+			if (!entry) {
+				return -ENOMEM;
+			}
+
+			/* Add it to list */
+			insert_list_head(&ctx->whiteouts_head, entry);
+
+			/* Fill in data */
+			entry->d_reclen = namlen;
+			strncpy(entry->d_name, name + 4, namlen);
+			entry->d_name[namlen] = '\0';
+		}
+	}
+	else {
+		/* This is a normal entry
+		 * Just add it to the list
+		 */
+		entry = kmalloc(sizeof(struct list_entry) + namlen + sizeof(char), GFP_KERNEL);
+		if (!entry) {
+			return -ENOMEM;
+		}
+
+		/* Add it to list */
+		insert_list_head(&ctx->files_head, entry);
+
+		/* Fill in data */
+		entry->d_reclen = namlen;
+		strncpy(entry->d_name, name, namlen);
+		entry->d_name[namlen] = '\0';
+	}
 
 	return 0;
+}
+
+static int read_ro_branch(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
+	struct list_entry *entry, *back;
+	struct list_entry **prev;
+	struct opendir_context *ctx = (struct opendir_context *)buf;
+
+	/* Check if there is any matching whiteout */
+	while_list_entry(&ctx->whiteouts_head, prev, entry) {
+		if (namlen == entry->d_reclen &&
+			!strncmp(name, entry->d_name, namlen)) {
+			/* There's a whiteout, forget the entry */
+			remove_list_entry(back, prev);
+			break;
+		}
+	}
+	if (entry) {
+		return 0;
+	}
+
+	/* Check if it matches a RW entry */
+	while_list_entry(&ctx->files_head, prev, entry) {
+		if (namlen == entry->d_reclen &&
+			!strncmp(name, entry->d_name, namlen)) {
+			/* There's a RW entry, forget the entry */
+			remove_list_entry(back, prev);
+			break;
+		}
+	}
+
+	/* Finally, add the entry in list */
+	entry = kmalloc(sizeof(struct list_entry) + namlen + sizeof(char), GFP_KERNEL);
+	if (!entry) {
+		return -ENOMEM;
+	}
+
+	/* Add it to list */
+	insert_list_head(&ctx->files_head, entry);
+
+	/* Fill in data */
+	entry->d_reclen = namlen;
+	strncpy(entry->d_name, name, namlen);
+	entry->d_name[namlen] = '\0';
+
+	return 0;
+}
+
+static int pierrefs_readdir(struct file *filp, void *dirent, filldir_t filldir) {
+	int err = 0;
+	int i = 0;
+	struct list_entry *entry;
+	struct list_entry **prev;
+	struct opendir_context *ctx = (struct opendir_context *)filp->private_data;
+
+	pr_info("pierrefs_readdir: %p, %p, %p\n", filp, dirent, filldir);
+
+	if (ctx->files_head == NULL) {
+		/* Here fun begins.... */
+		struct file *rw_dir;
+		struct file *ro_dir;
+
+		/* Check if there is an associated RW dir */
+		if (ctx->rw_len) {
+			char *rw_dir_path = (char *)(ctx->rw_off + (unsigned long)ctx);
+
+			// Start browsing RW dir
+			rw_dir = open_worker(rw_dir_path, O_RDONLY);
+			if (IS_ERR(rw_dir)) {
+				err = PTR_ERR(rw_dir);
+				goto cleanup;
+			}
+
+			err = vfs_readdir(rw_dir, read_rw_branch, ctx);
+			filp_close(rw_dir, 0);
+
+			if (err < 0) {
+				goto cleanup;
+			}
+		}
+
+		/* Work on RO branch */
+		if (ctx->ro_len) {
+			char *ro_dir_path = (char *)(ctx->ro_off + (unsigned long)ctx);
+
+			/* Start browsing RO dir */
+			ro_dir = open_worker(ro_dir_path, O_RDONLY);
+			if (IS_ERR(ro_dir)) {
+				err = PTR_ERR(ro_dir);
+				goto cleanup;
+			}
+
+			err = vfs_readdir(ro_dir, read_ro_branch, ctx);
+			filp_close(ro_dir, 0);
+
+			if (err < 0) {
+				goto cleanup;
+			}
+		}
+
+		/* Now we have files list, clean whiteouts */
+		while (ctx->whiteouts_head) {
+			entry = ctx->whiteouts_head;
+
+			ctx->whiteouts_head = entry->next;
+			kfree(entry);
+		}
+	}
+
+	/* Try to find the requested entry now */
+	while_list_entry(&ctx->files_head, prev, entry) {
+		/* Found the entry - return it */
+		if (i == filp->f_pos) {
+			filldir(dirent, entry->d_name, entry->d_reclen, i, 0, DT_UNKNOWN);
+			break;
+		}
+		++i;
+	}
+
+cleanup:
+	/* There was an error, clean everything */
+	if (err < 0) {
+		while (ctx->whiteouts_head) {
+			entry = ctx->whiteouts_head;
+
+			ctx->whiteouts_head = entry->next;
+			kfree(entry);
+		}
+
+		while (ctx->files_head) {
+			entry = ctx->files_head;
+
+			ctx->files_head = entry->next;
+			kfree(entry);
+		}
+	}
+	return err;
 }
 
 static int pierrefs_revalidate(struct dentry *dentry, struct nameidata *nd) {

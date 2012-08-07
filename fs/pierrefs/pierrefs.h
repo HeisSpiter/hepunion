@@ -101,6 +101,31 @@ struct readdir_context {
 };
 
 /**
+ * \brief Structure defining a directory entry during unioning
+ *
+ * This structure, used into a single linked list entry, contains
+ * one entry of a directory browsing.
+ * You first set the attributes of the name of the entry. And then,
+ * you put the name of entry.
+ * \warning This is a non-fixed sized structure
+ */
+struct list_entry {
+	/**
+	 * Pointer to the next list entry.
+	 * If there's none, set to NULL
+	 */
+	struct list_entry *next;
+	/**
+	 * Length of the string containing the file name
+	 */
+	unsigned short d_reclen;
+	/**
+	 * String containing the file name. It's allocated with the structure
+	 */
+	char d_name[1];
+};
+
+/**
  * \brief Structure defining a directory browsing context
  *
  * It optionaly contains the full path of the RO branch to browse
@@ -110,6 +135,14 @@ struct readdir_context {
  * \warning This is a non-fixed sized structure
  */
 struct opendir_context {
+	/**
+	 *
+	 */
+	struct list_entry *files_head;
+	/**
+	 *
+	 */
+	struct list_entry *whiteouts_head;
 	/**
 	 * Length of the string containing the RO branch directory.
 	 * Set it to 0 if there is no RO branch directory
@@ -255,6 +288,17 @@ extern struct file_operations pierrefs_dir_fops;
 #define is_flag_set(s, f) ((s & f) == f)
 
 /**
+ * Check if the given directory entry is a metadata file against its name
+ * \param[in]	e	dir_entry structure pointer
+ * \return	1 if that's a metadata file, 0 otherwise
+ * \warning	You MUST have defined d_reclen field the structure before using this macro
+ * \note	Here, 4 is the length of ".me."
+ */
+#define is_me(n, l)					\
+	(l > 4 && n[0] == '.' &&		\
+	 n[1] == 'm' &&	n[2] == 'e' &&	\
+	 n[3] == '.')
+/**
  * Check if the given directory entry is a whiteout file against its name
  * \param[in]	e	dir_entry structure pointer
  * \return	1 if that's a whiteout file, 0 otherwise
@@ -275,6 +319,20 @@ extern struct file_operations pierrefs_dir_fops;
 	((l == 1 && n[0] == '.') ||	\
 	 (l == 2 &&	n[0] == '.' &&	\
 	  n[1] == '.'))
+
+/**
+ * Browse a linked list (made of list_entry members)
+ * while keeping a reference to previous entry.
+ * This defines a loop.
+ * This allows safe and easy entry deletion
+ * \param[in]	h	Pointer to the head list pointer
+ * \param[in]	p	Pointer to the previous entry pointer
+ * \param[in]	e	Pointer to the current entry
+ * \return	Nothing
+ * \note	If you need simple browsing (ie, no need for deletion), prefer foreach_list_entry() loop
+ * \note	You can exit such block by using break
+ */
+#define while_list_entry(h, p, e) for (e = *h, p = h; e; e = e->next, p = &((*p)->next))
 
 /**
  * Get current context associated with dentry
@@ -338,7 +396,6 @@ extern struct file_operations pierrefs_dir_fops;
  * \return	The associated inode number
  */
 #define name_to_ino(n) murmur_hash_64a(n, strlen(n) * sizeof(n[0]), PIERREFS_SEED)
-
 /**
  * Wrapper to the vfs_lstat syscall.
  * It first switches user to root
@@ -376,6 +433,27 @@ extern struct file_operations pierrefs_dir_fops;
 #define symlink_worker(o, n, c) symlink(o, n, c)
 #define link_worker(o, n, c) link(o, n, c)
 #endif
+
+/**
+ * Insert the given entry to the head of the linked list
+ * \param[in]	head	Pointer to the pointer on the head of the list
+ * \param[in]	entry	Pointer to the entry to insert
+ * \return	Nothing
+ */
+#define insert_list_head(head, entry)	\
+	entry->next = *head;				\
+	*head = entry
+
+/**
+ * Remove the entry after the given one in the linked list
+ * \param[in]	entry		Variable for backup
+ * \param[in]	previous	Pointer to the pointer on the previous entry
+ * \return	Nothing
+ */
+#define remove_list_entry(entry, previous)	\
+	entry = (*previous);					\
+	*previous = entry->next;				\
+	kfree(entry)
 
 /* Functions in cow.c */
 /**
