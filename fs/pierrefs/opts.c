@@ -578,8 +578,10 @@ static void pierrefs_read_inode(struct inode *inode) {
 	/* Set operations */
 	if (inode->i_mode & S_IFDIR) {
 		inode->i_op = &pierrefs_dir_iops;
+		inode->i_fop = &pierrefs_dir_fops;
 	} else {
 		inode->i_op = &pierrefs_iops;
+		inode->i_fop = &pierrefs_fops;
 	}
 }
 
