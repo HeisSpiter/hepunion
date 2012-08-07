@@ -129,6 +129,8 @@ static int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct 
 		/* Set our inode number */
 		kstbuf->ino = dentry->d_inode->i_ino;
 	}
+
+	return err;
 }
 
 static int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *dentry) {
@@ -492,7 +494,7 @@ static int pierrefs_opendir(struct inode *inode, struct file *file) {
 	if (rw_len) {
 		ctx->rw_len = rw_len;
 		ctx->rw_off = sizeof(struct opendir_context) + ro_len;
-		// Don't forget \0
+		/* Don't forget \0 */
 		if (ro_len) {
 			ctx->rw_off += sizeof(char);
 		}
@@ -587,6 +589,12 @@ static void pierrefs_read_inode(struct inode *inode) {
 		inode->i_op = &pierrefs_iops;
 		inode->i_fop = &pierrefs_fops;
 	}
+}
+
+static int pierrefs_readdir(struct file *filp, void *dirent, filldir_t filldir) {
+	pr_info("pierrefs_readdir: %p, %p, %p\n", filp, dirent, filldir);
+
+	return 0;
 }
 
 static int pierrefs_revalidate(struct dentry *dentry, struct nameidata *nd) {
@@ -747,4 +755,5 @@ struct file_operations pierrefs_fops = {
 
 struct file_operations pierrefs_dir_fops = {
 	.open		= pierrefs_opendir,
+	.readdir	= pierrefs_readdir,
 };
