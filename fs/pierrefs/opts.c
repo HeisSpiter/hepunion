@@ -510,6 +510,10 @@ static int pierrefs_opendir(struct inode *inode, struct file *file) {
 	/* Keep inode */
 	ctx->inode = inode;
 
+	/* Zero list heads */
+	ctx->files_head = NULL;
+	ctx->whiteouts_head = NULL;
+
 	file->private_data = ctx;
 
 	return 0;
