@@ -119,6 +119,7 @@ struct list_entry {
 	 * Length of the string containing the file name
 	 */
 	unsigned short d_reclen;
+	unsigned long ino;
 	/**
 	 * String containing the file name. It's allocated with the structure
 	 */
@@ -135,6 +136,10 @@ struct list_entry {
  * \warning This is a non-fixed sized structure
  */
 struct opendir_context {
+	/**
+	 *
+	 */
+	struct inode *inode;
 	/**
 	 *
 	 */

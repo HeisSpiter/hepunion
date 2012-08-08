@@ -507,6 +507,9 @@ static int pierrefs_opendir(struct inode *inode, struct file *file) {
 		ctx->rw_off = 0;
 	}
 
+	/* Keep inode */
+	ctx->inode = inode;
+
 	file->private_data = ctx;
 
 	return 0;
@@ -594,6 +597,9 @@ static void pierrefs_read_inode(struct inode *inode) {
 static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
 	struct list_entry *entry;
 	struct opendir_context *ctx = (struct opendir_context *)buf;
+	struct pierrefs_sb_info *context = get_context_i(ctx->inode);
+	char complete_path[PATH_MAX];
+	char *path;
 
 	/* Ignore metadata */
 	if (is_me(name, namlen)) {
@@ -641,6 +647,29 @@ static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset
 		entry->d_reclen = namlen;
 		strncpy(entry->d_name, name, namlen);
 		entry->d_name[namlen] = '\0';
+
+		complete_path[0] = '\0';
+
+		/* Get its ino */
+		if (ctx->ro_len) {
+			path = (char *)(ctx->ro_off + (unsigned long)ctx);
+			if (strncmp(context->read_only_branch, path, context->ro_len) == 0) {
+				memcpy(complete_path, path + 1 + context->ro_len, ctx->ro_len - 1 - context->ro_len);
+			}
+		}
+
+		if (complete_path[0] == 0 && ctx->rw_len) {
+			path = (char *)(ctx->rw_off + (unsigned long)ctx);
+			if (strncmp(context->read_write_branch, path, context->rw_len) == 0) {
+				memcpy(complete_path, path + 1 + context->rw_len, ctx->rw_len - 1 - context->rw_len);
+			}
+		}
+
+		if (complete_path[0] != 0) {
+			entry->ino = name_to_ino(complete_path);
+		} else {
+			entry->ino = 0;
+		}
 	}
 
 	return 0;
@@ -650,6 +679,9 @@ static int read_ro_branch(void *buf, const char *name, int namlen, loff_t offset
 	struct list_entry *entry, *back;
 	struct list_entry **prev;
 	struct opendir_context *ctx = (struct opendir_context *)buf;
+	struct pierrefs_sb_info *context = get_context_i(ctx->inode);
+	char complete_path[PATH_MAX];
+	char *path;
 
 	/* Check if there is any matching whiteout */
 	while_list_entry(&ctx->whiteouts_head, prev, entry) {
@@ -687,6 +719,29 @@ static int read_ro_branch(void *buf, const char *name, int namlen, loff_t offset
 	entry->d_reclen = namlen;
 	strncpy(entry->d_name, name, namlen);
 	entry->d_name[namlen] = '\0';
+
+	complete_path[0] = '\0';
+
+	/* Get its ino */
+	if (ctx->ro_len) {
+		path = (char *)(ctx->ro_off + (unsigned long)ctx);
+		if (strncmp(context->read_only_branch, path, context->ro_len) == 0) {
+			memcpy(complete_path, path + 1 + context->ro_len, ctx->ro_len - 1 - context->ro_len);
+		}
+	}
+
+	if (complete_path[0] == 0 && ctx->rw_len) {
+		path = (char *)(ctx->rw_off + (unsigned long)ctx);
+		if (strncmp(context->read_write_branch, path, context->rw_len) == 0) {
+			memcpy(complete_path, path + 1 + context->rw_len, ctx->rw_len - 1 - context->rw_len);
+		}
+	}
+
+	if (complete_path[0] != 0) {
+		entry->ino = name_to_ino(complete_path);
+	} else {
+		entry->ino = 0;
+	}
 
 	return 0;
 }
@@ -756,7 +811,7 @@ static int pierrefs_readdir(struct file *filp, void *dirent, filldir_t filldir) 
 	while_list_entry(&ctx->files_head, prev, entry) {
 		/* Found the entry - return it */
 		if (i == filp->f_pos) {
-			filldir(dirent, entry->d_name, entry->d_reclen, i, 0, DT_UNKNOWN);
+			filldir(dirent, entry->d_name, entry->d_reclen, i, entry->ino, DT_UNKNOWN);
 			break;
 		}
 		++i;
