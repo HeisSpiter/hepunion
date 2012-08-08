@@ -601,6 +601,8 @@ static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset
 	char complete_path[PATH_MAX];
 	char *path;
 
+	pr_info("read_rw_branch: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
+
 	/* Ignore metadata */
 	if (is_me(name, namlen)) {
 		return 0;
@@ -683,6 +685,8 @@ static int read_ro_branch(void *buf, const char *name, int namlen, loff_t offset
 	char complete_path[PATH_MAX];
 	char *path;
 
+	pr_info("read_ro_branch: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
+
 	/* Check if there is any matching whiteout */
 	while_list_entry(&ctx->whiteouts_head, prev, entry) {
 		if (namlen == entry->d_reclen &&
@@ -764,7 +768,7 @@ static int pierrefs_readdir(struct file *filp, void *dirent, filldir_t filldir) 
 		if (ctx->rw_len) {
 			char *rw_dir_path = (char *)(ctx->rw_off + (unsigned long)ctx);
 
-			// Start browsing RW dir
+			/* Start browsing RW dir */
 			rw_dir = open_worker(rw_dir_path, O_RDONLY);
 			if (IS_ERR(rw_dir)) {
 				err = PTR_ERR(rw_dir);
