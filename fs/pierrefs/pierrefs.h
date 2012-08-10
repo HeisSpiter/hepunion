@@ -109,16 +109,19 @@ struct readdir_context {
  * you put the name of entry.
  * \warning This is a non-fixed sized structure
  */
-struct list_entry {
+struct readdir_file {
 	/**
 	 * Pointer to the next list entry.
 	 * If there's none, set to NULL
 	 */
-	struct list_entry *next;
+	struct list_head files_entry;
 	/**
 	 * Length of the string containing the file name
 	 */
 	unsigned short d_reclen;
+	/**
+	 *
+	 */
 	unsigned long ino;
 	/**
 	 * String containing the file name. It's allocated with the structure
@@ -139,15 +142,15 @@ struct opendir_context {
 	/**
 	 *
 	 */
-	struct inode *inode;
+	struct pierrefs_sb_info *context;
 	/**
 	 *
 	 */
-	struct list_entry *files_head;
+	struct list_head files_head;
 	/**
 	 *
 	 */
-	struct list_entry *whiteouts_head;
+	struct list_head whiteouts_head;
 	/**
 	 * Length of the string containing the RO branch directory.
 	 * Set it to 0 if there is no RO branch directory
@@ -326,20 +329,6 @@ extern struct file_operations pierrefs_dir_fops;
 	  n[1] == '.'))
 
 /**
- * Browse a linked list (made of list_entry members)
- * while keeping a reference to previous entry.
- * This defines a loop.
- * This allows safe and easy entry deletion
- * \param[in]	h	Pointer to the head list pointer
- * \param[in]	p	Pointer to the previous entry pointer
- * \param[in]	e	Pointer to the current entry
- * \return	Nothing
- * \note	If you need simple browsing (ie, no need for deletion), prefer foreach_list_entry() loop
- * \note	You can exit such block by using break
- */
-#define while_list_entry(h, p, e) for (e = *h, p = h; e; e = e->next, p = &((*p)->next))
-
-/**
  * Get current context associated with dentry
  * \param[in]	d	dentry pointer
  * \return	It returns super block info structure (pierrefs_sb_info)
@@ -438,27 +427,6 @@ extern struct file_operations pierrefs_dir_fops;
 #define symlink_worker(o, n, c) symlink(o, n, c)
 #define link_worker(o, n, c) link(o, n, c)
 #endif
-
-/**
- * Insert the given entry to the head of the linked list
- * \param[in]	head	Pointer to the pointer on the head of the list
- * \param[in]	entry	Pointer to the entry to insert
- * \return	Nothing
- */
-#define insert_list_head(head, entry)	\
-	entry->next = *head;				\
-	*head = entry
-
-/**
- * Remove the entry after the given one in the linked list
- * \param[in]	entry		Variable for backup
- * \param[in]	previous	Pointer to the pointer on the previous entry
- * \return	Nothing
- */
-#define remove_list_entry(entry, previous)	\
-	entry = (*previous);					\
-	*previous = entry->next;				\
-	kfree(entry)
 
 /* Functions in cow.c */
 /**

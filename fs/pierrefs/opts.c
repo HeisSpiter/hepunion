@@ -508,11 +508,11 @@ static int pierrefs_opendir(struct inode *inode, struct file *file) {
 	}
 
 	/* Keep inode */
-	ctx->inode = inode;
+	ctx->context = context;
 
-	/* Zero list heads */
-	ctx->files_head = NULL;
-	ctx->whiteouts_head = NULL;
+	/* Init list heads */
+	INIT_LIST_HEAD(&ctx->files_head);
+	INIT_LIST_HEAD(&ctx->whiteouts_head);
 
 	file->private_data = ctx;
 
@@ -599,13 +599,21 @@ static void pierrefs_read_inode(struct inode *inode) {
 }
 
 static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
-	struct list_entry *entry;
+	struct readdir_file *entry;
 	struct opendir_context *ctx = (struct opendir_context *)buf;
-	struct pierrefs_sb_info *context = get_context_i(ctx->inode);
+	struct pierrefs_sb_info *context = ctx->context;
 	char complete_path[PATH_MAX];
 	char *path;
+	size_t len;
 
 	pr_info("read_rw_branch: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
+
+#if 0
+	/* Skip special */
+	if (is_special(name, namlen)) {
+		return 0;
+	}
+#endif
 
 	/* Ignore metadata */
 	if (is_me(name, namlen)) {
@@ -623,13 +631,13 @@ static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset
 			namlen -= 4; /* strlen(".wh."); */
 
 			/* Allocate a list big enough to contain data and null terminated name */
-			entry = kmalloc(sizeof(struct list_entry) + (namlen + 1) * sizeof(char), GFP_KERNEL);
+			entry = kmalloc(sizeof(struct readdir_file) + (namlen + 1) * sizeof(char), GFP_KERNEL);
 			if (!entry) {
 				return -ENOMEM;
 			}
 
 			/* Add it to list */
-			insert_list_head(&ctx->whiteouts_head, entry);
+			list_add(&entry->files_entry, &ctx->whiteouts_head);
 
 			/* Fill in data */
 			entry->d_reclen = namlen;
@@ -641,13 +649,13 @@ static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset
 		/* This is a normal entry
 		 * Just add it to the list
 		 */
-		entry = kmalloc(sizeof(struct list_entry) + namlen + sizeof(char), GFP_KERNEL);
+		entry = kmalloc(sizeof(struct readdir_file) + namlen + sizeof(char), GFP_KERNEL);
 		if (!entry) {
 			return -ENOMEM;
 		}
 
 		/* Add it to list */
-		insert_list_head(&ctx->files_head, entry);
+		list_add(&entry->files_entry, &ctx->files_head);
 
 		/* Fill in data */
 		entry->d_reclen = namlen;
@@ -659,15 +667,19 @@ static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset
 		/* Get its ino */
 		if (ctx->ro_len) {
 			path = (char *)(ctx->ro_off + (unsigned long)ctx);
+			len = ctx->ro_len - 1 - context->ro_len;
 			if (strncmp(context->read_only_branch, path, context->ro_len) == 0) {
-				memcpy(complete_path, path + 1 + context->ro_len, ctx->ro_len - 1 - context->ro_len);
+				memcpy(complete_path, path + 1 + context->ro_len, len);
+				complete_path[len] = '\0';
 			}
 		}
 
 		if (complete_path[0] == 0 && ctx->rw_len) {
 			path = (char *)(ctx->rw_off + (unsigned long)ctx);
+			len = ctx->rw_len - 1 - context->rw_len;
 			if (strncmp(context->read_write_branch, path, context->rw_len) == 0) {
 				memcpy(complete_path, path + 1 + context->rw_len, ctx->rw_len - 1 - context->rw_len);
+				complete_path[len] = '\0';
 			}
 		}
 
@@ -682,46 +694,57 @@ static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset
 }
 
 static int read_ro_branch(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
-	struct list_entry *entry, *back;
-	struct list_entry **prev;
 	struct opendir_context *ctx = (struct opendir_context *)buf;
-	struct pierrefs_sb_info *context = get_context_i(ctx->inode);
+	struct pierrefs_sb_info *context = ctx->context;
 	char complete_path[PATH_MAX];
 	char *path;
+	size_t len;
+	struct readdir_file *entry;
+	struct list_head *lentry;
 
 	pr_info("read_ro_branch: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
 
-	/* Check if there is any matching whiteout */
-	while_list_entry(&ctx->whiteouts_head, prev, entry) {
-		if (namlen == entry->d_reclen &&
-			!strncmp(name, entry->d_name, namlen)) {
-			/* There's a whiteout, forget the entry */
-			remove_list_entry(back, prev);
-			break;
-		}
-	}
-	if (entry) {
+#if 0
+	/* Skip special */
+	if (is_special(name, namlen)) {
 		return 0;
+	}
+#endif
+
+	/* Check if there is any matching whiteout */
+	lentry = ctx->whiteouts_head.next;
+	while (lentry != &ctx->whiteouts_head) {
+		entry = list_entry(lentry, struct readdir_file, files_entry);
+		if (namlen == entry->d_reclen &&
+			strncmp(name, entry->d_name, namlen) == 0) {
+			/* There's a whiteout, forget the entry */
+			return 0;
+		}
+
+		lentry = lentry->next;
 	}
 
 	/* Check if it matches a RW entry */
-	while_list_entry(&ctx->files_head, prev, entry) {
+	lentry = ctx->files_head.next;
+	while (lentry != &ctx->files_head) {
+		entry = list_entry(lentry, struct readdir_file, files_entry);
 		if (namlen == entry->d_reclen &&
-			!strncmp(name, entry->d_name, namlen)) {
+			strncmp(name, entry->d_name, namlen) == 0) {
 			/* There's a RW entry, forget the entry */
-			remove_list_entry(back, prev);
-			break;
+			return 0;
 		}
+
+		lentry = lentry->next;
 	}
 
 	/* Finally, add the entry in list */
-	entry = kmalloc(sizeof(struct list_entry) + namlen + sizeof(char), GFP_KERNEL);
+	entry = kmalloc(sizeof(struct readdir_file) + namlen + sizeof(char), GFP_KERNEL);
 	if (!entry) {
 		return -ENOMEM;
 	}
 
 	/* Add it to list */
-	insert_list_head(&ctx->files_head, entry);
+	list_add(&entry->files_entry, &ctx->files_head);
 
 	/* Fill in data */
 	entry->d_reclen = namlen;
@@ -733,15 +756,19 @@ static int read_ro_branch(void *buf, const char *name, int namlen, loff_t offset
 	/* Get its ino */
 	if (ctx->ro_len) {
 		path = (char *)(ctx->ro_off + (unsigned long)ctx);
+		len = ctx->ro_len - 1 - context->ro_len;
 		if (strncmp(context->read_only_branch, path, context->ro_len) == 0) {
 			memcpy(complete_path, path + 1 + context->ro_len, ctx->ro_len - 1 - context->ro_len);
+			complete_path[len] = '\0';
 		}
 	}
 
 	if (complete_path[0] == 0 && ctx->rw_len) {
 		path = (char *)(ctx->rw_off + (unsigned long)ctx);
+		len = ctx->rw_len - 1 - context->rw_len;
 		if (strncmp(context->read_write_branch, path, context->rw_len) == 0) {
 			memcpy(complete_path, path + 1 + context->rw_len, ctx->rw_len - 1 - context->rw_len);
+			complete_path[len] = '\0'; 
 		}
 	}
 
@@ -757,13 +784,13 @@ static int read_ro_branch(void *buf, const char *name, int namlen, loff_t offset
 static int pierrefs_readdir(struct file *filp, void *dirent, filldir_t filldir) {
 	int err = 0;
 	int i = 0;
-	struct list_entry *entry;
-	struct list_entry **prev;
+	struct readdir_file *entry;
+	struct list_head *lentry;
 	struct opendir_context *ctx = (struct opendir_context *)filp->private_data;
 
 	pr_info("pierrefs_readdir: %p, %p, %p\n", filp, dirent, filldir);
 
-	if (ctx->files_head == NULL) {
+	if (list_empty(&ctx->files_head)) {
 		/* Here fun begins.... */
 		struct file *rw_dir;
 		struct file *ro_dir;
@@ -807,38 +834,44 @@ static int pierrefs_readdir(struct file *filp, void *dirent, filldir_t filldir) 
 		}
 
 		/* Now we have files list, clean whiteouts */
-		while (ctx->whiteouts_head) {
-			entry = ctx->whiteouts_head;
-
-			ctx->whiteouts_head = entry->next;
+		while (!list_empty(&ctx->whiteouts_head)) {
+			entry = list_entry(ctx->whiteouts_head.next, struct readdir_file, files_entry);
+			list_del(&entry->files_entry);
 			kfree(entry);
 		}
 	}
 
+	/* Reset error */
+	err = 0;
+
 	/* Try to find the requested entry now */
-	while_list_entry(&ctx->files_head, prev, entry) {
+	lentry = ctx->files_head.next;
+	while (lentry != &ctx->files_head) {
 		/* Found the entry - return it */
 		if (i == filp->f_pos) {
+			entry = list_entry(lentry, struct readdir_file, files_entry);
 			filldir(dirent, entry->d_name, entry->d_reclen, i, entry->ino, DT_UNKNOWN);
+			/* Update position */
+			++filp->f_pos;
 			break;
 		}
+
 		++i;
+		lentry = lentry->next;
 	}
 
 cleanup:
 	/* There was an error, clean everything */
 	if (err < 0) {
-		while (ctx->whiteouts_head) {
-			entry = ctx->whiteouts_head;
-
-			ctx->whiteouts_head = entry->next;
+		while (!list_empty(&ctx->whiteouts_head)) {
+			entry = list_entry(ctx->whiteouts_head.next, struct readdir_file, files_entry);
+			list_del(&entry->files_entry);
 			kfree(entry);
 		}
 
-		while (ctx->files_head) {
-			entry = ctx->files_head;
-
-			ctx->files_head = entry->next;
+		while (!list_empty(&ctx->files_head)) {
+			entry = list_entry(ctx->files_head.next, struct readdir_file, files_entry);
+			list_del(&entry->files_entry);
 			kfree(entry);
 		}
 	}
