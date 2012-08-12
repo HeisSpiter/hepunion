@@ -255,7 +255,7 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr, s
 		pop_root();
 	}
 	else {
-		fd = dbg_open(me_path, context, O_RDWR);
+		fd = open_worker(me_path, context, O_RDWR);
 		if (IS_ERR(fd)) {
 			return PTR_ERR(fd);
 		}
