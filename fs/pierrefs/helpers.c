@@ -613,6 +613,8 @@ long readlink(const char *path, char *buf, struct pierrefs_sb_info *context, int
 }
 
 struct file* dbg_open(const char *pathname, const struct pierrefs_sb_info *context, int flags) {
+	pr_info("dbg_open: %s, %p, %x\n", pathname, context, flags);
+
 	if (flags & (O_CREAT | O_WRONLY | O_RDWR)) {
 		if (strncmp(pathname, context->read_only_branch, context->ro_len) == 0) {
 			return ERR_PTR(-EINVAL);
@@ -623,6 +625,8 @@ struct file* dbg_open(const char *pathname, const struct pierrefs_sb_info *conte
 }
 
 struct file* dbg_open_2(const char *pathname, const struct pierrefs_sb_info *context, int flags, mode_t mode) {
+	pr_info("dbg_open_2: %s, %p, %x, %x\n", pathname, context, flags, mode);
+
 	if (flags & (O_CREAT | O_WRONLY | O_RDWR)) {
 		if (strncmp(pathname, context->read_only_branch, context->ro_len) == 0) {
 			return ERR_PTR(-EINVAL);
@@ -633,6 +637,8 @@ struct file* dbg_open_2(const char *pathname, const struct pierrefs_sb_info *con
 }
 
 struct file* dbg_creat(const char *pathname, const struct pierrefs_sb_info *context, mode_t mode) {
+	pr_info("dbg_creat: %s, %p, %x\n", pathname, context, mode);
+
 	if (strncmp(pathname, context->read_only_branch, context->ro_len) == 0) {
 		return ERR_PTR(-EINVAL);
 	}
@@ -641,6 +647,8 @@ struct file* dbg_creat(const char *pathname, const struct pierrefs_sb_info *cont
 }
 
 int dbg_mkdir(const char *pathname, struct pierrefs_sb_info *context, mode_t mode) {
+	pr_info("dbg_mkdir: %s, %p, %x\n", pathname, context, mode);
+
 	if (strncmp(pathname, context->read_only_branch, context->ro_len) == 0) {
 		return -EINVAL;
 	}
@@ -649,6 +657,8 @@ int dbg_mkdir(const char *pathname, struct pierrefs_sb_info *context, mode_t mod
 }
 
 int dbg_mknod(const char *pathname, struct pierrefs_sb_info *context, mode_t mode, dev_t dev) {
+	pr_info("dbg_mknod: %s, %p, %x, %x\n", pathname, context, mode, dev);
+
 	if (strncmp(pathname, context->read_only_branch, context->ro_len) == 0) {
 		return -EINVAL;
 	}
@@ -657,6 +667,8 @@ int dbg_mknod(const char *pathname, struct pierrefs_sb_info *context, mode_t mod
 }
 
 int dbg_mkfifo(const char *pathname, struct pierrefs_sb_info *context, mode_t mode) {
+	pr_info("dbg_mkfifo: %s, %p, %x\n", pathname, context, mode);
+
 	if (strncmp(pathname, context->read_only_branch, context->ro_len) == 0) {
 		return -EINVAL;
 	}
@@ -665,6 +677,8 @@ int dbg_mkfifo(const char *pathname, struct pierrefs_sb_info *context, mode_t mo
 }
 
 int dbg_symlink(const char *oldpath, const char *newpath, struct pierrefs_sb_info *context) {
+	pr_info("dbg_symlink: %s, %s, %p\n", oldpath, newpath, context);
+
 	if (strncmp(newpath, context->read_only_branch, context->ro_len) == 0) {
 		return -EINVAL;
 	}
@@ -673,6 +687,8 @@ int dbg_symlink(const char *oldpath, const char *newpath, struct pierrefs_sb_inf
 }
 
 int dbg_link(const char *oldpath, const char *newpath, struct pierrefs_sb_info *context) {
+	pr_info("dbg_link: %s, %s, %p\n", oldpath, newpath, context);
+
 	if (strncmp(newpath, context->read_only_branch, context->ro_len) == 0) {
 		return -EINVAL;
 	}
