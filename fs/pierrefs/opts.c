@@ -22,15 +22,19 @@ static int pierrefs_create(struct inode *dir, struct dentry *dentry, int mode, s
 
 	pr_info("pierrefs_create: %p, %p, %x, %p\n", dir, dentry, mode, nameidata);
 
+	will_use_buffers(context);
+
 	/* Try to find the file first */
 	err = get_relative_path_for_file(dir, dentry, context, path, 1);
 	if (err < 0) {
+		release_buffers(context);
 		return err;
 	}
 
 	/* And ensure it doesn't exist */
 	err = find_file(path, real_path, context, 0);
 	if (err >= 0) {
+		release_buffers(context);
 		return -EEXIST;
 	}
 
@@ -40,18 +44,21 @@ static int pierrefs_create(struct inode *dir, struct dentry *dentry, int mode, s
 	/* Create path if needed */
 	err = find_path(path, real_path, context);
 	if (err < 0) {
+		release_buffers(context);
 		return err;
 	}
 
 	/* Be paranoid, check access */
 	err = can_create(path, real_path, context);
 	if (err < 0) {
+		release_buffers(context);
 		return err;
 	}
 
 	/* Open the file */
 	filp = creat_worker(real_path, context, mode);
 	if (IS_ERR(filp)) {
+		release_buffers(context);
 		return PTR_ERR(filp);
 	}
 
@@ -68,6 +75,7 @@ static int pierrefs_create(struct inode *dir, struct dentry *dentry, int mode, s
 	if (err < 0) {
 		dentry = get_path_dentry(real_path, context, LOOKUP_REVAL);
 		if (IS_ERR(dentry)) {
+			release_buffers(context);
 			return err;
 		}
 
@@ -76,12 +84,14 @@ static int pierrefs_create(struct inode *dir, struct dentry *dentry, int mode, s
 		pop_root();
 		dput(dentry);
 
+		release_buffers(context);
 		return err;
 	}
 
 	/* Now we're done, create the inode */
 	inode = new_inode(dir->i_sb);
 	if (!inode) {
+		release_buffers(context);
 		return -ENOMEM;
 	}
 
@@ -107,6 +117,7 @@ static int pierrefs_create(struct inode *dir, struct dentry *dentry, int mode, s
 	/* Remove whiteout if any */
 	unlink_whiteout(path, context);
 
+	release_buffers(context);
 	return 0;
 }
 
@@ -117,9 +128,12 @@ static int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct 
 
 	pr_info("pierrefs_getattr: %p, %p, %p\n", mnt, dentry, kstbuf);
 
+	will_use_buffers(context);
+
 	/* Get path */
 	err = get_relative_path(0, dentry, context, path, 1);
 	if (err < 0) {
+		release_buffers(context);
 		return err;
 	}
 
@@ -130,6 +144,7 @@ static int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct 
 		kstbuf->ino = dentry->d_inode->i_ino;
 	}
 
+	release_buffers(context);
 	return err;
 }
 
@@ -143,38 +158,46 @@ static int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct de
 
 	pr_info("pierrefs_link: %p, %p, %p\n", old_dentry, dir, dentry);
 
+	will_use_buffers(context);
+
 	/* First, find file */
 	err = get_relative_path(0, old_dentry, context, from, 1);
 	if (err < 0) {
+		release_buffers(context);
 		return err;
 	}
 
 	origin = find_file(from, real_from, context, 0);
 	if (origin < 0) {
+		release_buffers(context);
 		return origin;
 	}
 
 	/* Find destination */
 	err = get_relative_path_for_file(dir, dentry, context, to, 1);
 	if (err < 0) {
+		release_buffers(context);
 		return err;
 	}
 
 	/* And ensure it doesn't exist */
 	err = find_file(to, real_to, context, 0);
 	if (err >= 0) {
+		release_buffers(context);
 		return -EEXIST;
 	}
 
 	/* Check access */
 	err = can_create(to, real_to, context);
 	if (err < 0) {
+		release_buffers(context);
 		return err;
 	}
 
 	/* Create path if needed */
 	err = find_path(to, real_to, context);
 	if (err < 0) {
+		release_buffers(context);
 		return err;
 	}
 
@@ -182,17 +205,20 @@ static int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct de
 		/* Here, fallback to a symlink */
 		err = symlink_worker(real_from, real_to, context);
 		if (err < 0) {
+			release_buffers(context);
 			return err;
 		}
 	}
 	else {
 		/* Get RW name */
 		if (make_rw_path(to, real_to) > PATH_MAX) {
+			release_buffers(context);
 			return -ENAMETOOLONG;
 		}
 
 		err = link_worker(real_from, real_to, context);
 		if (err < 0) {
+			release_buffers(context);
 			return err;
 		}
 	}
@@ -200,6 +226,7 @@ static int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct de
 	/* Remove possible whiteout */
 	unlink_whiteout(to, context);
 
+	release_buffers(context);
 	return 0;
 }
 
@@ -229,9 +256,12 @@ static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry,
 
 	pr_info("pierrefs_lookup: %p, %p, %p\n", dir, dentry, nameidata);
 
+	will_use_buffers(context);
+
 	/* First get path of the file */
 	err = get_relative_path_for_file(dir, dentry, context, path, 1);
 	if (err < 0) {
+		release_buffers(context);
 		return ERR_PTR(err);
 	}
 
@@ -243,9 +273,11 @@ static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry,
 	if (err < 0) {
 		if (err == -ENOENT) {
 			d_add(dentry, inode);
+			release_buffers(context);
 			return NULL;
 		} else {
 			pr_info("Err: %d\n", err);
+			release_buffers(context);
 			return ERR_PTR(err);
 		}
 	}
@@ -277,6 +309,7 @@ static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry,
 	list_del(&ctx->read_inode_entry);
 	kfree(ctx);
 
+	release_buffers(context);
 	return (struct dentry *)inode;
 }
 
@@ -288,32 +321,39 @@ static int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 
 	pr_info("pierrefs_mkdir: %p, %p, %x\n", dir, dentry, mode);
 
+	will_use_buffers(context);
+
 	/* Try to find the directory first */
 	err = get_relative_path_for_file(dir, dentry, context, path, 1);
 	if (err < 0) {
+		release_buffers(context);
 		return err;
 	}
 
 	/* And ensure it doesn't exist */
 	err = find_file(path, real_path, context, 0);
 	if (err >= 0) {
+		release_buffers(context);
 		return -EEXIST;
 	}
 
 	/* Get full path for destination */
 	if (make_rw_path(path, real_path) > PATH_MAX) {
+		release_buffers(context);
 		return -ENAMETOOLONG;
 	}
 
 	/* Check access */
 	err = can_create(path, real_path, context);
 	if (err < 0) {
+		release_buffers(context);
 		return err;
 	}
 
 	/* Now, create/reuse arborescence */
 	err = find_path(path, real_path, context);
 	if (err < 0) {
+		release_buffers(context);
 		return err;
 	}
 
@@ -323,6 +363,7 @@ static int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 	/* Just create dir now */
 	err = mkdir_worker(real_path, context, mode);
 	if (err < 0) {
+		release_buffers(context);
 		return err;
 	}
 
@@ -331,6 +372,7 @@ static int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 	if (err < 0) {
 		dentry = get_path_dentry(real_path, context, LOOKUP_REVAL);
 		if (IS_ERR(dentry)) {
+			release_buffers(context);
 			return err;
 		}
 
@@ -339,12 +381,14 @@ static int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 		pop_root();
 		dput(dentry);
 
+		release_buffers(context);
 		return err;
 	}
 
 	/* Remove possible .wh. */
 	unlink_whiteout(path, context);
 
+	release_buffers(context);
 	return 0;
 }
 
@@ -356,21 +400,26 @@ static int pierrefs_mknod(struct inode *dir, struct dentry *dentry, int mode, de
 
 	pr_info("pierrefs_mknod: %p, %p, %x, %x\n", dir, dentry, mode, rdev);
 
+	will_use_buffers(context);
+
 	/* Try to find the node first */
 	err = get_relative_path_for_file(dir, dentry, context, path, 1);
 	if (err < 0) {
+		release_buffers(context);
 		return err;
 	}
 
 	/* And ensure it doesn't exist */
 	err = find_file(path, real_path, context, 0);
 	if (err >= 0) {
+		release_buffers(context);
 		return -EEXIST;
 	}
 
 	/* Now, create/reuse arborescence */
 	err = find_path(path, real_path, context);
 	if (err < 0) {
+		release_buffers(context);
 		return err;
 	}
 
@@ -378,12 +427,14 @@ static int pierrefs_mknod(struct inode *dir, struct dentry *dentry, int mode, de
 	if (S_ISFIFO(mode)) {
 		err = mkfifo_worker(real_path, context, mode);
 		if (err < 0) {
+			release_buffers(context);
 			return err;
 		}
 	}
 	else {
 		err = mknod_worker(real_path, context, mode, rdev);
 		if (err < 0) {
+			release_buffers(context);
 			return err;
 		}
 	}
@@ -391,6 +442,7 @@ static int pierrefs_mknod(struct inode *dir, struct dentry *dentry, int mode, de
 	/* Remove possible whiteout */
 	unlink_whiteout(path, context);
 
+	release_buffers(context);
 	return 0;
 }
 
@@ -401,6 +453,8 @@ static int pierrefs_open(struct inode *inode, struct file *file) {
 	char *real_path = context->global2;
 
 	pr_info("pierrefs_open: %p, %p\n", inode, file);
+
+	will_use_buffers(context);
 
 	/* Don't check for flags here, if we are down here
 	 * the user is allowed to read/write the file, the
@@ -415,6 +469,7 @@ static int pierrefs_open(struct inode *inode, struct file *file) {
 	/* Get real file path */
 	err = find_file(path, real_path, context, 0);
 	if (err < 0) {
+		release_buffers(context);
 		return err;
 	}
 
@@ -428,9 +483,11 @@ static int pierrefs_open(struct inode *inode, struct file *file) {
 	if (IS_ERR(file->private_data)) {
 		err = PTR_ERR(file->private_data);
 		file->private_data = 0;
+		release_buffers(context);
 		return err;
 	}
 
+	release_buffers(context);
 	return 0;
 }
 
@@ -447,6 +504,8 @@ static int pierrefs_opendir(struct inode *inode, struct file *file) {
 
 	pr_info("pierrefs_opendir: %p, %p\n", inode, file);
 
+	will_use_buffers(context);
+
 	/* Don't check for flags here, if we are down here
 	 * the user is allowed to read/write the dir, the
 	 * dir was created if required (and allowed).
@@ -460,6 +519,7 @@ static int pierrefs_opendir(struct inode *inode, struct file *file) {
 	/* Get real directory path */
 	err = find_file(path, real_path, context, 0);
 	if (err < 0) {
+		release_buffers(context);
 		return err;
 	}
 
@@ -474,6 +534,7 @@ static int pierrefs_opendir(struct inode *inode, struct file *file) {
 	/* Allocate readdir context */
 	ctx = kmalloc(sizeof(struct opendir_context) + rw_len + ro_len + 2 * sizeof(char), GFP_KERNEL);
 	if (!ctx) {
+		release_buffers(context);
 		return -ENOMEM;
 	}
 
@@ -516,6 +577,7 @@ static int pierrefs_opendir(struct inode *inode, struct file *file) {
 
 	file->private_data = ctx;
 
+	release_buffers(context);
 	return 0;
 }
 
@@ -527,20 +589,27 @@ static int pierrefs_permission(struct inode *inode, int mask, struct nameidata *
 
 	pr_info("pierrefs_permission: %p, %x, %p\n", inode, mask, nd);
 
+	will_use_buffers(context);
+
 	/* Get path */
 	err = get_relative_path(0, nd->dentry, context, path, 1);
 	if (err) {
+		release_buffers(context);
 		return err;
 	}
 
 	/* Get file */
 	err = find_file(path, real_path, context, 0);
 	if (err < 0) {
+		release_buffers(context);
 		return err;
 	}
 
 	/* And call worker */
-	return can_access(path, real_path, context, mask);
+	err = can_access(path, real_path, context, mask);
+
+	release_buffers(context);
+	return err;
 }
 
 static void pierrefs_read_inode(struct inode *inode) {
@@ -897,20 +966,25 @@ static int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
 
 	pr_info("pierrefs_setattr: %p, %p\n", dentry, attr);
 
+	will_use_buffers(context);
+
 	/* Get path */
 	err = get_relative_path(0, dentry, context, path, 1);
 	if (err) {
+		release_buffers(context);
 		return err;
 	}
 
 	/* Get file */
 	err = find_file(path, real_path, context, 0);
 	if (err < 0) {
+		release_buffers(context);
 		return err;
 	}
 
 	if (err == READ_WRITE || err == READ_WRITE_COPYUP) {
 		/* Just update file attributes */
+		release_buffers(context);
 		return notify_change(dentry, attr);
     }
 
@@ -918,7 +992,10 @@ static int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
 	 * Don't clear flags, set_me_worker will do
 	 * So, only call the worker
 	 */
-	return set_me_worker(path, real_path, attr, context);
+	err = set_me_worker(path, real_path, attr, context);
+
+	release_buffers(context);
+	return err;
 }
 
 static int pierrefs_symlink(struct inode *dir, struct dentry *dentry, const char *symname) {
@@ -930,44 +1007,53 @@ static int pierrefs_symlink(struct inode *dir, struct dentry *dentry, const char
 
 	pr_info("pierrefs_symlink: %p, %p, %s\n", dir, dentry, symname);
 
+	will_use_buffers(context);
+
 	/* Find destination */
 	err = get_relative_path_for_file(dir, dentry, context, to, 1);
 	if (err < 0) {
+		release_buffers(context);
 		return err;
 	}
 
 	/* And ensure it doesn't exist */
 	err = find_file(to, real_to, context, 0);
 	if (err >= 0) {
+		release_buffers(context);
 		return -EEXIST;
 	}
 
 	/* Get full path for destination */
 	if (make_rw_path(to, real_to) > PATH_MAX) {
+		release_buffers(context);
 		return -ENAMETOOLONG;
 	}
 
 	/* Check access */
 	err = can_create(to, real_to, context);
 	if (err < 0) {
+		release_buffers(context);
 		return err;
 	}
 
 	/* Create path if needed */
 	err = find_path(to, real_to, context);
 	if (err < 0) {
+		release_buffers(context);
 		return err;
 	}
 
 	/* Now it's sure the link does not exist, create it */
 	err = symlink_worker(symname, real_to, context);
 	if (err < 0) {
+		release_buffers(context);
 		return err;
 	}
 
 	/* Remove possible whiteout */
 	unlink_whiteout(to, context);
 
+	release_buffers(context);
 	return 0;
 }
 

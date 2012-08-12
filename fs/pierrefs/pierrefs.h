@@ -80,6 +80,9 @@ struct pierrefs_sb_info {
 	 */
 	char global1[PATH_MAX];
 	char global2[PATH_MAX];
+#ifdef _DEBUG_
+	int buffers_in_use;
+#endif
 	/**
 	 * Head for the read_inode contexts list used during
 	 * lookup
@@ -411,6 +414,17 @@ extern struct file_operations pierrefs_dir_fops;
 	err = vfs_lstat(p, b);	\
 	restore_kernelmode();	\
 	pop_root()
+/**
+ * Kernel mode assertion
+ * In case the expression is unverified, kernel panic
+ * \param[in]	e	The expression that has to be true
+ * \return Nothing
+ */
+#define assert(e)																		\
+	if (!(e)) {																			\
+		pr_crit("Assertion %s failed at line: %d, file: %s\n", #e, __LINE__, __FILE__);	\
+		BUG_ON(!(e));																	\
+	}
 
 #define filp_creat(p, m) filp_open(p, O_CREAT | O_WRONLY | O_TRUNC, m)
 
@@ -423,6 +437,14 @@ extern struct file_operations pierrefs_dir_fops;
 #define mkfifo_worker(p, c, m) dbg_mkfifo(p, c, m)
 #define symlink_worker(o, n, c) dbg_symlink(o, n, c)
 #define link_worker(o, n, c) dbg_link(o, n, c)
+
+#define will_use_buffers(c)			\
+	assert(c->buffers_in_use == 0);	\
+	c->buffers_in_use = 1
+#define release_buffers(c)			\
+	assert(c->buffers_in_use == 1);	\
+	c->buffers_in_use = 0
+	
 #else
 #define open_worker(p, c, f) filp_open(p, f, 0)
 #define open_worker_2(p, c, f, m) filp_open(p, f, m)
@@ -432,6 +454,9 @@ extern struct file_operations pierrefs_dir_fops;
 #define mkfifo_worker(p, c, m) mkfifo(p, c, m)
 #define symlink_worker(o, n, c) symlink(o, n, c)
 #define link_worker(o, n, c) link(o, n, c)
+
+#define will_use_buffers(c)
+#define release_buffers(c)
 #endif
 
 /* Functions in cow.c */

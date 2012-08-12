@@ -248,6 +248,9 @@ static int pierrefs_read_super(struct super_block *sb, void *raw_data,
 	/* Init sb_info */
 	recursive_mutex_init(&sb_info->id_lock);
 	INIT_LIST_HEAD(&sb_info->read_inode_head);
+#ifdef _DEBUG_
+	sb_info->buffers_in_use = 0;
+#endif
 
 	/* Get branches */
 	err = get_branches(sb, raw_data);

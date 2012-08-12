@@ -612,6 +612,7 @@ long readlink(const char *path, char *buf, struct pierrefs_sb_info *context, int
 	return error;
 }
 
+#ifdef _DEBUG_
 struct file* dbg_open(const char *pathname, const struct pierrefs_sb_info *context, int flags) {
 	pr_info("dbg_open: %s, %p, %x\n", pathname, context, flags);
 
@@ -695,3 +696,4 @@ int dbg_link(const char *oldpath, const char *newpath, struct pierrefs_sb_info *
 
 	return link(oldpath, newpath, context);
 }
+#endif
