@@ -55,7 +55,7 @@ static int create_whiteout_worker(const char *wh_path, struct pierrefs_sb_info *
 	struct dentry *dentry;
 
 	/* Create file */
-	struct file *fd = creat_worker(wh_path, S_IRUSR);
+	struct file *fd = creat_worker(wh_path, context, S_IRUSR);
 
 	pr_info("create_whiteout_worker: %s, %p\n", wh_path, context);
 
@@ -213,7 +213,7 @@ int hide_directory_contents(const char *path, struct pierrefs_sb_info *context) 
 		return -ENAMETOOLONG;
 	}
 
-	ro_fd = open_worker(ro_path, O_RDONLY);
+	ro_fd = open_worker(ro_path, context, O_RDONLY);
 	if (IS_ERR(ro_fd)) {
 		return PTR_ERR(ro_fd);
 	}
@@ -248,7 +248,7 @@ int is_empty_dir(const char *path, const char *ro_path, const char *rw_path, str
 
 	pr_info("is_empty_dir: %s, %s, %s, %p\n", path, ro_path, rw_path, context);
 
-	ro_fd = open_worker(ro_path, O_RDONLY);
+	ro_fd = open_worker(ro_path, context, O_RDONLY);
 	if (IS_ERR(ro_fd)) {
 		return PTR_ERR(ro_fd);
 	}
@@ -266,7 +266,7 @@ int is_empty_dir(const char *path, const char *ro_path, const char *rw_path, str
 	}
 
 	if (rw_path) {
-		rw_fd = open_worker(rw_path, O_RDONLY);
+		rw_fd = open_worker(rw_path, context, O_RDONLY);
 		if (IS_ERR(rw_fd)) {
 			return PTR_ERR(rw_fd);
 		}

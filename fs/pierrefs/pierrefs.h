@@ -31,6 +31,8 @@
 #include "hash.h"
 #include "recursivemutex.h"
 
+#define _DEBUG_
+
 struct read_inode_context {
 	/**
 	 * Entry in the read_inode list
@@ -123,6 +125,10 @@ struct readdir_file {
 	 *
 	 */
 	unsigned long ino;
+	/**
+	 *
+	 */
+	unsigned type;
 	/**
 	 * String containing the file name. It's allocated with the structure
 	 */
@@ -409,18 +415,18 @@ extern struct file_operations pierrefs_dir_fops;
 #define filp_creat(p, m) filp_open(p, O_CREAT | O_WRONLY | O_TRUNC, m)
 
 #ifdef _DEBUG_
-#define open_worker(p, f) dbg_open(p, f)
-#define open_worker_2(p, f, m) dbg_open_2(p, f, m)
-#define creat_worker(p, m) dbg_creat(p, m)
+#define open_worker(p, c, f) dbg_open(p, c, f)
+#define open_worker_2(p, c, f, m) dbg_open_2(p, c, f, m)
+#define creat_worker(p, c, m) dbg_creat(p, c, m)
 #define mkdir_worker(p, c, m) dbg_mkdir(p, c, m)
 #define mknod_worker(p, c, m, d) dbg_mknod(p, c, m, d)
 #define mkfifo_worker(p, c, m) dbg_mkfifo(p, c, m)
 #define symlink_worker(o, n, c) dbg_symlink(o, n, c)
 #define link_worker(o, n, c) dbg_link(o, n, c)
 #else
-#define open_worker(p, f) filp_open(p, f, 0)
-#define open_worker_2(p, f, m) filp_open(p, f, m)
-#define creat_worker(p, m) filp_creat(p, m)
+#define open_worker(p, c, f) filp_open(p, f, 0)
+#define open_worker_2(p, c, f, m) filp_open(p, f, m)
+#define creat_worker(p, c, m) filp_creat(p, m)
 #define mkdir_worker(p, c, m) mkdir(p, c, m)
 #define mknod_worker(p, c, m, d) mknod(p, c, m, d)
 #define mkfifo_worker(p, c, m) mkfifo(p, c, m)

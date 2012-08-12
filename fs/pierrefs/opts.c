@@ -50,7 +50,7 @@ static int pierrefs_create(struct inode *dir, struct dentry *dentry, int mode, s
 	}
 
 	/* Open the file */
-	filp = creat_worker(real_path, mode);
+	filp = creat_worker(real_path, context, mode);
 	if (IS_ERR(filp)) {
 		return PTR_ERR(filp);
 	}
@@ -424,7 +424,7 @@ static int pierrefs_open(struct inode *inode, struct file *file) {
 	 * to maintain data consistency and to forward requests on
 	 * the file to the lower file system.
 	 */
-	file->private_data = open_worker_2(real_path, file->f_flags, file->f_mode);
+	file->private_data = open_worker_2(real_path, context, file->f_flags, file->f_mode);
 	if (IS_ERR(file->private_data)) {
 		err = PTR_ERR(file->private_data);
 		file->private_data = 0;
@@ -659,6 +659,7 @@ static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset
 
 		/* Fill in data */
 		entry->d_reclen = namlen;
+		entry->type = d_type;
 		strncpy(entry->d_name, name, namlen);
 		entry->d_name[namlen] = '\0';
 
@@ -748,6 +749,7 @@ static int read_ro_branch(void *buf, const char *name, int namlen, loff_t offset
 
 	/* Fill in data */
 	entry->d_reclen = namlen;
+	entry->type = d_type;
 	strncpy(entry->d_name, name, namlen);
 	entry->d_name[namlen] = '\0';
 
@@ -787,6 +789,9 @@ static int pierrefs_readdir(struct file *filp, void *dirent, filldir_t filldir) 
 	struct readdir_file *entry;
 	struct list_head *lentry;
 	struct opendir_context *ctx = (struct opendir_context *)filp->private_data;
+#ifdef _DEBUG_
+	struct pierrefs_sb_info *context = ctx->context;
+#endif
 
 	pr_info("pierrefs_readdir: %p, %p, %p\n", filp, dirent, filldir);
 
@@ -800,7 +805,7 @@ static int pierrefs_readdir(struct file *filp, void *dirent, filldir_t filldir) 
 			char *rw_dir_path = (char *)(ctx->rw_off + (unsigned long)ctx);
 
 			/* Start browsing RW dir */
-			rw_dir = open_worker(rw_dir_path, O_RDONLY);
+			rw_dir = open_worker(rw_dir_path, context, O_RDONLY);
 			if (IS_ERR(rw_dir)) {
 				err = PTR_ERR(rw_dir);
 				goto cleanup;
@@ -819,7 +824,7 @@ static int pierrefs_readdir(struct file *filp, void *dirent, filldir_t filldir) 
 			char *ro_dir_path = (char *)(ctx->ro_off + (unsigned long)ctx);
 
 			/* Start browsing RO dir */
-			ro_dir = open_worker(ro_dir_path, O_RDONLY);
+			ro_dir = open_worker(ro_dir_path, context, O_RDONLY);
 			if (IS_ERR(ro_dir)) {
 				err = PTR_ERR(ro_dir);
 				goto cleanup;
@@ -850,7 +855,7 @@ static int pierrefs_readdir(struct file *filp, void *dirent, filldir_t filldir) 
 		/* Found the entry - return it */
 		if (i == filp->f_pos) {
 			entry = list_entry(lentry, struct readdir_file, files_entry);
-			filldir(dirent, entry->d_name, entry->d_reclen, i, entry->ino, DT_UNKNOWN);
+			filldir(dirent, entry->d_name, entry->d_reclen, i, entry->ino, entry->type);
 			/* Update position */
 			++filp->f_pos;
 			break;

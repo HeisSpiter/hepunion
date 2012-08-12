@@ -107,13 +107,13 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
 		/* Regular file */
 		case S_IFREG:
 			/* Open read only... */
-			ro_fd = open_worker(ro_path, O_RDONLY);
+			ro_fd = open_worker(ro_path, context, O_RDONLY);
 			if (IS_ERR(ro_fd)) {
 				return PTR_ERR(ro_fd);
 			}
 
 			/* Then, create copyup... */
-			rw_fd = open_worker_2(rw_path, O_CREAT | O_WRONLY | O_EXCL, kstbuf.mode); 
+			rw_fd = open_worker_2(rw_path, context, O_CREAT | O_WRONLY | O_EXCL, kstbuf.mode); 
 			if (IS_ERR(rw_fd)) {
 				filp_close(ro_fd, 0);
 				return PTR_ERR(rw_fd);
@@ -180,7 +180,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
 			}
 
 			/* Recreate dir structure */
-			ro_fd = open_worker(ro_path, O_RDONLY);
+			ro_fd = open_worker(ro_path, context, O_RDONLY);
 			if (IS_ERR(ro_fd)) {
 				dentry = get_path_dentry(rw_path, context, LOOKUP_REVAL);
 				if (IS_ERR(dentry)) {

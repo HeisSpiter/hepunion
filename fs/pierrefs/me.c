@@ -58,7 +58,7 @@ int create_me(const char *me_path, struct kstat *kstbuf, struct pierrefs_sb_info
 	clear_mode_flags(mode);
 
 	/* Create file */
-	fd = creat_worker(me_path, mode);
+	fd = creat_worker(me_path, context, mode);
 	if (IS_ERR(fd)) {
 		return PTR_ERR(fd);
 	}
@@ -226,7 +226,7 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr, s
 		mode = (attr->ia_valid & ATTR_MODE) ? attr->ia_mode : kstme.mode;
 		clear_mode_flags(mode);
 
-		fd = creat_worker(me_path, mode);
+		fd = creat_worker(me_path, context, mode);
 		if (IS_ERR(fd)) {
 			return PTR_ERR(fd);
 		}
