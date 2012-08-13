@@ -300,6 +300,10 @@ static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry,
 	if (!inode) {
 		inode = ERR_PTR(-EACCES);
 	} else {
+		/* Reference the dentry */
+		/* FIXME: This is probably not the thing to do, but we can't keep negative dentries */
+		dget(dentry);
+
 		/* Set our inode */
 		d_add(dentry, inode);
 	}
