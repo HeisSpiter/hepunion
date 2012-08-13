@@ -271,21 +271,17 @@ static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry,
 		return ERR_PTR(err);
 	}
 
+	pr_info("Looking for: %s\n", path);
+
 	/* Set our operations before we continue */
 	dentry->d_op = &pierrefs_dops;
 
 	/* Now, look for the file */
 	err = find_file(path, real_path, context, 0);
 	if (err < 0) {
-		if (err == -ENOENT) {
-			d_add(dentry, inode);
-			release_buffers(context);
-			return NULL;
-		} else {
-			pr_info("Err: %d\n", err);
-			release_buffers(context);
-			return ERR_PTR(err);
-		}
+		pr_info("Err: %d\n", err);
+		release_buffers(context);
+		return ERR_PTR(err);
 	}
 
 	/* We've got it!
@@ -316,7 +312,7 @@ static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry,
 	kfree(ctx);
 
 	release_buffers(context);
-	return (struct dentry *)inode;
+	return NULL;
 }
 
 static int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
@@ -648,6 +644,8 @@ static void pierrefs_read_inode(struct inode *inode) {
 		pr_info("Context not found for: %lu\n", inode->i_ino);
 		return;
 	}
+
+	pr_info("Reading inode: %s\n", ctx->name);
 
 	/* Call worker */
 	err = get_file_attr(ctx->name, context, &kstbuf);
@@ -1112,7 +1110,6 @@ struct inode_operations pierrefs_iops = {
 	.readlink	= generic_readlink, /* dentry will already point on the right file */
 #endif
 	.setattr	= pierrefs_setattr,
-
 };
 
 struct inode_operations pierrefs_dir_iops = {
