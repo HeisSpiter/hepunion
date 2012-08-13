@@ -267,7 +267,7 @@ int get_full_path_d(const struct dentry *dentry, char *real_path) {
 	char *end = tmp_path + PATH_MAX;
 	int namelen = 0, buflen = PATH_MAX;
 
-	pr_info("get_full_path: %p, %p\n", dentry, real_path);
+	pr_info("get_full_path_d: %p, %p\n", dentry, real_path);
 
 	pr_info("Getting full path of: %s\n", dentry->d_name.name);
 
