@@ -204,6 +204,9 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	root_i->i_op = &pierrefs_dir_iops;
 	root_i->i_fop = &pierrefs_dir_fops;
 	root_i->i_nlink = 2;
+#ifdef _DEBUG_
+	root_i->i_private = (void *)PIERREFS_MAGIC;
+#endif
 
 	/* Create its directory entry */
 	sb->s_root = d_alloc_root(root_i);
