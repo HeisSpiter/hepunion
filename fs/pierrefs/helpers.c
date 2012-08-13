@@ -285,8 +285,11 @@ int get_full_path_d(const struct dentry *dentry, char *real_path) {
 		dentry = dentry->d_parent;
 	}
 	spin_unlock(&dcache_lock);
-	*--end = '/';
-	buflen--;
+
+	if (buflen == PATH_MAX - 1) {
+		*--end = '/';
+		buflen--;
+	}
 
 	/* Copy back name */
 	memcpy(real_path, end, buflen);
