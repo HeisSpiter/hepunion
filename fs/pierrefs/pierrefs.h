@@ -444,7 +444,9 @@ extern struct file_operations pierrefs_dir_fops;
 #define release_buffers(c)			\
 	assert(c->buffers_in_use == 1);	\
 	c->buffers_in_use = 0
-	
+#define validate_inode(i)	\
+	assert((unsigned long)i->i_private == PIERREFS_MAGIC)
+
 #else
 #define open_worker(p, c, f) filp_open(p, f, 0)
 #define open_worker_2(p, c, f, m) filp_open(p, f, m)
@@ -457,6 +459,8 @@ extern struct file_operations pierrefs_dir_fops;
 
 #define will_use_buffers(c)
 #define release_buffers(c)
+#define validate_inode(i)
+
 #endif
 
 /* Functions in cow.c */

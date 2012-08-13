@@ -23,6 +23,7 @@ static int pierrefs_create(struct inode *dir, struct dentry *dentry, int mode, s
 	pr_info("pierrefs_create: %p, %p, %x, %p\n", dir, dentry, mode, nameidata);
 
 	will_use_buffers(context);
+	validate_inode(dir);
 
 	/* Try to find the file first */
 	err = get_relative_path_for_file(dir, dentry, context, path, 1);
@@ -108,6 +109,9 @@ static int pierrefs_create(struct inode *dir, struct dentry *dentry, int mode, s
 	inode->i_mode = mode;
 	inode->i_nlink = 1;
 	inode->i_ino = name_to_ino(path);
+#ifdef _DEBUG_
+	inode->i_private = (void *)PIERREFS_MAGIC;
+#endif
 	insert_inode_hash(inode); 
 
 	d_instantiate(dentry, inode);
@@ -159,6 +163,7 @@ static int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct de
 	pr_info("pierrefs_link: %p, %p, %p\n", old_dentry, dir, dentry);
 
 	will_use_buffers(context);
+	validate_inode(dir);
 
 	/* First, find file */
 	err = get_relative_path(0, old_dentry, context, from, 1);
@@ -257,6 +262,7 @@ static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry,
 	pr_info("pierrefs_lookup: %p, %p, %p\n", dir, dentry, nameidata);
 
 	will_use_buffers(context);
+	validate_inode(dir);
 
 	/* First get path of the file */
 	err = get_relative_path_for_file(dir, dentry, context, path, 1);
@@ -322,6 +328,7 @@ static int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 	pr_info("pierrefs_mkdir: %p, %p, %x\n", dir, dentry, mode);
 
 	will_use_buffers(context);
+	validate_inode(dir);
 
 	/* Try to find the directory first */
 	err = get_relative_path_for_file(dir, dentry, context, path, 1);
@@ -401,6 +408,7 @@ static int pierrefs_mknod(struct inode *dir, struct dentry *dentry, int mode, de
 	pr_info("pierrefs_mknod: %p, %p, %x, %x\n", dir, dentry, mode, rdev);
 
 	will_use_buffers(context);
+	validate_inode(dir);
 
 	/* Try to find the node first */
 	err = get_relative_path_for_file(dir, dentry, context, path, 1);
@@ -455,6 +463,7 @@ static int pierrefs_open(struct inode *inode, struct file *file) {
 	pr_info("pierrefs_open: %p, %p\n", inode, file);
 
 	will_use_buffers(context);
+	validate_inode(inode);
 
 	/* Don't check for flags here, if we are down here
 	 * the user is allowed to read/write the file, the
@@ -505,6 +514,7 @@ static int pierrefs_opendir(struct inode *inode, struct file *file) {
 	pr_info("pierrefs_opendir: %p, %p\n", inode, file);
 
 	will_use_buffers(context);
+	validate_inode(inode);
 
 	/* Don't check for flags here, if we are down here
 	 * the user is allowed to read/write the dir, the
@@ -590,6 +600,7 @@ static int pierrefs_permission(struct inode *inode, int mask, struct nameidata *
 	pr_info("pierrefs_permission: %p, %x, %p\n", inode, mask, nd);
 
 	will_use_buffers(context);
+	validate_inode(inode);
 
 	/* Get path */
 	err = get_relative_path(0, nd->dentry, context, path, 1);
@@ -665,6 +676,10 @@ static void pierrefs_read_inode(struct inode *inode) {
 		inode->i_op = &pierrefs_iops;
 		inode->i_fop = &pierrefs_fops;
 	}
+
+#ifdef _DEBUG_
+	inode->i_private = (void *)PIERREFS_MAGIC;
+#endif
 }
 
 static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
@@ -1008,6 +1023,7 @@ static int pierrefs_symlink(struct inode *dir, struct dentry *dentry, const char
 	pr_info("pierrefs_symlink: %p, %p, %s\n", dir, dentry, symname);
 
 	will_use_buffers(context);
+	validate_inode(dir);
 
 	/* Find destination */
 	err = get_relative_path_for_file(dir, dentry, context, to, 1);
