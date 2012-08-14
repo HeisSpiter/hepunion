@@ -1029,6 +1029,10 @@ cleanup:
 static int pierrefs_revalidate(struct dentry *dentry, struct nameidata *nd) {
 	pr_info("pierrefs_revalidate: %p, %p\n", dentry, nd);
 
+	if (dentry->d_inode == NULL) {
+		return 0;
+	}
+
 	return 1;
 }
 
