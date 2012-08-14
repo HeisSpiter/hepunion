@@ -279,9 +279,16 @@ static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry,
 	/* Now, look for the file */
 	err = find_file(path, real_path, context, 0);
 	if (err < 0) {
-		pr_info("Err: %d\n", err);
-		release_buffers(context);
-		return ERR_PTR(err);
+		if (err == -ENOENT) {
+			pr_info("Null inode\n");
+			d_add(dentry, inode);
+			release_buffers(context);
+			return NULL;
+		} else {
+			pr_info("Err: %d\n", err);
+			release_buffers(context);
+			return ERR_PTR(err);
+		}
 	}
 
 	/* We've got it!
@@ -300,10 +307,6 @@ static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry,
 	if (!inode) {
 		inode = ERR_PTR(-EACCES);
 	} else {
-		/* Reference the dentry */
-		/* FIXME: This is probably not the thing to do, but we can't keep negative dentries */
-		dget(dentry);
-
 		/* Set our inode */
 		d_add(dentry, inode);
 	}
@@ -603,7 +606,7 @@ static int pierrefs_permission(struct inode *inode, int mask, struct nameidata *
 	validate_inode(inode);
 
 	/* Get path */
-	err = get_relative_path(0, nd->dentry, context, path, 1);
+	err = get_relative_path(inode, (nd ? nd->dentry : NULL), context, path, 1);
 	if (err) {
 		release_buffers(context);
 		return err;
