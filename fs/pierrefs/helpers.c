@@ -386,6 +386,49 @@ int get_relative_path_for_file(const struct inode *dir, const struct dentry *den
 	return 0;
 }
 
+int path_to_special(const char *path, specials type, const struct pierrefs_sb_info *context, char *outpath) {
+	size_t len = strlen(path);
+	char *tree_path = strrchr(path, '/');
+	size_t written = 0;
+
+	pr_info("path_to_special: %s, %d, %p\n", path, type, outpath);
+
+	if (!tree_path) {
+		return -EINVAL;
+	}
+
+	/* Ensure the complete path can fit in the output path */
+	if (context->rw_len + len + 5 > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+
+	memcpy(outpath, context->read_write_branch, context->rw_len);
+	written = context->rw_len;
+
+	if (written + tree_path - path + 5 > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
+
+	/* Copy path (and /) */
+	memcpy(outpath + written, path, tree_path - path + 1);
+	written += tree_path - path + 1;
+
+	/* Append me or wh */
+	if (type == ME) {
+		memcpy(outpath + written, ".me.", 4);
+	} else {
+		memcpy(outpath + written, ".wh.", 4);
+	}
+	written += 4;
+
+	/* Finalement copy name */
+	memcpy(outpath + written, tree_path + 1, path + len - tree_path);
+	written += path + len - tree_path;
+	outpath[written] = 0;
+
+	return 0;
+}
+
 /* Imported for Linux kernel and simplified */
 int lstat(const char *pathname, struct pierrefs_sb_info *context, struct kstat *stat)
 {

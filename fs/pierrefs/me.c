@@ -83,25 +83,14 @@ int create_me(const char *me_path, struct kstat *kstbuf, struct pierrefs_sb_info
 
 int find_me(const char *path, struct pierrefs_sb_info *context, char *me_path, struct kstat *kstbuf) {
 	int err;
-	/* Find name */
-	char *tree_path = strrchr(path, '/');
 
 	pr_info("find_me: %s, %p, %p, %p\n", path, context, me_path, kstbuf);
 
-	if (!tree_path) {
-		return -EINVAL;
+	/* Get me path */
+	err = path_to_special(path, ME, context, me_path);
+	if (err < 0) {
+		return err;
 	}
-
-	if (snprintf(me_path, PATH_MAX, "%s", context->read_write_branch) > PATH_MAX) {
-		return -ENAMETOOLONG;
-	}
-
-	/* Copy path (and /) */
-	strncat(me_path, path, tree_path - path + 1);
-	/* Append me */
-	strcat(me_path, ".me.");
-	/* Finalement copy name */
-	strcat(me_path, tree_path + 1);
 
 	/* Now, try to get properties */
 	err = lstat(me_path, context, kstbuf);

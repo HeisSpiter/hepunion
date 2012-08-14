@@ -219,6 +219,11 @@ typedef enum _types {
 	READ_WRITE_COPYUP = 2
 } types;
 
+typedef enum _specials {
+	ME = 0,
+	WH = 1
+} specials;
+
 extern struct inode_operations pierrefs_iops;
 extern struct inode_operations pierrefs_dir_iops;
 extern struct super_operations pierrefs_sops;
@@ -635,6 +640,16 @@ int get_relative_path_for_file(const struct inode *dir, const struct dentry *den
  * \return dentry, or -err in case of error
  */
 struct dentry* get_path_dentry(const char *pathname, struct pierrefs_sb_info *context, int flag);
+/**
+ * Given a PierreFS relative path transforms it to full path for either wh or me
+ * \param[in]	path	The path to transform
+ * \param[in]	type	Type of special file wanted (see specials)
+ * \param[in]	context	Calling context of the FS
+ * \param[out]	outpath	Buffer big enough (PATH_MAX) containing the special path
+ * \return 0 in case of a success, an error code otherwise
+ * \warning This function assumes that the path is PATH_MAX big
+ */
+int path_to_special(const char *path, specials type, const struct pierrefs_sb_info *context, char *outpath);
 /**
  * Implementation taken from Linux kernel (and simplified). It's here to allow creation
  * of a link using pathname.

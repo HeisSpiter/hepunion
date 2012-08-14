@@ -93,25 +93,13 @@ static int create_whiteout_worker(const char *wh_path, struct pierrefs_sb_info *
 int create_whiteout(const char *path, char *wh_path, struct pierrefs_sb_info *context) {
 	int err;
 
-	/* Find name */
-	char *tree_path = strrchr(path, '/');
-
 	pr_info("create_whiteout: %s, %p, %p\n", path, wh_path, context);
 
-	if (!tree_path) {
-		return -EINVAL;
+	/* Get wh path */
+	err = path_to_special(path, WH, context, wh_path);
+	if (err < 0) {
+		return err;
 	}
-
-	if (snprintf(wh_path, PATH_MAX, "%s", context->read_write_branch) > PATH_MAX) {
-		return -ENAMETOOLONG;
-	}
-
-	/* Copy path (and /) */
-	strncat(wh_path, path, tree_path - path + 1);
-	/* Append wh */
-	strcat(wh_path, ".wh.");
-	/* Finalement copy name */
-	strcat(wh_path, tree_path + 1);
 
 	/* Ensure path exists */
 	err = find_path(path, NULL, context);
@@ -158,25 +146,13 @@ int find_whiteout(const char *path, struct pierrefs_sb_info *context, char *wh_p
 	int err;
 	struct kstat kstbuf;
 
-	/* Find name */
-	char *tree_path = strrchr(path, '/');
-
 	pr_info("find_whiteout: %s, %p, %p\n", path, context, wh_path);
 
-	if (!tree_path) {
-		return -EINVAL;
+	/* Get wh path */
+	err = path_to_special(path, WH, context, wh_path);
+	if (err < 0) {
+		return err;
 	}
-
-	if (snprintf(wh_path, PATH_MAX, "%s", context->read_write_branch) > PATH_MAX) {
-		return -ENAMETOOLONG;
-	}
-
-	/* Copy path (and /) */
-	strncat(wh_path, path, tree_path - path + 1);
-	/* Append me */
-	strcat(wh_path, ".wh.");
-	/* Finally copy name */
-	strcat(wh_path, tree_path + 1);
 
 	/* Does it exists */
 	err = lstat(wh_path, context, &kstbuf);
@@ -342,25 +318,13 @@ int unlink_whiteout(const char *path, struct pierrefs_sb_info *context) {
 	char wh_path[PATH_MAX];
 	struct dentry *dentry;
 
-	/* Find name */
-	char *tree_path = strrchr(path, '/');
-
 	pr_info("unlink_whiteout: %s, %p\n", path, context);
 
-	if (!tree_path) {
-		return -EINVAL;
+	/* Get wh path */
+	err = path_to_special(path, WH, context, wh_path);
+	if (err < 0) {
+		return err;
 	}
-
-	if (snprintf(wh_path, PATH_MAX, "%s", context->read_write_branch) > PATH_MAX) {
-		return -ENAMETOOLONG;
-	}
-
-	/* Copy path (and /) */
-	strncat(wh_path, path, tree_path - path + 1);
-	/* Append wh */
-	strcat(wh_path, ".wh.");
-	/* Finalement copy name */
-	strcat(wh_path, tree_path + 1);
 
 	/* Get file dentry */
 	dentry = get_path_dentry(wh_path, context, LOOKUP_REVAL);
