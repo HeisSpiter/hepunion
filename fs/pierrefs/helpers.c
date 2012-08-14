@@ -621,6 +621,7 @@ struct file* dbg_open(const char *pathname, const struct pierrefs_sb_info *conte
 
 	if (flags & (O_CREAT | O_WRONLY | O_RDWR)) {
 		if (strncmp(pathname, context->read_only_branch, context->ro_len) == 0) {
+			pr_err("Attempted to write on RO branch!\n");
 			return ERR_PTR(-EINVAL);
 		}
 	}
@@ -633,6 +634,7 @@ struct file* dbg_open_2(const char *pathname, const struct pierrefs_sb_info *con
 
 	if (flags & (O_CREAT | O_WRONLY | O_RDWR)) {
 		if (strncmp(pathname, context->read_only_branch, context->ro_len) == 0) {
+			pr_err("Attempted to write on RO branch!\n");
 			return ERR_PTR(-EINVAL);
 		}
 	}
@@ -644,6 +646,7 @@ struct file* dbg_creat(const char *pathname, const struct pierrefs_sb_info *cont
 	pr_info("dbg_creat: %s, %p, %x\n", pathname, context, mode);
 
 	if (strncmp(pathname, context->read_only_branch, context->ro_len) == 0) {
+		pr_err("Attempted to write on RO branch!\n");
 		return ERR_PTR(-EINVAL);
 	}
 
@@ -654,6 +657,7 @@ int dbg_mkdir(const char *pathname, struct pierrefs_sb_info *context, mode_t mod
 	pr_info("dbg_mkdir: %s, %p, %x\n", pathname, context, mode);
 
 	if (strncmp(pathname, context->read_only_branch, context->ro_len) == 0) {
+		pr_err("Attempted to write on RO branch!\n");
 		return -EINVAL;
 	}
 
@@ -664,6 +668,7 @@ int dbg_mknod(const char *pathname, struct pierrefs_sb_info *context, mode_t mod
 	pr_info("dbg_mknod: %s, %p, %x, %x\n", pathname, context, mode, dev);
 
 	if (strncmp(pathname, context->read_only_branch, context->ro_len) == 0) {
+		pr_err("Attempted to write on RO branch!\n");
 		return -EINVAL;
 	}
 
@@ -674,6 +679,7 @@ int dbg_mkfifo(const char *pathname, struct pierrefs_sb_info *context, mode_t mo
 	pr_info("dbg_mkfifo: %s, %p, %x\n", pathname, context, mode);
 
 	if (strncmp(pathname, context->read_only_branch, context->ro_len) == 0) {
+		pr_err("Attempted to write on RO branch!\n");
 		return -EINVAL;
 	}
 
@@ -684,6 +690,7 @@ int dbg_symlink(const char *oldpath, const char *newpath, struct pierrefs_sb_inf
 	pr_info("dbg_symlink: %s, %s, %p\n", oldpath, newpath, context);
 
 	if (strncmp(newpath, context->read_only_branch, context->ro_len) == 0) {
+		pr_err("Attempted to write on RO branch!\n");
 		return -EINVAL;
 	}
 
@@ -694,6 +701,7 @@ int dbg_link(const char *oldpath, const char *newpath, struct pierrefs_sb_info *
 	pr_info("dbg_link: %s, %s, %p\n", oldpath, newpath, context);
 
 	if (strncmp(newpath, context->read_only_branch, context->ro_len) == 0) {
+		pr_err("Attempted to write on RO branch!\n");
 		return -EINVAL;
 	}
 
