@@ -55,12 +55,18 @@ struct pierrefs_sb_info {
 	 * \warning It is not \ terminated
 	 */
 	char *read_write_branch;
+	/**
+	 * Size of the RW branch path
+	 */
 	size_t rw_len;
 	/**
 	 * Contains the full path of the RO branch
 	 * \warning It is not \ terminated
 	 */
 	char *read_only_branch;
+	/**
+	 * Size of the RO branch path
+	 */
 	size_t ro_len;
 	/**
 	 * Contains the UID when switched to root
@@ -81,6 +87,11 @@ struct pierrefs_sb_info {
 	char global1[PATH_MAX];
 	char global2[PATH_MAX];
 #ifdef _DEBUG_
+	/**
+	 * Set to 1 if global1 and global2 are being used
+	 * by a function.
+	 * It is used to detect contexts override
+	 */
 	int buffers_in_use;
 #endif
 	/**
@@ -125,11 +136,11 @@ struct readdir_file {
 	 */
 	unsigned short d_reclen;
 	/**
-	 *
+	 * Inode number of the entry
 	 */
 	unsigned long ino;
 	/**
-	 *
+	 * Tye of the entry
 	 */
 	unsigned type;
 	/**
@@ -149,15 +160,15 @@ struct readdir_file {
  */
 struct opendir_context {
 	/**
-	 *
+	 * Context used for opendir
 	 */
 	struct pierrefs_sb_info *context;
 	/**
-	 *
+	 * Head of the list containing all the files to be returned
 	 */
 	struct list_head files_head;
 	/**
-	 *
+	 * Head of the list containing all the whiteouts found during unioning
 	 */
 	struct list_head whiteouts_head;
 	/**
