@@ -311,7 +311,7 @@ struct dentry * get_path_dentry(const char *pathname, struct pierrefs_sb_info *c
 	pr_info("get_path_dentry: %s, %p, %x\n", pathname, context, flag);
 
 	push_root();
-	err = __user_walk(pathname, flag, &nd);
+	err = path_lookup(pathname, flag, &nd);
 	pop_root();
 	if (err) {
 		return ERR_PTR(err);
@@ -527,7 +527,7 @@ long link(const char *oldname, const char *newname, struct pierrefs_sb_info *con
 	pr_info("link: %s, %s, %p\n", oldname, newname, context);
 
 	push_root();
-	error = __user_walk(oldname, 0, &old_nd);
+	error = path_lookup(oldname, 0, &old_nd);
 	pop_root();
 	if (error) {
 		return error;
@@ -572,7 +572,7 @@ long readlink(const char *path, char *buf, struct pierrefs_sb_info *context, int
 		return -EINVAL;
 
 	push_root();
-	error = __user_walk(path, 0, &nd);
+	error = path_lookup(path, 0, &nd);
 	pop_root();
 	if (!error) {
 		inode = nd.dentry->d_inode;
