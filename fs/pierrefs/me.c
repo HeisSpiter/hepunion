@@ -134,7 +134,7 @@ int get_file_attr_worker(const char *path, const char *real_path, struct pierref
 	pr_info("get_file_attr_worker: %s, %s, %p, %p\n", path, real_path, context, kstbuf);
 
 	/* Look for a me file */
-	me = (find_me(path, context, me_file, &kstme) > 0);
+	me = (find_me(path, context, me_file, &kstme) >= 0);
 
 	pr_info("me file status: %d\n", me);
 
@@ -206,7 +206,7 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr, s
 	attr->ia_valid &= ATTR_UID | ATTR_GID | ATTR_ATIME | ATTR_MTIME | ATTR_MODE;
 
 	/* Look for a me file */
-	me = (find_me(path, context, me_path, &kstme) > 0);
+	me = (find_me(path, context, me_path, &kstme) >= 0);
 
 	if (!me) {
 		/* Read real file info */
