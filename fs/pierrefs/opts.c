@@ -1038,6 +1038,7 @@ static int pierrefs_revalidate(struct dentry *dentry, struct nameidata *nd) {
 
 static int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
 	int err;
+	struct dentry *real_dentry;
 	struct pierrefs_sb_info *context = get_context_d(dentry);
 	char *path = context->global1;
 	char *real_path = context->global2;
@@ -1061,9 +1062,21 @@ static int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
 	}
 
 	if (err == READ_WRITE || err == READ_WRITE_COPYUP) {
+		/* Get dentry for the file to update */
+		real_dentry = get_path_dentry(real_path, context, LOOKUP_REVAL);
+		if (IS_ERR(real_dentry)) {
+			release_buffers(context);
+			return PTR_ERR(real_dentry);
+		}
+
 		/* Just update file attributes */
+		push_root();
+		err = notify_change(real_dentry, attr);
+		pop_root();
+		dput(real_dentry);
+
 		release_buffers(context);
-		return notify_change(dentry, attr);
+		return err;
     }
 
 	/* Update me
