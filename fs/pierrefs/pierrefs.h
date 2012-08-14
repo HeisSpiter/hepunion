@@ -673,6 +673,13 @@ struct dentry* get_path_dentry(const char *pathname, struct pierrefs_sb_info *co
  */
 long link(const char *oldname, const char *newname, struct pierrefs_sb_info *context);
 /**
+ * Implementation taken from the Linux kernel (and simplitied). It's here to query files attributes
+ * \param[in]	pathname	Path of which querying attributes
+ * \param[out]	stat		Queried attributes
+ * \return	0 in case of a success, -err otherwise
+ */
+int lstat(const char *pathname, struct kstat *stat);
+/**
  * Implementation taken from Linux kernel. It's here to allow creation of a directory
  * using pathname.
  * \param[in]	pathname	Directory to create

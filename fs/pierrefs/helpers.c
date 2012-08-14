@@ -387,6 +387,21 @@ int get_relative_path_for_file(const struct inode *dir, const struct dentry *den
 	return 0;
 }
 
+/* Imported for Linux kernel and simplified */
+int lstat(const char *pathname, struct kstat *stat)
+{
+	struct nameidata nd;
+	int error;
+
+	error = path_lookup(pathname, 0, &nd);
+	if (!error) {
+		error = vfs_getattr(nd.mnt, nd.dentry, stat);
+		path_release(&nd);
+	}
+
+	return error;
+}
+
 /* Imported for Linux kernel */
 long mkdir(const char *pathname, struct pierrefs_sb_info *context, int mode) {
 	int error = 0;
