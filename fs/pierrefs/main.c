@@ -41,7 +41,7 @@ static int make_path(const char *s, size_t n, char **path) {
 	if (*path) {
 		memcpy(*path, s, n);
 		(*path)[n] = '\0';
-        return 0;
+        return n;
 	}
 
 	pr_crit("Failed allocating new path\n");
@@ -73,12 +73,13 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	if (type && type < part2) {
 		/* Get branch name */
 		err = make_path(arg, type - arg, &output);
-		if (err || !output) {
+		if (err < 0 || !output) {
 			return err;
 		}
 
 		if (!strncmp(type + 1, "RW", 2)) {
 			sb_info->read_write_branch = output;
+			sb_info->rw_len = err;
 		}
 		else if (strncmp(type + 1, "RO", 2)) {
 		pr_err("Unrecognized branch type: %.2s\n", type + 1);
@@ -86,6 +87,7 @@ static int get_branches(struct super_block *sb, const char *arg) {
 		}
 		else {
 			sb_info->read_only_branch = output;
+			sb_info->ro_len = err;
 			forced_ro = 1;
 		}
 
@@ -96,9 +98,10 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	else {
 		/* Get branch name */
 		err = make_path(arg, part2 - arg, &sb_info->read_only_branch);
-		if (err || !sb_info->read_only_branch) {
+		if (err < 0 || !sb_info->read_only_branch) {
 			return err;
 		}
+		sb_info->ro_len = err;
 	}
 
 	/* Skip : */
@@ -108,7 +111,7 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	if (type) {
 		/* Get branch name */
 		err = make_path(part2, type - part2, &output);
-		if (err || !output) {
+		if (err < 0 || !output) {
 			return err;
 		}
 
@@ -118,6 +121,7 @@ static int get_branches(struct super_block *sb, const char *arg) {
 				return -EINVAL;
 			}
 			sb_info->read_write_branch = output;
+			sb_info->rw_len = err;
 		}
 		else if (strncmp(type + 1, "RO", 2)) {
 			pr_err("Unrecognized branch type: %.2s\n", type + 1);
@@ -129,21 +133,24 @@ static int get_branches(struct super_block *sb, const char *arg) {
 				return -EINVAL;
 			}
 			sb_info->read_only_branch = output;
+			sb_info->ro_len = err;
 		}
 	}
 	else {
 		/* It has no type, adapt given the situation */
 		if (sb_info->read_write_branch) {
 			err = make_path(part2, strlen(part2), &sb_info->read_only_branch);
-			if (err || !sb_info->read_only_branch) {
+			if (err < 0 || !sb_info->read_only_branch) {
 				return err;
 			}
+			sb_info->ro_len = err;
 		}
 		else if (sb_info->read_only_branch) {
 			err = make_path(part2, strlen(part2), &sb_info->read_write_branch);
-			if (err || !sb_info->read_write_branch) {
+			if (err < 0 || !sb_info->read_write_branch) {
 				return err;
 			}
+			sb_info->rw_len = err;
 		}
 	}
 
@@ -154,6 +161,7 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	}
 
 	pr_info("Read-write: %s\nRead-only: %s\n", sb_info->read_write_branch, sb_info->read_only_branch);
+	pr_info("Read-write length: %zu\nRead-only length: %zu\n", sb_info->rw_len, sb_info->ro_len);
 
 	/* Check for branches */
 	filp = filp_open(sb_info->read_only_branch, O_RDONLY, 0);
