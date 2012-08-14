@@ -392,39 +392,11 @@ extern struct file_operations pierrefs_dir_fops;
 	current->fsuid = 0;							\
 	current->fsgid = 0
 /**
- * Switch the current data segment to disable buffers checking
- * To be used when calling a VFS function wanting an usermode
- * buffer
- */
-#define call_usermode()	\
-	oldfs = get_fs();	\
-	set_fs(KERNEL_DS)
-/**
- * Switch back to previous data segment, thanks to the stored value
- */
-#define restore_kernelmode()	\
-	set_fs(oldfs)
-/**
  * Convert a name (relative path name) to an inode number
  * \param[in]	n	The name to translate
  * \return	The associated inode number
  */
 #define name_to_ino(n) murmur_hash_64a(n, strlen(n) * sizeof(n[0]), PIERREFS_SEED)
-/**
- * Wrapper to the vfs_lstat syscall.
- * It first switches user to root
- * and then switches data segment
- * \warning Use it REALLY carefully
- * \param[in]	p	The path to stat
- * \param[out]	b	The kstat struct to fill
- * \return	Nothing, but fills err
- */
-#define super_lstat(p, b)	\
-	push_root();			\
-	call_usermode();		\
-	err = vfs_lstat(p, b);	\
-	restore_kernelmode();	\
-	pop_root()
 /**
  * Kernel mode assertion
  * In case the expression is unverified, kernel panic

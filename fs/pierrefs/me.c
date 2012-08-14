@@ -83,7 +83,6 @@ int create_me(const char *me_path, struct kstat *kstbuf, struct pierrefs_sb_info
 
 int find_me(const char *path, struct pierrefs_sb_info *context, char *me_path, struct kstat *kstbuf) {
 	int err;
-	mm_segment_t oldfs;
 	/* Find name */
 	char *tree_path = strrchr(path, '/');
 
@@ -105,7 +104,9 @@ int find_me(const char *path, struct pierrefs_sb_info *context, char *me_path, s
 	strcat(me_path, tree_path + 1);
 
 	/* Now, try to get properties */
-	super_lstat(me_path, kstbuf);
+	push_root();
+	err = lstat(me_path, kstbuf);
+	pop_root();
 
 	return err;
 }
@@ -131,15 +132,18 @@ int get_file_attr_worker(const char *path, const char *real_path, struct pierref
 	char me;
 	struct kstat kstme;
 	char me_file[PATH_MAX];
-	mm_segment_t oldfs;
 
 	pr_info("get_file_attr_worker: %s, %s, %p, %p\n", path, real_path, context, kstbuf);
 
 	/* Look for a me file */
 	me = (find_me(path, context, me_file, &kstme) > 0);
 
+	pr_info("me file status: %d\n", me);
+
 	/* Get attributes */
-	super_lstat(real_path, kstbuf);
+	push_root();
+	err = lstat(real_path, kstbuf);
+	pop_root();
 	if (err < 0) {
 		return err;
 	}
@@ -199,7 +203,6 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr, s
 	struct kstat kstme;
 	struct file *fd;
 	umode_t mode;
-	mm_segment_t oldfs;
 
 	pr_info("set_me: %s, %s, %p, %p\n", path, real_path, attr, context);
 
@@ -211,7 +214,9 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr, s
 
 	if (!me) {
 		/* Read real file info */
-		super_lstat(real_path, &kstme);
+		push_root();
+		err = lstat(real_path, &kstme);
+		pop_root();
 		if (err < 0) {
 			return err;
 		}

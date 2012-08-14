@@ -141,7 +141,6 @@ int find_file(const char *path, char *real_path, struct pierrefs_sb_info *contex
 	struct kstat kstbuf;
 	char tmp_path[PATH_MAX];
 	char wh_path[PATH_MAX];
-	mm_segment_t oldfs;
 
 	pr_info("find_file: %s, %p, %p, %x\n", path, real_path, context, flags);
 
@@ -155,7 +154,9 @@ int find_file(const char *path, char *real_path, struct pierrefs_sb_info *contex
 			return -ENAMETOOLONG;
 		}
 
-		super_lstat(real_path, &kstbuf);
+		push_root();
+		err = lstat(real_path, &kstbuf);
+		pop_root();
 		if (err < 0) {
 			if (is_flag_set(flags, MUST_READ_WRITE)) {
 				return err;
@@ -178,7 +179,9 @@ int find_file(const char *path, char *real_path, struct pierrefs_sb_info *contex
 			return -ENAMETOOLONG;
 		}
 
-		super_lstat(tmp_path, &kstbuf);
+		push_root();
+		err = lstat(tmp_path, &kstbuf);
+		pop_root();
 		if (err < 0) {
 			/* If file does not exist, even in RO, fail */
 			return err;
@@ -209,7 +212,9 @@ int find_file(const char *path, char *real_path, struct pierrefs_sb_info *contex
 			return -ENAMETOOLONG;
 		}
 
-		super_lstat(real_path, &kstbuf);
+		push_root();
+		err = lstat(real_path, &kstbuf);
+		pop_root();
 		if (err < 0) {
 			return err;
 		}

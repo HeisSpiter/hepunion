@@ -275,7 +275,6 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
 int find_path_worker(const char *path, char *real_path, struct pierrefs_sb_info *context) {
 	/* Try to find that tree */
 	int err;
-	mm_segment_t oldfs;
 	char read_only[PATH_MAX];
 	char tree_path[PATH_MAX];
 	char real_tree_path[PATH_MAX];
@@ -340,11 +339,9 @@ int find_path_worker(const char *path, char *real_path, struct pierrefs_sb_info 
 
 		/* Only create if it doesn't already exist */
 		push_root();
-		call_usermode();
-		if (vfs_lstat(real_path, &kstbuf) < 0) {
+		if (lstat(real_path, &kstbuf) < 0) {
 			/* Get previous dir properties */
-			err = vfs_lstat(read_only, &kstbuf);
-			restore_kernelmode();
+			err = lstat(read_only, &kstbuf);
 			pop_root();
 			if (err < 0) {
 				return err;
@@ -379,10 +376,7 @@ int find_path_worker(const char *path, char *real_path, struct pierrefs_sb_info 
 			}
 
 			dput(dentry);
-			call_usermode();
 		}
-
-		restore_kernelmode();
 		pop_root();
 
 		/* Next iteration (skip /) */
