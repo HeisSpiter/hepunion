@@ -390,21 +390,18 @@ int get_relative_path_for_file(const struct inode *dir, const struct dentry *den
 /* Imported for Linux kernel */
 long mkdir(const char *pathname, struct pierrefs_sb_info *context, int mode) {
 	int error = 0;
-	char * tmp;
 	struct dentry *dentry;
 	struct nameidata nd;
 
 	pr_info("mkdir: %s, %p, %x\n", pathname, context, mode);
 
-	tmp = getname(pathname);
-	if (IS_ERR(tmp))
-		return PTR_ERR(tmp);
-
 	push_root();
-	error = path_lookup(tmp, LOOKUP_PARENT, &nd);
+	error = path_lookup(pathname, LOOKUP_PARENT, &nd);
 	pop_root();
-	if (error)
-		goto out;
+	if (error) {
+		return error;
+	}
+
 	push_root();
 	dentry = lookup_create(&nd, 1);
 	pop_root();
@@ -420,8 +417,6 @@ long mkdir(const char *pathname, struct pierrefs_sb_info *context, int mode) {
 	}
 	mutex_unlock(&nd.dentry->d_inode->i_mutex);
 	path_release(&nd);
-out:
-	putname(tmp);
 
 	return error;
 }
@@ -429,7 +424,6 @@ out:
 /* Imported from Linux kernel */
 long mknod(const char *pathname, struct pierrefs_sb_info *context, int mode, unsigned dev) {
 	int error = 0;
-	char * tmp;
 	struct dentry * dentry;
 	struct nameidata nd;
 
@@ -437,15 +431,14 @@ long mknod(const char *pathname, struct pierrefs_sb_info *context, int mode, uns
 
 	if (S_ISDIR(mode))
 		return -EPERM;
-	tmp = getname(pathname);
-	if (IS_ERR(tmp))
-		return PTR_ERR(tmp);
 
 	push_root();
-	error = path_lookup(tmp, LOOKUP_PARENT, &nd);
+	error = path_lookup(pathname, LOOKUP_PARENT, &nd);
 	pop_root();
-	if (error)
-		goto out;
+	if (error) {
+		return error;
+	}
+
 	push_root();
 	dentry = lookup_create(&nd, 0);
 	pop_root();
@@ -480,8 +473,6 @@ long mknod(const char *pathname, struct pierrefs_sb_info *context, int mode, uns
 	}
 	mutex_unlock(&nd.dentry->d_inode->i_mutex);
 	path_release(&nd);
-out:
-	putname(tmp);
 
 	return error;
 }
@@ -499,41 +490,31 @@ int mkfifo(const char *pathname, struct pierrefs_sb_info *context, int mode) {
 /* Imported from Linux kernel */
 long symlink(const char *oldname, const char *newname, struct pierrefs_sb_info *context) {
 	int error = 0;
-	char * from;
-	char * to;
+	struct dentry *dentry;
+	struct nameidata nd;
 
 	pr_info("symlink: %s, %s, %p\n", oldname, newname, context);
 
-	from = getname(oldname);
-	if(IS_ERR(from))
-		return PTR_ERR(from);
-	to = getname(newname);
-	error = PTR_ERR(to);
-	if (!IS_ERR(to)) {
-		struct dentry *dentry;
-		struct nameidata nd;
-
-		push_root();
-		error = path_lookup(to, LOOKUP_PARENT, &nd);
-		pop_root();
-		if (error)
-			goto out;
-		push_root();
-		dentry = lookup_create(&nd, 0);
-		pop_root();
-		error = PTR_ERR(dentry);
-		if (!IS_ERR(dentry)) {
-			push_root();
-			error = vfs_symlink(nd.dentry->d_inode, dentry, from, S_IALLUGO);
-			pop_root();
-			dput(dentry);
-		}
-		mutex_unlock(&nd.dentry->d_inode->i_mutex);
-		path_release(&nd);
-out:
-		putname(to);
+	push_root();
+	error = path_lookup(newname, LOOKUP_PARENT, &nd);
+	pop_root();
+	if (error) {
+		return error;
 	}
-	putname(from);
+
+	push_root();
+	dentry = lookup_create(&nd, 0);
+	pop_root();
+	error = PTR_ERR(dentry);
+	if (!IS_ERR(dentry)) {
+		push_root();
+		error = vfs_symlink(nd.dentry->d_inode, dentry, oldname, S_IALLUGO);
+		pop_root();
+		dput(dentry);
+	}
+	mutex_unlock(&nd.dentry->d_inode->i_mutex);
+	path_release(&nd);
+
 	return error;
 }
 
@@ -542,21 +523,18 @@ long link(const char *oldname, const char *newname, struct pierrefs_sb_info *con
 	struct dentry *new_dentry;
 	struct nameidata nd, old_nd;
 	int error;
-	char * to;
 
 	pr_info("link: %s, %s, %p\n", oldname, newname, context);
-
-	to = getname(newname);
-	if (IS_ERR(to))
-		return PTR_ERR(to);
 
 	push_root();
 	error = __user_walk(oldname, 0, &old_nd);
 	pop_root();
-	if (error)
-		goto exit;
+	if (error) {
+		return error;
+	}
+
 	push_root();
-	error = path_lookup(to, LOOKUP_PARENT, &nd);
+	error = path_lookup(newname, LOOKUP_PARENT, &nd);
 	pop_root();
 	if (error)
 		goto out;
@@ -578,8 +556,6 @@ out_release:
 	path_release(&nd);
 out:
 	path_release(&old_nd);
-exit:
-	putname(to);
 
 	return error;
 }
