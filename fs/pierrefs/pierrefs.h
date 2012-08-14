@@ -647,10 +647,11 @@ long link(const char *oldname, const char *newname, struct pierrefs_sb_info *con
 /**
  * Implementation taken from the Linux kernel (and simplitied). It's here to query files attributes
  * \param[in]	pathname	Path of which querying attributes
+ * \param[in]	context		Calling context of the FS
  * \param[out]	stat		Queried attributes
  * \return	0 in case of a success, -err otherwise
  */
-int lstat(const char *pathname, struct kstat *stat);
+int lstat(const char *pathname, struct pierrefs_sb_info *context, struct kstat *stat);
 /**
  * Implementation taken from Linux kernel. It's here to allow creation of a directory
  * using pathname.

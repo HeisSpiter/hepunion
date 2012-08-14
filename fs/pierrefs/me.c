@@ -104,9 +104,7 @@ int find_me(const char *path, struct pierrefs_sb_info *context, char *me_path, s
 	strcat(me_path, tree_path + 1);
 
 	/* Now, try to get properties */
-	push_root();
-	err = lstat(me_path, kstbuf);
-	pop_root();
+	err = lstat(me_path, context, kstbuf);
 
 	return err;
 }
@@ -141,9 +139,7 @@ int get_file_attr_worker(const char *path, const char *real_path, struct pierref
 	pr_info("me file status: %d\n", me);
 
 	/* Get attributes */
-	push_root();
-	err = lstat(real_path, kstbuf);
-	pop_root();
+	err = lstat(real_path, context, kstbuf);
 	if (err < 0) {
 		return err;
 	}
@@ -214,9 +210,7 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr, s
 
 	if (!me) {
 		/* Read real file info */
-		push_root();
-		err = lstat(real_path, &kstme);
-		pop_root();
+		err = lstat(real_path, context, &kstme);
 		if (err < 0) {
 			return err;
 		}

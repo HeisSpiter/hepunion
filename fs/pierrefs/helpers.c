@@ -154,9 +154,7 @@ int find_file(const char *path, char *real_path, struct pierrefs_sb_info *contex
 			return -ENAMETOOLONG;
 		}
 
-		push_root();
-		err = lstat(real_path, &kstbuf);
-		pop_root();
+		err = lstat(real_path, context, &kstbuf);
 		if (err < 0) {
 			if (is_flag_set(flags, MUST_READ_WRITE)) {
 				return err;
@@ -179,9 +177,7 @@ int find_file(const char *path, char *real_path, struct pierrefs_sb_info *contex
 			return -ENAMETOOLONG;
 		}
 
-		push_root();
-		err = lstat(tmp_path, &kstbuf);
-		pop_root();
+		err = lstat(tmp_path, context, &kstbuf);
 		if (err < 0) {
 			/* If file does not exist, even in RO, fail */
 			return err;
@@ -212,9 +208,7 @@ int find_file(const char *path, char *real_path, struct pierrefs_sb_info *contex
 			return -ENAMETOOLONG;
 		}
 
-		push_root();
-		err = lstat(real_path, &kstbuf);
-		pop_root();
+		err = lstat(real_path, context, &kstbuf);
 		if (err < 0) {
 			return err;
 		}
@@ -393,16 +387,20 @@ int get_relative_path_for_file(const struct inode *dir, const struct dentry *den
 }
 
 /* Imported for Linux kernel and simplified */
-int lstat(const char *pathname, struct kstat *stat)
+int lstat(const char *pathname, struct pierrefs_sb_info *context, struct kstat *stat)
 {
 	struct nameidata nd;
 	int error;
 
 	pr_info("lstat: %s, %p\n", pathname, stat);
 
+	push_root();
 	error = path_lookup(pathname, 0, &nd);
+	pop_root();
 	if (!error) {
+		push_root();
 		error = vfs_getattr(nd.mnt, nd.dentry, stat);
+		pop_root();
 		path_release(&nd);
 	}
 

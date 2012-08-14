@@ -179,9 +179,7 @@ int find_whiteout(const char *path, struct pierrefs_sb_info *context, char *wh_p
 	strcat(wh_path, tree_path + 1);
 
 	/* Does it exists */
-	push_root();
-	err = lstat(wh_path, &kstbuf);
-	pop_root();
+	err = lstat(wh_path, context, &kstbuf);
 
 	return err;
 }
@@ -200,9 +198,7 @@ int hide_directory_contents(const char *path, struct pierrefs_sb_info *context) 
 	}
 
 	/* If RO even does not exist, all correct */
-	push_root();
-	err = lstat(ro_path, &kstbuf);
-	pop_root();
+	err = lstat(ro_path, context, &kstbuf);
 	if (err < 0) {
 		if (err == -ENOENT) {
 			return 0;

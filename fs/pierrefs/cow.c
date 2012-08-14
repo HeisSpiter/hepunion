@@ -338,11 +338,9 @@ int find_path_worker(const char *path, char *real_path, struct pierrefs_sb_info 
 		strncat(real_path, old_directory, (directory - old_directory) / sizeof(char));
 
 		/* Only create if it doesn't already exist */
-		push_root();
-		if (lstat(real_path, &kstbuf) < 0) {
+		if (lstat(real_path, context, &kstbuf) < 0) {
 			/* Get previous dir properties */
-			err = lstat(read_only, &kstbuf);
-			pop_root();
+			err = lstat(read_only, context, &kstbuf);
 			if (err < 0) {
 				return err;
 			}
