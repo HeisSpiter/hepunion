@@ -398,6 +398,8 @@ int lstat(const char *pathname, struct kstat *stat)
 	struct nameidata nd;
 	int error;
 
+	pr_info("lstat: %s, %p\n", pathname, stat);
+
 	error = path_lookup(pathname, 0, &nd);
 	if (!error) {
 		error = vfs_getattr(nd.mnt, nd.dentry, stat);
