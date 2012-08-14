@@ -92,6 +92,17 @@ static int pierrefs_create(struct inode *dir, struct dentry *dentry, int mode, s
 	/* Now we're done, create the inode */
 	inode = new_inode(dir->i_sb);
 	if (!inode) {
+		dentry = get_path_dentry(real_path, context, LOOKUP_REVAL);
+		if (IS_ERR(dentry)) {
+			release_buffers(context);
+			return err;
+		}
+
+		push_root();
+		vfs_unlink(dentry->d_inode, dentry);
+		pop_root();
+		dput(dentry);
+
 		release_buffers(context);
 		return -ENOMEM;
 	}
@@ -106,6 +117,7 @@ static int pierrefs_create(struct inode *dir, struct dentry *dentry, int mode, s
 	inode->i_blocks = 0;
 	inode->i_blkbits = 0;
 	inode->i_op = &pierrefs_iops;
+	inode->i_fop = &pierrefs_fops;
 	inode->i_mode = mode;
 	inode->i_nlink = 1;
 	inode->i_ino = name_to_ino(path);
@@ -324,6 +336,7 @@ static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry,
 
 static int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 	int err;
+	struct inode *inode;
 	struct pierrefs_sb_info *context = get_context_i(dir);
 	char *path = context->global1;
 	char *real_path = context->global2;
@@ -394,6 +407,47 @@ static int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 		release_buffers(context);
 		return err;
 	}
+
+	/* Now we're done, create the inode */
+	inode = new_inode(dir->i_sb);
+	if (!inode) {
+		dentry = get_path_dentry(real_path, context, LOOKUP_REVAL);
+		if (IS_ERR(dentry)) {
+			release_buffers(context);
+			return err;
+		}
+
+		push_root();
+		vfs_unlink(dentry->d_inode, dentry);
+		pop_root();
+		dput(dentry);
+
+		release_buffers(context);
+		return -ENOMEM;
+	}
+
+	/* And fill it in */
+	dir->i_nlink++;
+	inode->i_uid = current->fsuid;
+	inode->i_gid = current->fsgid;
+	inode->i_mtime = CURRENT_TIME;
+	inode->i_atime = CURRENT_TIME;
+	inode->i_ctime = CURRENT_TIME;
+	inode->i_blocks = 0;
+	inode->i_blkbits = 0;
+	inode->i_op = &pierrefs_dir_iops;
+	inode->i_fop = &pierrefs_dir_fops;
+	inode->i_mode = mode;
+	inode->i_nlink = 1;
+	inode->i_ino = name_to_ino(path);
+#ifdef _DEBUG_
+	inode->i_private = (void *)PIERREFS_MAGIC;
+#endif
+	insert_inode_hash(inode); 
+
+	d_instantiate(dentry, inode);
+	mark_inode_dirty(dir);
+	mark_inode_dirty(inode);
 
 	/* Remove possible .wh. */
 	unlink_whiteout(path, context);
