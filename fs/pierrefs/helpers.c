@@ -156,7 +156,6 @@ int check_exist(const char *pathname, struct pierrefs_sb_info *context, int flag
 
 int find_file(const char *path, char *real_path, struct pierrefs_sb_info *context, char flags) {
 	int err;
-	struct kstat kstbuf;
 	char tmp_path[PATH_MAX];
 	char wh_path[PATH_MAX];
 
@@ -172,7 +171,7 @@ int find_file(const char *path, char *real_path, struct pierrefs_sb_info *contex
 			return -ENAMETOOLONG;
 		}
 
-		err = lstat(real_path, context, &kstbuf);
+		err = check_exist(real_path, context, 0);
 		if (err < 0) {
 			if (is_flag_set(flags, MUST_READ_WRITE)) {
 				return err;
@@ -195,7 +194,7 @@ int find_file(const char *path, char *real_path, struct pierrefs_sb_info *contex
 			return -ENAMETOOLONG;
 		}
 
-		err = lstat(tmp_path, context, &kstbuf);
+		err = check_exist(tmp_path, context, 0);
 		if (err < 0) {
 			/* If file does not exist, even in RO, fail */
 			return err;
@@ -226,7 +225,7 @@ int find_file(const char *path, char *real_path, struct pierrefs_sb_info *contex
 			return -ENAMETOOLONG;
 		}
 
-		err = lstat(real_path, context, &kstbuf);
+		err = check_exist(real_path, context, 0);
 		if (err < 0) {
 			return err;
 		}

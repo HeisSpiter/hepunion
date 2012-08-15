@@ -131,7 +131,6 @@ static int delete_whiteout(void *buf, const char *name, int namlen, loff_t offse
 
 int find_whiteout(const char *path, struct pierrefs_sb_info *context, char *wh_path) {
 	int err;
-	struct kstat kstbuf;
 
 	pr_info("find_whiteout: %s, %p, %p\n", path, context, wh_path);
 
@@ -142,15 +141,12 @@ int find_whiteout(const char *path, struct pierrefs_sb_info *context, char *wh_p
 	}
 
 	/* Does it exists */
-	err = lstat(wh_path, context, &kstbuf);
-
-	return err;
+	return check_exist(wh_path, context, 0);
 }
 
 int hide_directory_contents(const char *path, struct pierrefs_sb_info *context) {
 	int err;
 	struct file *ro_fd;
-	struct kstat kstbuf;
 	char rw_path[PATH_MAX];
 	char ro_path[PATH_MAX];
 
@@ -161,7 +157,7 @@ int hide_directory_contents(const char *path, struct pierrefs_sb_info *context) 
 	}
 
 	/* If RO even does not exist, all correct */
-	err = lstat(ro_path, context, &kstbuf);
+	err = check_exist(ro_path, context, 0);
 	if (err < 0) {
 		if (err == -ENOENT) {
 			return 0;
