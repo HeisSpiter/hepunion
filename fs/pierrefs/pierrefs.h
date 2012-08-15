@@ -580,6 +580,14 @@ int can_remove(const char *path, const char *real_path, struct pierrefs_sb_info 
  */
 int can_traverse(const char *path, struct pierrefs_sb_info *context);
 /**
+ * Check whether the given path exists.
+ * \param[in]	pathname	Pathname to lookup
+ * \param[in]	context		Calling context of the FS
+ * \param[in]	flag		Flag to use for looking up
+ * \return dentry, or -err in case of error
+ */
+int check_exist(const char *pathname, struct pierrefs_sb_info *context, int flag);
+/**
  * Find a file either in RW or RO branch, taking into account whiteout files. It can copyup files if needed.
  * \param[in]	path		Relative path of the file to find
  * \param[out]	real_path	Full path of the file, if found

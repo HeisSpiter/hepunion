@@ -136,6 +136,24 @@ int can_traverse(const char *path, struct pierrefs_sb_info *context) {
 	return 0;
 }
 
+int check_exist(const char *pathname, struct pierrefs_sb_info *context, int flag) {
+	int err;
+	struct nameidata nd;
+
+	pr_info("check_exist: %s, %p, %x\n", pathname, context, flag);
+
+	push_root();
+	err = path_lookup(pathname, flag, &nd);
+	pop_root();
+	if (err) {
+		return err;
+	}
+
+	path_release(&nd);
+
+	return 0;
+}
+
 int find_file(const char *path, char *real_path, struct pierrefs_sb_info *context, char flags) {
 	int err;
 	struct kstat kstbuf;
