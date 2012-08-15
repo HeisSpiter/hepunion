@@ -142,13 +142,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
 						pop_root();
 
 						/* Delete copyup */
-						dentry = get_path_dentry(rw_path, context, LOOKUP_REVAL);
-						if (!IS_ERR(dentry)) {
-							push_root();
-							vfs_unlink(dentry->d_inode, dentry);
-							pop_root();
-							dput(dentry);
-						}
+						unlink(rw_path, context);
 
 						return rcount;
 					}
@@ -182,15 +176,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
 			/* Recreate dir structure */
 			ro_fd = open_worker(ro_path, context, O_RDONLY);
 			if (IS_ERR(ro_fd)) {
-				dentry = get_path_dentry(rw_path, context, LOOKUP_REVAL);
-				if (IS_ERR(dentry)) {
-					return PTR_ERR(ro_fd);
-				}
-
-				push_root();
-				vfs_unlink(dentry->d_inode, dentry);
-				pop_root();
-				dput(dentry);
+				unlink(rw_path, context);
 				return PTR_ERR(ro_fd);
 			}
 
@@ -205,15 +191,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
 
 			/* Handle failure */
 			if (err < 0) {
-				dentry = get_path_dentry(rw_path, context, LOOKUP_REVAL);
-				if (IS_ERR(dentry)) {
-					return err;
-				}
-
-				push_root();
-				vfs_unlink(dentry->d_inode, dentry);
-				pop_root();
-				dput(dentry);
+				unlink(rw_path, context);
 				return err;
 			}
 
@@ -258,15 +236,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
 
 	/* Check if there was a me and remove */
 	if (find_me(path, context, me_path, &kstbuf) >= 0) {
-		dentry = get_path_dentry(me_path, context, LOOKUP_REVAL);
-		if (IS_ERR(dentry)) {
-			return 0;
-		}
-
-		push_root();
-		vfs_unlink(dentry->d_inode, dentry);
-		pop_root();
-		dput(dentry);
+		unlink(me_path, context);
 	}
 
 	return 0;

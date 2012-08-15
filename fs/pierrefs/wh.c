@@ -112,8 +112,6 @@ int create_whiteout(const char *path, char *wh_path, struct pierrefs_sb_info *co
 }
 
 static int delete_whiteout(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
-	int err;
-	struct dentry *dentry;
 	char wh_path[PATH_MAX];
 	struct readdir_context *ctx = (struct readdir_context*)buf;
 	struct pierrefs_sb_info *context = ctx->context;
@@ -127,19 +125,8 @@ static int delete_whiteout(void *buf, const char *name, int namlen, loff_t offse
 		return -ENAMETOOLONG;
 	}
 
-	/* Get its dentry */
-	dentry = get_path_dentry(wh_path, context, LOOKUP_REVAL);
-	if (IS_ERR(dentry)) {
-		return PTR_ERR(dentry);
-	}
-
 	/* Remove file */
-	push_root();
-	err = vfs_unlink(dentry->d_inode, dentry);
-	pop_root();
-	dput(dentry);
-
-	return err;
+	return unlink(wh_path, context);
 }
 
 int find_whiteout(const char *path, struct pierrefs_sb_info *context, char *wh_path) {
@@ -271,7 +258,6 @@ int unlink_rw_file(const char *path, const char *rw_path, struct pierrefs_sb_inf
 	char has_ro = 0;
 	char ro_path[PATH_MAX];
 	char wh_path[PATH_MAX];
-	struct dentry *dentry;
 
 	pr_info("unlink_rw_file: %s, %s, %p, %u\n", path, rw_path, context, has_ro_sure);
 
@@ -289,18 +275,8 @@ int unlink_rw_file(const char *path, const char *rw_path, struct pierrefs_sb_inf
 		return err;
 	}
 
-	/* Get file dentry */
-	dentry = get_path_dentry(rw_path, context, LOOKUP_REVAL);
-	if (IS_ERR(dentry)) {
-		return PTR_ERR(dentry);
-	}
-
 	/* Remove file */
-	push_root();
-	err = vfs_unlink(dentry->d_inode, dentry);
-	pop_root();
-	dput(dentry);
-
+	err = unlink(rw_path, context);
 	if (err < 0) {
 		return err;
 	}
@@ -316,7 +292,6 @@ int unlink_rw_file(const char *path, const char *rw_path, struct pierrefs_sb_inf
 int unlink_whiteout(const char *path, struct pierrefs_sb_info *context) {
 	int err;
 	char wh_path[PATH_MAX];
-	struct dentry *dentry;
 
 	pr_info("unlink_whiteout: %s, %p\n", path, context);
 
@@ -326,17 +301,6 @@ int unlink_whiteout(const char *path, struct pierrefs_sb_info *context) {
 		return err;
 	}
 
-	/* Get file dentry */
-	dentry = get_path_dentry(wh_path, context, LOOKUP_REVAL);
-	if (IS_ERR(dentry)) {
-		return PTR_ERR(dentry);
-	}
-
 	/* Now unlink whiteout */
-	push_root();
-	err = vfs_unlink(dentry->d_inode, dentry);
-	pop_root();
-	dput(dentry);
-
-	return err;
+	return unlink(wh_path, context);
 }

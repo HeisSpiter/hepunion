@@ -99,17 +99,7 @@ static int pierrefs_create(struct inode *dir, struct dentry *dentry, int mode, s
 	pop_root();
 
 	if (err < 0) {
-		dentry = get_path_dentry(real_path, context, LOOKUP_REVAL);
-		if (IS_ERR(dentry)) {
-			release_buffers(context);
-			return err;
-		}
-
-		push_root();
-		vfs_unlink(dentry->d_inode, dentry);
-		pop_root();
-		dput(dentry);
-
+		unlink(real_path, context);
 		release_buffers(context);
 		return err;
 	}
@@ -117,17 +107,7 @@ static int pierrefs_create(struct inode *dir, struct dentry *dentry, int mode, s
 	/* Now we're done, create the inode */
 	inode = new_inode(dir->i_sb);
 	if (!inode) {
-		dentry = get_path_dentry(real_path, context, LOOKUP_REVAL);
-		if (IS_ERR(dentry)) {
-			release_buffers(context);
-			return err;
-		}
-
-		push_root();
-		vfs_unlink(dentry->d_inode, dentry);
-		pop_root();
-		dput(dentry);
-
+		unlink(real_path, context);
 		release_buffers(context);
 		return -ENOMEM;
 	}
@@ -425,7 +405,7 @@ static int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 		}
 
 		push_root();
-		vfs_unlink(dentry->d_inode, dentry);
+		vfs_rmdir(dentry->d_inode, dentry);
 		pop_root();
 		dput(dentry);
 
@@ -443,7 +423,7 @@ static int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 		}
 
 		push_root();
-		vfs_unlink(dentry->d_inode, dentry);
+		vfs_rmdir(dentry->d_inode, dentry);
 		pop_root();
 		dput(dentry);
 
