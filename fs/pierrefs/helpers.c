@@ -687,7 +687,7 @@ long unlink(const char *pathname, struct pierrefs_sb_info *context) {
 	pop_root();
 	dput(dentry);
 
-	return 0;
+	return err;
 }
 
 #ifdef _DEBUG_
