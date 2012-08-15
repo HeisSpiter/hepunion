@@ -11,6 +11,31 @@
 
 #include "pierrefs.h"
 
+static int pierrefs_closedir(struct inode *inode, struct file *filp) {
+	struct readdir_file *entry;
+	struct opendir_context *ctx = (struct opendir_context *)filp->private_data;
+
+	pr_info("pierrefs_closedir: %p, %p\n", inode, filp);
+
+	/* First, clean all the lists */
+	while (!list_empty(&ctx->whiteouts_head)) {
+		entry = list_entry(ctx->whiteouts_head.next, struct readdir_file, files_entry);
+		list_del(&entry->files_entry);
+		kfree(entry);
+	}
+
+	while (!list_empty(&ctx->files_head)) {
+		entry = list_entry(ctx->files_head.next, struct readdir_file, files_entry);
+		list_del(&entry->files_entry);
+		kfree(entry);
+	}
+
+	/* Then, release the context itself */
+	kfree(ctx);
+
+	return 0;
+}
+
 static int pierrefs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nameidata) {
 	int err;
 	struct pierrefs_sb_info *context = get_context_i(dir);
@@ -992,12 +1017,15 @@ static int pierrefs_readdir(struct file *filp, void *dirent, filldir_t filldir) 
 	/* Reset error */
 	err = 0;
 
+	pr_info("Looking for entry: %lld\n", filp->f_pos);
+
 	/* Try to find the requested entry now */
 	lentry = ctx->files_head.next;
 	while (lentry != &ctx->files_head) {
 		/* Found the entry - return it */
 		if (i == filp->f_pos) {
 			entry = list_entry(lentry, struct readdir_file, files_entry);
+			pr_info("Found: %s\n", entry->d_name);
 			filldir(dirent, entry->d_name, entry->d_reclen, i, entry->ino, entry->type);
 			/* Update position */
 			++filp->f_pos;
@@ -1023,6 +1051,7 @@ cleanup:
 			kfree(entry);
 		}
 	}
+
 	return err;
 }
 
@@ -1181,6 +1210,68 @@ static int pierrefs_statfs(struct dentry *dentry, struct kstatfs *buf) {
 	return 0;
 }
 
+static int pierrefs_unlink(struct inode *dir, struct dentry *dentry) {
+	int err;
+	struct pierrefs_sb_info *context = get_context_i(dir);
+	char *path = context->global1;
+	char *real_path = context->global2;
+	struct kstat kstbuf;
+	char me_path[PATH_MAX];
+	char wh_path[PATH_MAX];
+
+	pr_info("pierrefs_unlink: %p, %p\n", dir, dentry);
+
+	will_use_buffers(context);
+	validate_inode(dir);
+
+	/* Try to find the file first */
+	err = get_relative_path_for_file(dir, dentry, context, path, 1);
+	if (err < 0) {
+		release_buffers(context);
+		return err;
+	}
+
+	/* Then, find file */
+	err = find_file(path, real_path, context, 0);
+	switch (err) {
+		int has_me = 0;
+		/* On RW, just remove it */
+		case READ_WRITE_COPYUP: /* Can't happen */
+		case READ_WRITE:
+			unlink_rw_file(path, real_path, context, 0);
+			break;
+
+		/* On RO, create a whiteout */
+		case READ_ONLY:
+			/* Check if user can unlink file */
+			if (!can_remove(path, real_path, context)) {
+				break;
+			}
+
+			/* Get me first */
+			if (find_me(path, context, me_path, &kstbuf) >= 0) {
+				has_me = 1;
+				/* Delete it */
+				if (unlink(me_path, context)) {
+					break;
+				}
+			}
+
+			/* Now, create whiteout */
+			err = create_whiteout(path, wh_path, context);
+			if (err < 0 && has_me) {
+				create_me(me_path, &kstbuf, context);
+			}
+			break;
+
+		default:
+			/* Nothing to do */
+			break;
+	}
+
+	return err;
+}
+
 struct inode_operations pierrefs_iops = {
 	.getattr	= pierrefs_getattr,
 	.permission	= pierrefs_permission,
@@ -1188,6 +1279,7 @@ struct inode_operations pierrefs_iops = {
 	.readlink	= generic_readlink, /* dentry will already point on the right file */
 #endif
 	.setattr	= pierrefs_setattr,
+	.unlink		= pierrefs_unlink,
 };
 
 struct inode_operations pierrefs_dir_iops = {
@@ -1219,4 +1311,5 @@ struct file_operations pierrefs_fops = {
 struct file_operations pierrefs_dir_fops = {
 	.open		= pierrefs_opendir,
 	.readdir	= pierrefs_readdir,
+	.release	= pierrefs_closedir,
 };

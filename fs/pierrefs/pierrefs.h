@@ -714,6 +714,14 @@ long readlink(const char *path, char *buf, struct pierrefs_sb_info *context, int
  */
 long symlink(const char *oldname, const char *newname, struct pierrefs_sb_info *context);
 /**
+ * Implementation taken from Linux kernel. It's here to allow deletion of a file
+ * using pathname.
+ * \param[in]	pathname	File to delete
+ * \param[in]	context		Calling context of the FS
+ * \return	0 in case of a success, -err otherwise
+ */
+long unlink(const char *pathname, struct pierrefs_sb_info *context);
+/**
  * Worker for debug purpose. It first checks opening mode and branch, and then call open.
  * This is used to catch bad calls to RO branch
  * \param[in]	pathname	File to open
@@ -789,6 +797,14 @@ int dbg_symlink(const char *oldpath, const char *newpath, struct pierrefs_sb_inf
 int dbg_link(const char *oldpath, const char *newpath, struct pierrefs_sb_info *context);
 
 /* Functions in wh.c */
+/**
+ * Delete a file on RO by creating a whiteout
+ * \param[in]	path	The file to delete
+ * \param[out]	wh_path	The whiteout path
+ * \param[in]	context	Calling context of the FS
+ * \return	-1 in case of a failure, 0 otherwise. errno is set
+ */
+int create_whiteout(const char *path, char *wh_path, struct pierrefs_sb_info *context);
 /**
  * Find the whiteout that might hide a file.
  * \param[in]	path	Relative path of the file to check

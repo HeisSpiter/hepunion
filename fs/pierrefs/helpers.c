@@ -654,6 +654,25 @@ long readlink(const char *path, char *buf, struct pierrefs_sb_info *context, int
 	return error;
 }
 
+long unlink(const char *pathname, struct pierrefs_sb_info *context) {
+	int err;
+	struct dentry *dentry;
+
+	/* Get file dentry */
+	dentry = get_path_dentry(pathname, context, LOOKUP_REVAL);
+	if (IS_ERR(dentry)) {
+		return PTR_ERR(dentry);
+	}
+
+	/* Remove file */
+	push_root();
+	err = vfs_unlink(dentry->d_inode, dentry);
+	pop_root();
+	dput(dentry);
+
+	return 0;
+}
+
 #ifdef _DEBUG_
 struct file* dbg_open(const char *pathname, const struct pierrefs_sb_info *context, int flags) {
 	pr_info("dbg_open: %s, %p, %x\n", pathname, context, flags);
