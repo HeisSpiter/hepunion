@@ -203,8 +203,8 @@ int find_file(const char *path, char *real_path, struct pierrefs_sb_info *contex
 		if (!is_flag_set(flags, IGNORE_WHITEOUT)) {
 			/* Check whether it was deleted */
 			err = find_whiteout(path, context, wh_path);
-			if (err < 0) {
-				return err;
+			if (err == 0) {
+				return -ENOENT;
 			}
 		}
 
