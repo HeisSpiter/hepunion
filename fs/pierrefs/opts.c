@@ -524,10 +524,11 @@ static int pierrefs_mknod(struct inode *dir, struct dentry *dentry, int mode, de
 }
 
 static int pierrefs_open(struct inode *inode, struct file *file) {
-	int err;
+	int err, origin;
 	struct pierrefs_sb_info *context = get_context_i(inode);
 	char *path = context->global1;
 	char *real_path = context->global2;
+	short is_write_op = (file->f_flags & (O_WRONLY | O_RDWR));
 
 	pr_info("pierrefs_open: %p, %p\n", inode, file);
 
@@ -545,10 +546,21 @@ static int pierrefs_open(struct inode *inode, struct file *file) {
 	err = get_relative_path(inode, file->f_dentry, context, path, 1);
 
 	/* Get real file path */
-	err = find_file(path, real_path, context, 0);
-	if (err < 0) {
+	origin = find_file(path, real_path, context, (is_write_op ? CREATE_COPYUP : 0));
+	if (origin < 0) {
+		pr_info("Failed!\n");
 		release_buffers(context);
-		return err;
+		return origin;
+	}
+
+	/* If copyup created, check access */
+	if (origin == READ_WRITE_COPYUP) {
+		err = can_create(path, real_path, context);
+		if (err < 0) {
+			unlink_copyup(path, real_path, context);
+			release_buffers(context);
+			return err;
+		}
 	}
 
 	/* Really open the file.
@@ -557,10 +569,16 @@ static int pierrefs_open(struct inode *inode, struct file *file) {
 	 * to maintain data consistency and to forward requests on
 	 * the file to the lower file system.
 	 */
+	pr_info("Will open... %s\n", real_path);
 	file->private_data = open_worker_2(real_path, context, file->f_flags, file->f_mode);
 	if (IS_ERR(file->private_data)) {
 		err = PTR_ERR(file->private_data);
 		file->private_data = 0;
+
+		if (origin == READ_WRITE_COPYUP) {
+			unlink_copyup(path, real_path, context);
+		}
+
 		release_buffers(context);
 		return err;
 	}
