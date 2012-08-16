@@ -472,6 +472,14 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
  * \return	0 in case of a success, -err in case of error
  */
 int find_path(const char *path, char *real_path, struct pierrefs_sb_info *context);
+/**
+ * Delete a copyup but restore attributes of the file through a me if required
+ * \param[in]	path		Relative path of the file
+ * \param[in]	copyup_path	Complete path of the copyup
+ * \param[in]	context		Calling context of the FS
+ * \return	0 in case of a success, -err in case of error
+ */
+int unlink_copyup(const char *path, const char *copyup_path, struct pierrefs_sb_info *context);
 
 /* Functions in me.c */
 /**

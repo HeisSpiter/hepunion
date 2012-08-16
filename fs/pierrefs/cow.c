@@ -370,3 +370,34 @@ int find_path(const char *path, char *real_path, struct pierrefs_sb_info *contex
 		return find_path_worker(path, tmp_path, context);
 	}
 }
+
+int unlink_copyup(const char *path, const char *copyup_path, struct pierrefs_sb_info *context) {
+	int err;
+	struct kstat kstbuf;
+	char real_path[PATH_MAX];
+
+	pr_info("unlink_copyup: %s, %s\n", path, copyup_path);
+
+	/* First get copyup attributes */
+	err = lstat(copyup_path, context, &kstbuf);
+	if (err < 0) {
+		return err;
+	}
+
+	/* Then unlink it */
+	err = unlink(copyup_path, context);
+	if (err < 0) {
+		return err;
+	}
+
+	/* Now, find RO file */
+	if (find_file(path, real_path, context, 0) == -ENOENT) {
+		/* File doesn't exist anylonger?
+		 * Don't bother and work less
+		 */
+		return 0;
+	}
+
+	/* Create me if required */
+	return set_me(path, real_path, &kstbuf, context, MODE | TIME | OWNER);
+}
