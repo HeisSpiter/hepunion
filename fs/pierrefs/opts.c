@@ -1052,6 +1052,18 @@ cleanup:
 	return err;
 }
 
+static ssize_t pierrefs_readv(struct file *file, const struct iovec *vector, unsigned long count, loff_t *offset) {
+	struct file *real_file = (struct file *)file->private_data;
+	ssize_t ret;
+
+	pr_info("pierrefs_readv: %p, %p, %lu, %p(%llx)\n", file, vector, count, offset, *offset);
+
+	ret = vfs_readv(real_file, vector, count, offset);
+	file->f_pos = real_file->f_pos;
+
+	return ret;
+}
+
 static int pierrefs_revalidate(struct dentry *dentry, struct nameidata *nd) {
 	pr_info("pierrefs_revalidate: %p, %p\n", dentry, nd);
 
@@ -1291,6 +1303,18 @@ static ssize_t pierrefs_write(struct file *file, const char __user *buf, size_t 
 	return ret;
 }
 
+static ssize_t pierrefs_writev(struct file *file, const struct iovec *vector, unsigned long count, loff_t *offset) {
+	struct file *real_file = (struct file *)file->private_data;
+	ssize_t ret;
+
+	pr_info("pierrefs_writev: %p, %p, %lu, %p(%llx)\n", file, vector, count, offset, *offset);
+
+	ret = vfs_writev(real_file, vector, count, offset);
+	file->f_pos = real_file->f_pos;
+
+	return ret;
+}
+
 struct inode_operations pierrefs_iops = {
 	.getattr	= pierrefs_getattr,
 	.permission	= pierrefs_permission,
@@ -1326,8 +1350,10 @@ struct file_operations pierrefs_fops = {
 	.llseek		= pierrefs_llseek,
 	.open		= pierrefs_open,
 	.read		= pierrefs_read,
+	.readv		= pierrefs_readv,
 	.release	= pierrefs_close,
 	.write		= pierrefs_write,
+	.writev		= pierrefs_writev,
 };
 
 struct file_operations pierrefs_dir_fops = {
