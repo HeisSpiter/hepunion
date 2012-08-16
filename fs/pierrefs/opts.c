@@ -261,16 +261,15 @@ static int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct de
 }
 
 static loff_t pierrefs_llseek(struct file *file, loff_t offset, int origin) {
-	int err = -EINVAL;
 	struct file *real_file = (struct file *)file->private_data;
+	loff_t ret;
 
 	pr_info("pierrefs_llseek: %p, %llx, %x\n", file, offset, origin);
 
-	if (real_file->f_op->llseek) {
-		err = real_file->f_op->llseek(real_file, offset, origin);
-	}
+	ret = vfs_llseek(real_file, offset, origin);
+	file->f_pos = real_file->f_pos;
 
-	return err;
+	return ret;
 }
 
 static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nameidata) {
@@ -694,15 +693,13 @@ static int pierrefs_permission(struct inode *inode, int mask, struct nameidata *
 }
 
 static ssize_t pierrefs_read(struct file *file, char __user *buf, size_t count, loff_t *offset) {
-	int err = -EINVAL;
 	struct file *real_file = (struct file *)file->private_data;
+	ssize_t ret;
 
-	pr_info("pierrefs_read: %p, %p, %zu, %p(%llx)\n", file, buf, count, offset, *offset);
-	if (real_file->f_op->read) {
-		err = real_file->f_op->read(real_file, buf, count, offset);
-	}
+	ret = vfs_read(real_file, buf, count, offset);
+	file->f_pos = real_file->f_pos;
 
-	return err;
+	return ret;
 }
 
 static void pierrefs_read_inode(struct inode *inode) {
@@ -1283,15 +1280,15 @@ static int pierrefs_unlink(struct inode *dir, struct dentry *dentry) {
 }
 
 static ssize_t pierrefs_write(struct file *file, const char __user *buf, size_t count, loff_t *offset) {
-	int err = -EINVAL;
 	struct file *real_file = (struct file *)file->private_data;
+	ssize_t ret;
 
 	pr_info("pierrefs_write: %p, %p, %zu, %p(%llx)\n", file, buf, count, offset, *offset);
-	if (real_file->f_op->write) {
-		err = real_file->f_op->write(real_file, buf, count, offset);
-	}
 
-	return err;
+	ret = vfs_write(real_file, buf, count, offset);
+	file->f_pos = real_file->f_pos;
+
+	return ret;
 }
 
 struct inode_operations pierrefs_iops = {
