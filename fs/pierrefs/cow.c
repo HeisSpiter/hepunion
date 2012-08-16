@@ -71,6 +71,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
 	struct dentry *dentry;
 	struct iattr attr;
 	struct readdir_context ctx;
+	mm_segment_t oldfs;
 
 	pr_info("create_copyup: %s, %s, %s, %p\n", path, ro_path, rw_path, context);
 
@@ -126,14 +127,28 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
 				 */
 				for (;;) {
 					push_root();
+					call_usermode();
 					rcount = vfs_read(ro_fd, buf, MAXSIZE, &ro_fd->f_pos);
+					restore_kernelmode();
 					pop_root();
 					if (rcount < 0) {
+						push_root();
+						filp_close(ro_fd, 0);
+						filp_close(rw_fd, 0);
+						pop_root();
+
+						/* Delete copyup */
+						unlink(rw_path, context);
+
+						return rcount;
+					} else if (rcount == 0) {
 						break;
 					}
 
 					push_root();
+					call_usermode();
 					rcount = vfs_write(rw_fd, buf, rcount, &rw_fd->f_pos);
+					restore_kernelmode();
 					pop_root();
 					if (rcount < 0) {
 						push_root();
