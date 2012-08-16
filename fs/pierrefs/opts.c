@@ -11,6 +11,14 @@
 
 #include "pierrefs.h"
 
+static int pierrefs_close(struct inode *inode, struct file *filp) {
+	struct file *real_file = (struct file *)filp->private_data;
+
+	pr_info("pierrefs_close: %p, %p\n", inode, filp);
+
+	return filp_close(real_file, 0);
+}
+
 static int pierrefs_closedir(struct inode *inode, struct file *filp) {
 	struct readdir_file *entry;
 	struct opendir_context *ctx = (struct opendir_context *)filp->private_data;
@@ -685,6 +693,18 @@ static int pierrefs_permission(struct inode *inode, int mask, struct nameidata *
 	return err;
 }
 
+static ssize_t pierrefs_read(struct file *file, char __user *buf, size_t count, loff_t *offset) {
+	int err = -EINVAL;
+	struct file *real_file = (struct file *)file->private_data;
+
+	pr_info("pierrefs_read: %p, %p, %zu, %p(%llx)\n", file, buf, count, offset, *offset);
+	if (real_file->f_op->read) {
+		err = real_file->f_op->read(real_file, buf, count, offset);
+	}
+
+	return err;
+}
+
 static void pierrefs_read_inode(struct inode *inode) {
 	int err;
 	struct kstat kstbuf;
@@ -1262,6 +1282,18 @@ static int pierrefs_unlink(struct inode *dir, struct dentry *dentry) {
 	return err;
 }
 
+static ssize_t pierrefs_write(struct file *file, const char __user *buf, size_t count, loff_t *offset) {
+	int err = -EINVAL;
+	struct file *real_file = (struct file *)file->private_data;
+
+	pr_info("pierrefs_write: %p, %p, %zu, %p(%llx)\n", file, buf, count, offset, *offset);
+	if (real_file->f_op->write) {
+		err = real_file->f_op->write(real_file, buf, count, offset);
+	}
+
+	return err;
+}
+
 struct inode_operations pierrefs_iops = {
 	.getattr	= pierrefs_getattr,
 	.permission	= pierrefs_permission,
@@ -1296,6 +1328,9 @@ struct dentry_operations pierrefs_dops = {
 struct file_operations pierrefs_fops = {
 	.llseek		= pierrefs_llseek,
 	.open		= pierrefs_open,
+	.read		= pierrefs_read,
+	.release	= pierrefs_close,
+	.write		= pierrefs_write,
 };
 
 struct file_operations pierrefs_dir_fops = {
