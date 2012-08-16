@@ -1306,6 +1306,7 @@ static int pierrefs_unlink(struct inode *dir, struct dentry *dentry) {
         mark_inode_dirty(dentry->d_inode);
 	}
 
+	release_buffers(context);
 	return err;
 }
 
@@ -1340,7 +1341,6 @@ struct inode_operations pierrefs_iops = {
 	.readlink	= generic_readlink, /* dentry will already point on the right file */
 #endif
 	.setattr	= pierrefs_setattr,
-	.unlink		= pierrefs_unlink,
 };
 
 struct inode_operations pierrefs_dir_iops = {
@@ -1353,6 +1353,7 @@ struct inode_operations pierrefs_dir_iops = {
 	.permission	= pierrefs_permission,
 	.setattr	= pierrefs_setattr,
 	.symlink	= pierrefs_symlink,
+	.unlink		= pierrefs_unlink,
 };
 
 struct super_operations pierrefs_sops = {
