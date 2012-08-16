@@ -1218,13 +1218,14 @@ static int pierrefs_unlink(struct inode *dir, struct dentry *dentry) {
 		/* On RW, just remove it */
 		case READ_WRITE_COPYUP: /* Can't happen */
 		case READ_WRITE:
-			unlink_rw_file(path, real_path, context, 0);
+			err = unlink_rw_file(path, real_path, context, 0);
 			break;
 
 		/* On RO, create a whiteout */
 		case READ_ONLY:
 			/* Check if user can unlink file */
-			if (!can_remove(path, real_path, context)) {
+			err = can_remove(path, real_path, context);
+			if (err < 0) {
 				break;
 			}
 
@@ -1232,7 +1233,8 @@ static int pierrefs_unlink(struct inode *dir, struct dentry *dentry) {
 			if (find_me(path, context, me_path, &kstbuf) >= 0) {
 				has_me = 1;
 				/* Delete it */
-				if (unlink(me_path, context)) {
+				err = unlink(me_path, context);
+				if (err < 0) {
 					break;
 				}
 			}
@@ -1247,6 +1249,14 @@ static int pierrefs_unlink(struct inode *dir, struct dentry *dentry) {
 		default:
 			/* Nothing to do */
 			break;
+	}
+
+	/* Kill the inode now */
+	if (err == 0) {
+		dir->i_nlink--;
+		mark_inode_dirty(dir);
+        dentry->d_inode->i_nlink--;
+        mark_inode_dirty(dentry->d_inode);
 	}
 
 	return err;
