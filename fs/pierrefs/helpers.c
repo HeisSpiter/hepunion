@@ -700,9 +700,11 @@ long rmdir(const char *pathname, struct pierrefs_sb_info *context) {
 	}
 
 	/* Remove directory */
+	mutex_lock_nested(&dir->i_mutex, I_MUTEX_PARENT);
 	push_root();
 	err = vfs_rmdir(dir, dentry);
 	pop_root();
+	mutex_unlock(&dir->i_mutex);
 	if (lookup) {
 		path_release(&nd);
 	}
@@ -740,9 +742,11 @@ long unlink(const char *pathname, struct pierrefs_sb_info *context) {
 	}
 
 	/* Remove file */
+	mutex_lock_nested(&dir->i_mutex, I_MUTEX_PARENT);
 	push_root();
 	err = vfs_unlink(dir, dentry);
 	pop_root();
+	mutex_unlock(&dir->i_mutex);
 	if (lookup) {
 		path_release(&nd);
 	}
