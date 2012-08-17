@@ -671,6 +671,46 @@ long readlink(const char *path, char *buf, struct pierrefs_sb_info *context, int
 	return error;
 }
 
+long rmdir(const char *pathname, struct pierrefs_sb_info *context) {
+	int err;
+	short lookup = 0;
+	struct inode *dir;
+	struct nameidata nd;
+	struct dentry *dentry;
+
+	pr_info("rmdir: %s, %p\n", pathname, context);
+
+	/* Get dir dentry */
+	dentry = get_path_dentry(pathname, context, LOOKUP_REVAL);
+	if (IS_ERR(dentry)) {
+		return PTR_ERR(dentry);
+	}
+
+	/* Get parent inode */
+	dir = dentry->d_parent->d_inode;
+	if (dir == NULL) {
+		err = path_lookup(pathname, LOOKUP_PARENT, &nd);
+		if (err) {
+			dput(dentry);
+			return err;
+		}
+
+		dir = nd.dentry->d_inode;
+		lookup = 1;
+	}
+
+	/* Remove directory */
+	push_root();
+	err = vfs_rmdir(nd.dentry->d_inode, dentry);
+	pop_root();
+	if (lookup) {
+		path_release(&nd);
+	}
+	dput(dentry);
+
+	return err;
+}
+
 long unlink(const char *pathname, struct pierrefs_sb_info *context) {
 	int err;
 	short lookup = 0;

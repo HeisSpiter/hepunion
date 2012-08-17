@@ -737,6 +737,14 @@ long mknod(const char *pathname, struct pierrefs_sb_info *context, int mode, uns
  */
 long readlink(const char *path, char *buf, struct pierrefs_sb_info *context, int bufsiz);
 /**
+ * Implementation taken from Linux kernel. It's here to allow deletion of a directory
+ * using pathname.
+ * \param[in]	pathname	Directory to delete
+ * \param[in]	context		Calling context of the FS
+ * \return	0 in case of a success, -err otherwise
+ */
+long rmdir(const char *pathname, struct pierrefs_sb_info *context);
+/**
  * Implementation taken from Linux kernel. It's here to allow creation of a symlink
  * using pathname.
  * \param[in]	oldname	Target of the symlink
