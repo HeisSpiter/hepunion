@@ -1095,24 +1095,23 @@ static int pierrefs_rmdir(struct inode *dir, struct dentry *dentry) {
 			/* Check if RO exists */
 			if (find_file(path, ro_path, context, MUST_READ_ONLY) >= 0) {
 				has_ro = 1;
-				/* Read dir attributes */
-				if (lstat(real_path, context, &kstbuf) == -1) {
-					break;
-				}
 			}
 
 			/* Check if user can remove dir */
-			if (!can_remove(path, real_path, context)) {
+			err = can_remove(path, real_path, context);
+			if (err < 0) {
 				break;
 			}
 
 			/* If RO is present, check for emptyness */
-			if (!is_empty_dir(path, real_path, ro_path, context)) {
+			err = is_empty_dir(path, (has_ro ? ro_path : NULL), real_path, context);
+			if (err < 0) {
+				err = -ENOTEMPTY;
 				break;
 			}
 
 			/* If with have RO, first create whiteout */
-			if (has_ro && create_whiteout(path, wh_path, context) == -1) {
+			if (has_ro && create_whiteout(path, wh_path, context) < 0) {
 				break;
 			}
 
@@ -1131,7 +1130,8 @@ static int pierrefs_rmdir(struct inode *dir, struct dentry *dentry) {
 			}
 
 			/* Check for directory emptyness */
-			if (!is_empty_dir(path, real_path, NULL, context)) {
+			err = is_empty_dir(path, real_path, NULL, context);
+			if (err < 0) {
 				err = -ENOTEMPTY;
 				break;
 			}

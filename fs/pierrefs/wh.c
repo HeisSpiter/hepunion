@@ -35,18 +35,35 @@ static int check_whiteout(void *buf, const char *name, int namlen, loff_t offset
 
 	pr_info("check_whiteout: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
 
+	/* Ignore specials */
+	if (is_special(name, namlen)) {
+		return 0;
+	}
+
 	/* Get file path */
 	if (snprintf(file_path, PATH_MAX, "%s%s", ctx->path, name) > PATH_MAX) {
 		return -ENAMETOOLONG;
 	}
 
-	/* Look for whiteout - return 1 for non-existant */
-	return (find_whiteout(file_path, ctx->context, wh_path) < 0);
+	/* Look for whiteout */
+	return find_whiteout(file_path, ctx->context, wh_path);
 }
 
 static int check_writable(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
 	pr_info("check_writable: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
-	return is_whiteout(name, namlen);
+
+	/* Consider empty if whiteout */
+	if (is_whiteout(name, namlen)) {
+		return 0;
+	}
+
+	/* Ignore specials */
+	if (is_special(name, namlen)) {
+		return 0;
+	}
+
+	/* Otherwise, deny */
+	return -ENOTEMPTY;
 }
 
 static int create_whiteout_worker(const char *wh_path, struct pierrefs_sb_info *context) {
@@ -198,28 +215,30 @@ static int hide_entry(void *buf, const char *name, int namlen, loff_t offset, u6
 }
 
 int is_empty_dir(const char *path, const char *ro_path, const char *rw_path, struct pierrefs_sb_info *context) {
-	int err;
+	int err = 0;
 	struct file *ro_fd;
 	struct file *rw_fd;
 	struct readdir_context ctx;
 
 	pr_info("is_empty_dir: %s, %s, %s, %p\n", path, ro_path, rw_path, context);
 
-	ro_fd = open_worker(ro_path, context, O_RDONLY);
-	if (IS_ERR(ro_fd)) {
-		return PTR_ERR(ro_fd);
-	}
+	if (ro_path) {
+		ro_fd = open_worker(ro_path, context, O_RDONLY);
+		if (IS_ERR(ro_fd)) {
+			return PTR_ERR(ro_fd);
+		}
 
-	ctx.path = path;
-	ctx.context = context;
-	push_root();
-	err = vfs_readdir(ro_fd, check_whiteout, &ctx);
-	filp_close(ro_fd, 0);
-	pop_root();
+		ctx.path = path;
+		ctx.context = context;
+		push_root();
+		err = vfs_readdir(ro_fd, check_whiteout, &ctx);
+		filp_close(ro_fd, 0);
+		pop_root();
 
-	/* Return if an error occured or if the RO branch isn't empty */
-	if (err <= 0) {
-		return err;
+		/* Return if an error occured or if the RO branch isn't empty */
+		if (err < 0) {
+			return err;
+		}
 	}
 
 	if (rw_path) {
@@ -232,7 +251,7 @@ int is_empty_dir(const char *path, const char *ro_path, const char *rw_path, str
 		err = vfs_readdir(rw_fd, check_writable, 0);
 
 		/* Return if an error occured or if the RW branch isn't empty */
-		if (err <= 0) {
+		if (err < 0) {
 			filp_close(rw_fd, 0);
 			pop_root();
 			return err;
