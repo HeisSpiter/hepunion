@@ -82,7 +82,7 @@ static int create_whiteout_worker(const char *wh_path, struct pierrefs_sb_info *
 	/* Close file and delete it */
 	push_root();
 	filp_close(fd, 0);
-	vfs_unlink(fd->f_dentry->d_inode, fd->f_dentry);
+	vfs_unlink(fd->f_dentry->d_parent->d_inode, fd->f_dentry);
 	pop_root();
 
 	dput(dentry);

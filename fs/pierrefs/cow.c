@@ -241,7 +241,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
 
 	if (err < 0) {
 		push_root();
-		vfs_unlink(dentry->d_inode, dentry);
+		vfs_unlink(dentry->d_parent->d_inode, dentry);
 		pop_root();
 		dput(dentry);
 		return err;
@@ -353,7 +353,7 @@ int find_path_worker(const char *path, char *real_path, struct pierrefs_sb_info 
 			err = notify_change(dentry, &attr);
 
 			if (err < 0) {
-				vfs_rmdir(dentry->d_inode, dentry);
+				vfs_rmdir(dentry->d_parent->d_inode, dentry);
 				dput(dentry);
 				return err;
 			}
