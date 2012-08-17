@@ -866,6 +866,9 @@ static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset
 		/* Get its ino */
 		path = (char *)(ctx->rw_off + (unsigned long)ctx);
 		len = ctx->rw_len - context->rw_len;
+		if (len + namlen + 1 > PATH_MAX) {
+			return -ENAMETOOLONG;
+		}
 		memcpy(complete_path, path + context->rw_len, len);
 		memcpy(complete_path + len, name, namlen);
 		complete_path[len + namlen] = '\0';
@@ -938,6 +941,9 @@ static int read_ro_branch(void *buf, const char *name, int namlen, loff_t offset
 	/* Get its ino */
 	path = (char *)(ctx->ro_off + (unsigned long)ctx);
 	len = ctx->ro_len - context->ro_len;
+	if (len + namlen + 1 > PATH_MAX) {
+		return -ENAMETOOLONG;
+	}
 	memcpy(complete_path, path + context->ro_len, len);
 	memcpy(complete_path + len, name, namlen);
 	complete_path[len + namlen] = '\0';
