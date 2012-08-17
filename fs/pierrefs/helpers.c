@@ -673,8 +673,12 @@ long readlink(const char *path, char *buf, struct pierrefs_sb_info *context, int
 
 long unlink(const char *pathname, struct pierrefs_sb_info *context) {
 	int err;
+	short lookup = 0;
+	struct inode *dir;
 	struct nameidata nd;
 	struct dentry *dentry;
+
+	pr_info("unlink: %s, %p\n", pathname, context);
 
 	/* Get file dentry */
 	dentry = get_path_dentry(pathname, context, LOOKUP_REVAL);
@@ -683,17 +687,25 @@ long unlink(const char *pathname, struct pierrefs_sb_info *context) {
 	}
 
 	/* Get parent inode */
-	err = path_lookup(pathname, LOOKUP_PARENT, &nd);
-	if (err) {
-		dput(dentry);
-		return err;
+	dir = dentry->d_parent->d_inode;
+	if (dir == NULL) {
+		err = path_lookup(pathname, LOOKUP_PARENT, &nd);
+		if (err) {
+			dput(dentry);
+			return err;
+		}
+
+		dir = nd.dentry->d_inode;
+		lookup = 1;
 	}
 
 	/* Remove file */
 	push_root();
 	err = vfs_unlink(nd.dentry->d_inode, dentry);
 	pop_root();
-	path_release(&nd);
+	if (lookup) {
+		path_release(&nd);
+	}
 	dput(dentry);
 
 	return err;
