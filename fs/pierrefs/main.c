@@ -220,10 +220,13 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	sb->s_root = d_alloc_root(root_i);
 	if (IS_ERR(sb->s_root)) {
 		pr_crit("Failed allocating new dentry for /!\n");
-		clear_inode(root_i);
+		iput(root_i);
 		return PTR_ERR(sb->s_root);
 	}
 	sb->s_root->d_op = &pierrefs_dops;
+#ifdef _DEBUG_
+	sb->s_root->d_fsdata = (void *)PIERREFS_MAGIC;
+#endif
 
 	/* Set super block attributes */
 	sb->s_magic = PIERREFS_MAGIC;

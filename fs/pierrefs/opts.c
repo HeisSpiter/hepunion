@@ -16,6 +16,8 @@ static int pierrefs_close(struct inode *inode, struct file *filp) {
 
 	pr_info("pierrefs_close: %p, %p\n", inode, filp);
 
+	validate_inode(inode);
+
 	return filp_close(real_file, 0);
 }
 
@@ -24,6 +26,8 @@ static int pierrefs_closedir(struct inode *inode, struct file *filp) {
 	struct opendir_context *ctx = (struct opendir_context *)filp->private_data;
 
 	pr_info("pierrefs_closedir: %p, %p\n", inode, filp);
+
+	validate_inode(inode);
 
 	/* First, clean all the lists */
 	while (!list_empty(&ctx->whiteouts_head)) {
@@ -57,6 +61,7 @@ static int pierrefs_create(struct inode *dir, struct dentry *dentry, int mode, s
 
 	will_use_buffers(context);
 	validate_inode(dir);
+	validate_dentry(dentry);
 
 	/* Try to find the file first */
 	err = get_relative_path_for_file(dir, dentry, context, path, 1);
@@ -158,6 +163,7 @@ static int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct 
 	pr_info("pierrefs_getattr: %p, %p, %p\n", mnt, dentry, kstbuf);
 
 	will_use_buffers(context);
+	validate_dentry(dentry);
 
 	/* Get path */
 	err = get_relative_path(0, dentry, context, path, 1);
@@ -189,6 +195,8 @@ static int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct de
 
 	will_use_buffers(context);
 	validate_inode(dir);
+	validate_dentry(old_dentry);
+	validate_dentry(dentry);
 
 	/* First, find file */
 	err = get_relative_path(0, old_dentry, context, from, 1);
@@ -288,6 +296,10 @@ static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry,
 	will_use_buffers(context);
 	validate_inode(dir);
 
+#ifdef _DEBUG_
+	dentry->d_fsdata = (void *)PIERREFS_MAGIC;
+#endif
+
 	/* First get path of the file */
 	err = get_relative_path_for_file(dir, dentry, context, path, 1);
 	if (err < 0) {
@@ -357,6 +369,7 @@ static int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 
 	will_use_buffers(context);
 	validate_inode(dir);
+	validate_dentry(dentry);
 
 	/* Try to find the directory first */
 	err = get_relative_path_for_file(dir, dentry, context, path, 1);
@@ -478,6 +491,7 @@ static int pierrefs_mknod(struct inode *dir, struct dentry *dentry, int mode, de
 
 	will_use_buffers(context);
 	validate_inode(dir);
+	validate_dentry(dentry);
 
 	/* Try to find the node first */
 	err = get_relative_path_for_file(dir, dentry, context, path, 1);
@@ -688,6 +702,9 @@ static int pierrefs_permission(struct inode *inode, int mask, struct nameidata *
 
 	will_use_buffers(context);
 	validate_inode(inode);
+	if (nd && nd->dentry) {
+		validate_dentry(nd->dentry);
+	}
 
 	/* Get path */
 	err = get_relative_path(inode, (nd ? nd->dentry : NULL), context, path, 1);
@@ -846,32 +863,14 @@ static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset
 		strncpy(entry->d_name, name, namlen);
 		entry->d_name[namlen] = '\0';
 
-		complete_path[0] = '\0';
-
 		/* Get its ino */
-		if (ctx->ro_len) {
-			path = (char *)(ctx->ro_off + (unsigned long)ctx);
-			len = ctx->ro_len - 1 - context->ro_len;
-			if (strncmp(context->read_only_branch, path, context->ro_len) == 0) {
-				memcpy(complete_path, path + 1 + context->ro_len, len);
-				complete_path[len] = '\0';
-			}
-		}
+		path = (char *)(ctx->rw_off + (unsigned long)ctx);
+		len = ctx->rw_len - context->rw_len;
+		memcpy(complete_path, path + context->rw_len, len);
+		memcpy(complete_path + len, name, namlen);
+		complete_path[len + namlen] = '\0';
 
-		if (complete_path[0] == 0 && ctx->rw_len) {
-			path = (char *)(ctx->rw_off + (unsigned long)ctx);
-			len = ctx->rw_len - 1 - context->rw_len;
-			if (strncmp(context->read_write_branch, path, context->rw_len) == 0) {
-				memcpy(complete_path, path + 1 + context->rw_len, ctx->rw_len - 1 - context->rw_len);
-				complete_path[len] = '\0';
-			}
-		}
-
-		if (complete_path[0] != 0) {
-			entry->ino = name_to_ino(complete_path);
-		} else {
-			entry->ino = 0;
-		}
+		entry->ino = name_to_ino(complete_path);
 	}
 
 	return 0;
@@ -939,29 +938,13 @@ static int read_ro_branch(void *buf, const char *name, int namlen, loff_t offset
 	complete_path[0] = '\0';
 
 	/* Get its ino */
-	if (ctx->ro_len) {
-		path = (char *)(ctx->ro_off + (unsigned long)ctx);
-		len = ctx->ro_len - 1 - context->ro_len;
-		if (strncmp(context->read_only_branch, path, context->ro_len) == 0) {
-			memcpy(complete_path, path + 1 + context->ro_len, ctx->ro_len - 1 - context->ro_len);
-			complete_path[len] = '\0';
-		}
-	}
+	path = (char *)(ctx->ro_off + (unsigned long)ctx);
+	len = ctx->ro_len - context->ro_len;
+	memcpy(complete_path, path + context->ro_len, len);
+	memcpy(complete_path + len, name, namlen);
+	complete_path[len + namlen] = '\0';
 
-	if (complete_path[0] == 0 && ctx->rw_len) {
-		path = (char *)(ctx->rw_off + (unsigned long)ctx);
-		len = ctx->rw_len - 1 - context->rw_len;
-		if (strncmp(context->read_write_branch, path, context->rw_len) == 0) {
-			memcpy(complete_path, path + 1 + context->rw_len, ctx->rw_len - 1 - context->rw_len);
-			complete_path[len] = '\0'; 
-		}
-	}
-
-	if (complete_path[0] != 0) {
-		entry->ino = name_to_ino(complete_path);
-	} else {
-		entry->ino = 0;
-	}
+	entry->ino = name_to_ino(complete_path);
 
 	return 0;
 }
@@ -1102,6 +1085,7 @@ static int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
 	pr_info("pierrefs_setattr: %p, %p\n", dentry, attr);
 
 	will_use_buffers(context);
+	validate_dentry(dentry);
 
 	/* Get path */
 	err = get_relative_path(0, dentry, context, path, 1);
@@ -1156,6 +1140,7 @@ static int pierrefs_symlink(struct inode *dir, struct dentry *dentry, const char
 
 	will_use_buffers(context);
 	validate_inode(dir);
+	validate_dentry(dentry);
 
 	/* Find destination */
 	err = get_relative_path_for_file(dir, dentry, context, to, 1);
@@ -1213,6 +1198,8 @@ static int pierrefs_statfs(struct dentry *dentry, struct kstatfs *buf) {
 
 	pr_info("pierrefs_statfs: %p, %p\n", dentry, buf);
 
+	validate_dentry(dentry);
+
 	memset(buf, 0, sizeof(*buf));
 
 	/* First, get RO data */
@@ -1250,6 +1237,7 @@ static int pierrefs_unlink(struct inode *dir, struct dentry *dentry) {
 
 	will_use_buffers(context);
 	validate_inode(dir);
+	validate_dentry(dentry);
 
 	/* Try to find the file first */
 	err = get_relative_path_for_file(dir, dentry, context, path, 1);

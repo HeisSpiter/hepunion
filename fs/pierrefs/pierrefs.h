@@ -447,6 +447,8 @@ extern struct file_operations pierrefs_dir_fops;
 	c->buffers_in_use = 0
 #define validate_inode(i)	\
 	assert((unsigned long)i->i_private == PIERREFS_MAGIC)
+#define validate_dentry(d)	\
+	assert((unsigned long)d->d_fsdata == PIERREFS_MAGIC)
 
 #else
 #define open_worker(p, c, f) filp_open(p, f, 0)
@@ -461,6 +463,7 @@ extern struct file_operations pierrefs_dir_fops;
 #define will_use_buffers(c)
 #define release_buffers(c)
 #define validate_inode(i)
+#define validate_dentry(d)
 
 #endif
 
