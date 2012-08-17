@@ -1079,6 +1079,107 @@ static int pierrefs_revalidate(struct dentry *dentry, struct nameidata *nd) {
 	return 1;
 }
 
+static int pierrefs_rmdir(struct inode *dir, struct dentry *dentry) {
+	int err;
+	struct kstat kstbuf;
+	char me_path[PATH_MAX];
+	char wh_path[PATH_MAX];
+	char ro_path[PATH_MAX];
+	char has_ro = 0;
+	struct pierrefs_sb_info *context = get_context_i(dir);
+	char *path = context->global1;
+	char *real_path = context->global2;
+
+	pr_info("pierrefs_rmdir: %p, %p\n", dir, dentry);
+
+	will_use_buffers(context);
+	validate_inode(dir);
+	validate_dentry(dentry);
+
+	/* Try to find the dir first */
+	err = get_relative_path_for_file(dir, dentry, context, path, 1);
+	if (err < 0) {
+		release_buffers(context);
+		return err;
+	}
+
+	/* Then, find dir */
+	err = find_file(path, real_path, context, 0);
+	switch (err) {
+		int has_me = 0;
+		/* On RW, just remove it */
+		case READ_WRITE_COPYUP: // Can't happen
+		case READ_WRITE:
+			/* Check if RO exists */
+			if (find_file(path, ro_path, context, MUST_READ_ONLY) >= 0) {
+				has_ro = 1;
+				/* Read dir attributes */
+				if (lstat(real_path, context, &kstbuf) == -1) {
+					break;
+				}
+			}
+
+			/* Check if user can remove dir */
+			if (!can_remove(path, real_path, context)) {
+				break;
+			}
+
+			/* If RO is present, check for emptyness */
+			if (!is_empty_dir(path, real_path, ro_path, context)) {
+				break;
+			}
+
+			/* If with have RO, first create whiteout */
+			if (has_ro && create_whiteout(path, wh_path, context) == -1) {
+				break;
+			}
+
+			/* Remove dir */
+			err = rmdir(real_path, context);
+			if (err < 0) {
+				unlink(wh_path, context);
+			}
+			break;
+
+		/* On RO, create a whiteout */
+		case READ_ONLY:
+			/* Check if user can remove dir */
+			if (!can_remove(path, real_path, context)) {
+				break;
+			}
+
+			/* Check for directory emptyness */
+			if (!is_empty_dir(path, real_path, NULL, context)) {
+				err = -ENOTEMPTY;
+				break;
+			}
+
+			/* Get me first */
+			if (find_me(path, context, me_path, &kstbuf) >= 0) {
+				has_me = 1;
+				/* Unlink it */
+				err = unlink(me_path, context);
+				if (err < 0) {
+					break;
+				}
+			}
+
+			/* Now, create whiteout */
+			err = create_whiteout(path, wh_path, context);
+			if (err < 0 && has_me) {
+				create_me(me_path, &kstbuf, context);
+			}
+			break;
+
+		default:
+			/* Nothing to do */
+			break;
+	}
+
+	release_buffers(context);
+	return err;
+}
+
 static int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
 	int err;
 	struct dentry *real_dentry;
@@ -1343,6 +1444,7 @@ struct inode_operations pierrefs_dir_iops = {
 	.mkdir		= pierrefs_mkdir,
 	.mknod		= pierrefs_mknod,
 	.permission	= pierrefs_permission,
+	.rmdir		= pierrefs_rmdir,
 	.setattr	= pierrefs_setattr,
 	.symlink	= pierrefs_symlink,
 	.unlink		= pierrefs_unlink,
