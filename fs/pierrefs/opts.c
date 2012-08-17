@@ -935,8 +935,6 @@ static int read_ro_branch(void *buf, const char *name, int namlen, loff_t offset
 	strncpy(entry->d_name, name, namlen);
 	entry->d_name[namlen] = '\0';
 
-	complete_path[0] = '\0';
-
 	/* Get its ino */
 	path = (char *)(ctx->ro_off + (unsigned long)ctx);
 	len = ctx->ro_len - context->ro_len;
