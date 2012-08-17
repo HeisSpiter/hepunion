@@ -701,7 +701,7 @@ long rmdir(const char *pathname, struct pierrefs_sb_info *context) {
 
 	/* Remove directory */
 	push_root();
-	err = vfs_rmdir(nd.dentry->d_inode, dentry);
+	err = vfs_rmdir(dir, dentry);
 	pop_root();
 	if (lookup) {
 		path_release(&nd);
@@ -741,7 +741,7 @@ long unlink(const char *pathname, struct pierrefs_sb_info *context) {
 
 	/* Remove file */
 	push_root();
-	err = vfs_unlink(nd.dentry->d_inode, dentry);
+	err = vfs_unlink(dir, dentry);
 	pop_root();
 	if (lookup) {
 		path_release(&nd);
