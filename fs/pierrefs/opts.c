@@ -18,7 +18,7 @@ static int pierrefs_close(struct inode *inode, struct file *filp) {
 
 	validate_inode(inode);
 
-	return filp_close(real_file, 0);
+	return filp_close(real_file, NULL);
 }
 
 static int pierrefs_closedir(struct inode *inode, struct file *filp) {
@@ -108,7 +108,7 @@ static int pierrefs_create(struct inode *dir, struct dentry *dentry, int mode, s
 
 	push_root();
 	err = notify_change(filp->f_dentry, &attr);
-	filp_close(filp, 0);
+	filp_close(filp, NULL);
 	pop_root();
 
 	if (err < 0) {
@@ -166,7 +166,7 @@ static int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct 
 	validate_dentry(dentry);
 
 	/* Get path */
-	err = get_relative_path(0, dentry, context, path, 1);
+	err = get_relative_path(NULL, dentry, context, path, 1);
 	if (err < 0) {
 		release_buffers(context);
 		return err;
@@ -199,7 +199,7 @@ static int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct de
 	validate_dentry(dentry);
 
 	/* First, find file */
-	err = get_relative_path(0, old_dentry, context, from, 1);
+	err = get_relative_path(NULL, old_dentry, context, from, 1);
 	if (err < 0) {
 		release_buffers(context);
 		return err;
@@ -569,7 +569,7 @@ static int pierrefs_open(struct inode *inode, struct file *file) {
 	file->private_data = open_worker_2(real_path, context, file->f_flags, file->f_mode);
 	if (IS_ERR(file->private_data)) {
 		err = PTR_ERR(file->private_data);
-		file->private_data = 0;
+		file->private_data = NULL;
 
 		if (origin == READ_WRITE_COPYUP) {
 			unlink_copyup(path, real_path, context);
@@ -964,7 +964,7 @@ static int pierrefs_readdir(struct file *filp, void *dirent, filldir_t filldir) 
 			}
 
 			err = vfs_readdir(rw_dir, read_rw_branch, ctx);
-			filp_close(rw_dir, 0);
+			filp_close(rw_dir, NULL);
 
 			if (err < 0) {
 				goto cleanup;
@@ -983,7 +983,7 @@ static int pierrefs_readdir(struct file *filp, void *dirent, filldir_t filldir) 
 			}
 
 			err = vfs_readdir(ro_dir, read_ro_branch, ctx);
-			filp_close(ro_dir, 0);
+			filp_close(ro_dir, NULL);
 
 			if (err < 0) {
 				goto cleanup;
@@ -1175,7 +1175,7 @@ static int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
 	validate_dentry(dentry);
 
 	/* Get path */
-	err = get_relative_path(0, dentry, context, path, 1);
+	err = get_relative_path(NULL, dentry, context, path, 1);
 	if (err) {
 		release_buffers(context);
 		return err;
@@ -1297,7 +1297,7 @@ static int pierrefs_statfs(struct dentry *dentry, struct kstatfs *buf) {
 	}
 
 	err = vfs_statfs(filp->f_dentry, buf);
-	filp_close(filp, 0);
+	filp_close(filp, NULL);
 
 	if (unlikely(err)) {
 		return err;

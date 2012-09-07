@@ -22,8 +22,8 @@ MODULE_LICENSE("GPL");
 static int make_path(const char *s, size_t n, char **path) {
 	pr_info("make_path: %s, %zu, %p\n", s, n, path);
 
-    /* Zero output */
-    *path = 0;
+	/* Zero output */
+	*path = NULL;
 
 	/* First of all, look if it is relative path */
 	if (s[0] != '/') {
@@ -180,7 +180,7 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	ctime = filp->f_vfsmnt->mnt_sb->s_root->d_inode->i_ctime;
 
 	/* Finally close */
-	filp_close(filp, 0);
+	filp_close(filp, NULL);
 
 #if 0
 	/* Check for consistent data */
@@ -194,7 +194,7 @@ static int get_branches(struct super_block *sb, const char *arg) {
 		pr_err("Failed opening RW branch!\n");
 		return PTR_ERR(filp);
 	}
-	filp_close(filp, 0);
+	filp_close(filp, NULL);
 
 	/* Allocate inode for / */
 	root_i = new_inode(sb);

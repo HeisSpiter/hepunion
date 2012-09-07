@@ -98,7 +98,7 @@ static int create_whiteout_worker(const char *wh_path, struct pierrefs_sb_info *
 
 	/* Close file and delete it */
 	push_root();
-	filp_close(fd, 0);
+	filp_close(fd, NULL);
 	vfs_unlink(fd->f_dentry->d_parent->d_inode, fd->f_dentry);
 	pop_root();
 
@@ -195,7 +195,7 @@ int hide_directory_contents(const char *path, struct pierrefs_sb_info *context) 
 	/* Hide all entries */
 	push_root();
 	err = vfs_readdir(ro_fd, hide_entry, rw_path);
-	filp_close(ro_fd, 0);
+	filp_close(ro_fd, NULL);
 	pop_root();
 
 	return err;
@@ -232,7 +232,7 @@ int is_empty_dir(const char *path, const char *ro_path, const char *rw_path, str
 		ctx.context = context;
 		push_root();
 		err = vfs_readdir(ro_fd, check_whiteout, &ctx);
-		filp_close(ro_fd, 0);
+		filp_close(ro_fd, NULL);
 		pop_root();
 
 		/* Return if an error occured or if the RO branch isn't empty */
@@ -248,11 +248,11 @@ int is_empty_dir(const char *path, const char *ro_path, const char *rw_path, str
 		}
 
 		push_root();
-		err = vfs_readdir(rw_fd, check_writable, 0);
+		err = vfs_readdir(rw_fd, check_writable, NULL);
 
 		/* Return if an error occured or if the RW branch isn't empty */
 		if (err < 0) {
-			filp_close(rw_fd, 0);
+			filp_close(rw_fd, NULL);
 			pop_root();
 			return err;
 		}
@@ -261,7 +261,7 @@ int is_empty_dir(const char *path, const char *ro_path, const char *rw_path, str
 		ctx.path = rw_path;
 		ctx.context = context;
 		vfs_readdir(rw_fd, delete_whiteout, &ctx);
-		filp_close(rw_fd, 0);
+		filp_close(rw_fd, NULL);
 		pop_root();
 	}
 

@@ -16,7 +16,7 @@ void recursive_mutex_init(recursive_mutex_t *mutex) {
 	/* Simply init everything */
 	atomic_set(&mutex->count, 0);
 	spin_lock_init(&mutex->lock);
-	mutex->owner = 0;
+	mutex->owner = NULL;
 }
 
 void recursive_mutex_lock(recursive_mutex_t *mutex) {
@@ -46,7 +46,7 @@ void recursive_mutex_unlock(recursive_mutex_t *mutex) {
 	/* If count reached 0, no one is locking anymore */
 	if (count == 0) {
 		/* So release spin lock & lock */
-		mutex->owner = 0;
+		mutex->owner = NULL;
 		spin_unlock(&mutex->lock);
 	}
 }

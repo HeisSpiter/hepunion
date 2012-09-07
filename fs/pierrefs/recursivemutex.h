@@ -38,10 +38,10 @@ void recursive_mutex_init(recursive_mutex_t *mutex);
  * \param[int]	mutex	The mutex to lock
  * \return	Nothing
  */
-void recursive_mutex_lock(recursive_mutex_t *mutex);
+void recursive_mutex_lock(recursive_mutex_t *mutex) __acquires(&mutex->lock);
 /**
  * Unlock a recursive mutex.
  * \param[int]	mutex	The mutex to unlock
  * \return	Nothing
  */
-void recursive_mutex_unlock(recursive_mutex_t *mutex);
+void recursive_mutex_unlock(recursive_mutex_t *mutex) __releases(&mutex->lock);

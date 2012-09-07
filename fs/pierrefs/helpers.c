@@ -386,7 +386,7 @@ int get_relative_path_for_file(const struct inode *dir, const struct dentry *den
 	pr_info("get_relative_path_for_file: %p, %p, %p, %p, %d\n", dir, dentry, context, path, is_ours);
 
 	/* First get path of the directory */
-	err = get_relative_path(dir, 0, context, path, is_ours);
+	err = get_relative_path(dir, NULL, context, path, is_ours);
 	if (err < 0) {
 		return err;
 	}
@@ -645,6 +645,7 @@ long readlink(const char *path, char *buf, struct pierrefs_sb_info *context, int
 	struct inode *inode;
 	struct nameidata nd;
 	int error;
+	mm_segment_t oldfs;
 
 	pr_info("readlink: %s, %p, %p, %d\n", path, buf, context, bufsiz);
 
@@ -662,7 +663,9 @@ long readlink(const char *path, char *buf, struct pierrefs_sb_info *context, int
 			error = security_inode_readlink(nd.dentry);
 			if (!error) {
 				touch_atime(nd.mnt, nd.dentry);
+				call_usermode();
 				error = inode->i_op->readlink(nd.dentry, buf, bufsiz);
+				restore_kernelmode();
 			}
 			pop_root();
 		}

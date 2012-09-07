@@ -67,7 +67,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
 	struct kstat kstbuf;
 	struct file *ro_fd, *rw_fd;
 	ssize_t rcount;
-	unsigned char buf[MAXSIZE];
+	char buf[MAXSIZE];
 	struct dentry *dentry;
 	struct iattr attr;
 	struct readdir_context ctx;
@@ -116,7 +116,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
 			/* Then, create copyup... */
 			rw_fd = open_worker_2(rw_path, context, O_CREAT | O_WRONLY | O_EXCL, kstbuf.mode); 
 			if (IS_ERR(rw_fd)) {
-				filp_close(ro_fd, 0);
+				filp_close(ro_fd, NULL);
 				return PTR_ERR(rw_fd);
 			}
 
@@ -133,8 +133,8 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
 					pop_root();
 					if (rcount < 0) {
 						push_root();
-						filp_close(ro_fd, 0);
-						filp_close(rw_fd, 0);
+						filp_close(ro_fd, NULL);
+						filp_close(rw_fd, NULL);
 						pop_root();
 
 						/* Delete copyup */
@@ -152,8 +152,8 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
 					pop_root();
 					if (rcount < 0) {
 						push_root();
-						filp_close(ro_fd, 0);
-						filp_close(rw_fd, 0);
+						filp_close(ro_fd, NULL);
+						filp_close(rw_fd, NULL);
 						pop_root();
 
 						/* Delete copyup */
@@ -166,8 +166,8 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
 
 			/* Close files */
 			push_root();
-			filp_close(ro_fd, 0);
-			filp_close(rw_fd, 0);
+			filp_close(ro_fd, NULL);
+			filp_close(rw_fd, NULL);
 			pop_root();
 			break;
 
@@ -201,7 +201,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
 			ctx.context = context;
 			push_root();
 			err = vfs_readdir(ro_fd, copy_child, &ctx);
-			filp_close(ro_fd, 0);
+			filp_close(ro_fd, NULL);
 			pop_root();
 
 			/* Handle failure */
@@ -257,7 +257,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
 	return 0;
 }
 
-int find_path_worker(const char *path, char *real_path, struct pierrefs_sb_info *context) {
+static int find_path_worker(const char *path, char *real_path, struct pierrefs_sb_info *context) {
 	/* Try to find that tree */
 	int err;
 	char read_only[PATH_MAX];
