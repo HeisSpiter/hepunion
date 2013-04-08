@@ -1,6 +1,6 @@
 /**
  * \file helpers.c
- * \brief Misc functions used by the PierreFS file system
+ * \brief Misc functions used by the HEPunion file system
  * \author Pierre Schweitzer <pierre.jean.schweitzer@cern.ch>
  * \version 1.0
  * \date 10-Dec-2011
@@ -10,9 +10,9 @@
  * the driver to realize work
  */
 
-#include "pierrefs.h"
+#include "hepunion.h"
 
-int can_access(const char *path, const char *real_path, struct pierrefs_sb_info *context, int mode) {
+int can_access(const char *path, const char *real_path, struct hepunion_sb_info *context, int mode) {
 	struct kstat stbuf;
 	int err;
 
@@ -75,7 +75,7 @@ int can_access(const char *path, const char *real_path, struct pierrefs_sb_info 
 	}
 }
 
-int can_remove(const char *path, const char *real_path, struct pierrefs_sb_info *context) {
+int can_remove(const char *path, const char *real_path, struct hepunion_sb_info *context) {
 	char parent_path[PATH_MAX];
 
 	/* Find parent directory */
@@ -95,7 +95,7 @@ int can_remove(const char *path, const char *real_path, struct pierrefs_sb_info 
 	return can_access(path, parent_path, context, MAY_WRITE);
 }
 
-int can_traverse(const char *path, struct pierrefs_sb_info *context) {
+int can_traverse(const char *path, struct hepunion_sb_info *context) {
 	char short_path[PATH_MAX];
 	char long_path[PATH_MAX];
 	int err;
@@ -136,7 +136,7 @@ int can_traverse(const char *path, struct pierrefs_sb_info *context) {
 	return 0;
 }
 
-int check_exist(const char *pathname, struct pierrefs_sb_info *context, int flag) {
+int check_exist(const char *pathname, struct hepunion_sb_info *context, int flag) {
 	int err;
 	struct nameidata nd;
 
@@ -154,7 +154,7 @@ int check_exist(const char *pathname, struct pierrefs_sb_info *context, int flag
 	return 0;
 }
 
-int find_file(const char *path, char *real_path, struct pierrefs_sb_info *context, char flags) {
+int find_file(const char *path, char *real_path, struct hepunion_sb_info *context, char flags) {
 	int err;
 	char tmp_path[PATH_MAX];
 	char wh_path[PATH_MAX];
@@ -319,7 +319,7 @@ Elong_unlock:
 	return -ENAMETOOLONG;
 }
 
-struct dentry * get_path_dentry(const char *pathname, struct pierrefs_sb_info *context, int flag) {
+struct dentry * get_path_dentry(const char *pathname, struct hepunion_sb_info *context, int flag) {
 	int err;
 	struct dentry *dentry;
 	struct nameidata nd;
@@ -340,7 +340,7 @@ struct dentry * get_path_dentry(const char *pathname, struct pierrefs_sb_info *c
 	return dentry;
 }
 
-int get_relative_path(const struct inode *inode, const struct dentry *dentry, const struct pierrefs_sb_info *context, char *path, int is_ours) {
+int get_relative_path(const struct inode *inode, const struct dentry *dentry, const struct hepunion_sb_info *context, char *path, int is_ours) {
 	int len;
 	char real_path[PATH_MAX];
 
@@ -356,7 +356,7 @@ int get_relative_path(const struct inode *inode, const struct dentry *dentry, co
 		return len;
 	}
 
-	/* If those structures are owned by PierreFS, there's no
+	/* If those structures are owned by HEPunion, there's no
 	 * need to skip the branch part
 	 */
 	if (is_ours) {
@@ -379,7 +379,7 @@ int get_relative_path(const struct inode *inode, const struct dentry *dentry, co
 	return -EINVAL;
 }
 
-int get_relative_path_for_file(const struct inode *dir, const struct dentry *dentry, const struct pierrefs_sb_info *context, char *path, int is_ours) {
+int get_relative_path_for_file(const struct inode *dir, const struct dentry *dentry, const struct hepunion_sb_info *context, char *path, int is_ours) {
 	int err;
 	size_t len;
 
@@ -403,7 +403,7 @@ int get_relative_path_for_file(const struct inode *dir, const struct dentry *den
 	return 0;
 }
 
-int path_to_special(const char *path, specials type, const struct pierrefs_sb_info *context, char *outpath) {
+int path_to_special(const char *path, specials type, const struct hepunion_sb_info *context, char *outpath) {
 	size_t len = strlen(path);
 	char *tree_path = strrchr(path, '/');
 	size_t written = 0;
@@ -447,7 +447,7 @@ int path_to_special(const char *path, specials type, const struct pierrefs_sb_in
 }
 
 /* Imported for Linux kernel and simplified */
-int lstat(const char *pathname, struct pierrefs_sb_info *context, struct kstat *stat)
+int lstat(const char *pathname, struct hepunion_sb_info *context, struct kstat *stat)
 {
 	struct nameidata nd;
 	int error;
@@ -468,7 +468,7 @@ int lstat(const char *pathname, struct pierrefs_sb_info *context, struct kstat *
 }
 
 /* Imported for Linux kernel */
-long mkdir(const char *pathname, struct pierrefs_sb_info *context, int mode) {
+long mkdir(const char *pathname, struct hepunion_sb_info *context, int mode) {
 	int error = 0;
 	struct dentry *dentry;
 	struct nameidata nd;
@@ -502,7 +502,7 @@ long mkdir(const char *pathname, struct pierrefs_sb_info *context, int mode) {
 }
 
 /* Imported from Linux kernel */
-long mknod(const char *pathname, struct pierrefs_sb_info *context, int mode, unsigned dev) {
+long mknod(const char *pathname, struct hepunion_sb_info *context, int mode, unsigned dev) {
 	int error = 0;
 	struct dentry * dentry;
 	struct nameidata nd;
@@ -557,7 +557,7 @@ long mknod(const char *pathname, struct pierrefs_sb_info *context, int mode, uns
 	return error;
 }
 
-int mkfifo(const char *pathname, struct pierrefs_sb_info *context, int mode) {
+int mkfifo(const char *pathname, struct hepunion_sb_info *context, int mode) {
 	pr_info("mkfifo: %s, %p, %x\n", pathname, context, mode);
 
 	/* Ensure FIFO mode is set */
@@ -568,7 +568,7 @@ int mkfifo(const char *pathname, struct pierrefs_sb_info *context, int mode) {
 }
 
 /* Imported from Linux kernel */
-long symlink(const char *oldname, const char *newname, struct pierrefs_sb_info *context) {
+long symlink(const char *oldname, const char *newname, struct hepunion_sb_info *context) {
 	int error = 0;
 	struct dentry *dentry;
 	struct nameidata nd;
@@ -599,7 +599,7 @@ long symlink(const char *oldname, const char *newname, struct pierrefs_sb_info *
 }
 
 /* Imported from Linux kernel - simplified */
-long link(const char *oldname, const char *newname, struct pierrefs_sb_info *context) {
+long link(const char *oldname, const char *newname, struct hepunion_sb_info *context) {
 	struct dentry *new_dentry;
 	struct nameidata nd, old_nd;
 	int error;
@@ -641,7 +641,7 @@ out:
 }
 
 /* Imported from Linux kernel */
-long readlink(const char *path, char *buf, struct pierrefs_sb_info *context, int bufsiz) {
+long readlink(const char *path, char *buf, struct hepunion_sb_info *context, int bufsiz) {
 	struct inode *inode;
 	struct nameidata nd;
 	int error;
@@ -674,7 +674,7 @@ long readlink(const char *path, char *buf, struct pierrefs_sb_info *context, int
 	return error;
 }
 
-long rmdir(const char *pathname, struct pierrefs_sb_info *context) {
+long rmdir(const char *pathname, struct hepunion_sb_info *context) {
 	int err;
 	short lookup = 0;
 	struct inode *dir;
@@ -716,7 +716,7 @@ long rmdir(const char *pathname, struct pierrefs_sb_info *context) {
 	return err;
 }
 
-long unlink(const char *pathname, struct pierrefs_sb_info *context) {
+long unlink(const char *pathname, struct hepunion_sb_info *context) {
 	int err;
 	short lookup = 0;
 	struct inode *dir;
@@ -759,7 +759,7 @@ long unlink(const char *pathname, struct pierrefs_sb_info *context) {
 }
 
 #ifdef _DEBUG_
-struct file* dbg_open(const char *pathname, const struct pierrefs_sb_info *context, int flags) {
+struct file* dbg_open(const char *pathname, const struct hepunion_sb_info *context, int flags) {
 	pr_info("dbg_open: %s, %p, %x\n", pathname, context, flags);
 
 	if (flags & (O_CREAT | O_WRONLY | O_RDWR)) {
@@ -772,7 +772,7 @@ struct file* dbg_open(const char *pathname, const struct pierrefs_sb_info *conte
 	return filp_open(pathname, flags, 0);
 }
 
-struct file* dbg_open_2(const char *pathname, const struct pierrefs_sb_info *context, int flags, mode_t mode) {
+struct file* dbg_open_2(const char *pathname, const struct hepunion_sb_info *context, int flags, mode_t mode) {
 	pr_info("dbg_open_2: %s, %p, %x, %x\n", pathname, context, flags, mode);
 
 	if (flags & (O_CREAT | O_WRONLY | O_RDWR)) {
@@ -785,7 +785,7 @@ struct file* dbg_open_2(const char *pathname, const struct pierrefs_sb_info *con
 	return filp_open(pathname, flags, mode);
 }
 
-struct file* dbg_creat(const char *pathname, const struct pierrefs_sb_info *context, mode_t mode) {
+struct file* dbg_creat(const char *pathname, const struct hepunion_sb_info *context, mode_t mode) {
 	pr_info("dbg_creat: %s, %p, %x\n", pathname, context, mode);
 
 	if (strncmp(pathname, context->read_only_branch, context->ro_len) == 0) {
@@ -796,7 +796,7 @@ struct file* dbg_creat(const char *pathname, const struct pierrefs_sb_info *cont
 	return filp_creat(pathname, mode);
 }
 
-int dbg_mkdir(const char *pathname, struct pierrefs_sb_info *context, mode_t mode) {
+int dbg_mkdir(const char *pathname, struct hepunion_sb_info *context, mode_t mode) {
 	pr_info("dbg_mkdir: %s, %p, %x\n", pathname, context, mode);
 
 	if (strncmp(pathname, context->read_only_branch, context->ro_len) == 0) {
@@ -807,7 +807,7 @@ int dbg_mkdir(const char *pathname, struct pierrefs_sb_info *context, mode_t mod
 	return mkdir(pathname, context, mode);
 }
 
-int dbg_mknod(const char *pathname, struct pierrefs_sb_info *context, mode_t mode, dev_t dev) {
+int dbg_mknod(const char *pathname, struct hepunion_sb_info *context, mode_t mode, dev_t dev) {
 	pr_info("dbg_mknod: %s, %p, %x, %x\n", pathname, context, mode, dev);
 
 	if (strncmp(pathname, context->read_only_branch, context->ro_len) == 0) {
@@ -818,7 +818,7 @@ int dbg_mknod(const char *pathname, struct pierrefs_sb_info *context, mode_t mod
 	return mknod(pathname, context, mode, dev);
 }
 
-int dbg_mkfifo(const char *pathname, struct pierrefs_sb_info *context, mode_t mode) {
+int dbg_mkfifo(const char *pathname, struct hepunion_sb_info *context, mode_t mode) {
 	pr_info("dbg_mkfifo: %s, %p, %x\n", pathname, context, mode);
 
 	if (strncmp(pathname, context->read_only_branch, context->ro_len) == 0) {
@@ -829,7 +829,7 @@ int dbg_mkfifo(const char *pathname, struct pierrefs_sb_info *context, mode_t mo
 	return mkfifo(pathname, context, mode);
 }
 
-int dbg_symlink(const char *oldpath, const char *newpath, struct pierrefs_sb_info *context) {
+int dbg_symlink(const char *oldpath, const char *newpath, struct hepunion_sb_info *context) {
 	pr_info("dbg_symlink: %s, %s, %p\n", oldpath, newpath, context);
 
 	if (strncmp(newpath, context->read_only_branch, context->ro_len) == 0) {
@@ -840,7 +840,7 @@ int dbg_symlink(const char *oldpath, const char *newpath, struct pierrefs_sb_inf
 	return symlink(oldpath, newpath, context);
 }
 
-int dbg_link(const char *oldpath, const char *newpath, struct pierrefs_sb_info *context) {
+int dbg_link(const char *oldpath, const char *newpath, struct hepunion_sb_info *context) {
 	pr_info("dbg_link: %s, %s, %p\n", oldpath, newpath, context);
 
 	if (strncmp(newpath, context->read_only_branch, context->ro_len) == 0) {

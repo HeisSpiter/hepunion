@@ -1,6 +1,6 @@
 /**
  * \file wh.c
- * \brief Whiteout (WH) support for the PierreFS file system
+ * \brief Whiteout (WH) support for the HEPunion file system
  * \author Pierre Schweitzer <pierre.jean.schweitzer@cern.ch>
  * \version 1.0
  * \date 11-Jan-2012
@@ -10,7 +10,7 @@
  * deletion on the read-only branch.
  *
  * When a demand to delete a file on the read-only branch is
- * made, the PierreFS file system will a matching whiteout file
+ * made, the HEPunion file system will a matching whiteout file
  * on the read-write branch.
  *
  * That way, during union, whiteout files will be used to hide
@@ -24,7 +24,7 @@
  * team.
  */
 
-#include "pierrefs.h"
+#include "hepunion.h"
 
 static int hide_entry(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type);
 
@@ -66,7 +66,7 @@ static int check_writable(void *buf, const char *name, int namlen, loff_t offset
 	return -ENOTEMPTY;
 }
 
-static int create_whiteout_worker(const char *wh_path, struct pierrefs_sb_info *context) {
+static int create_whiteout_worker(const char *wh_path, struct hepunion_sb_info *context) {
 	int err;
 	struct iattr attr;
 	struct dentry *dentry;
@@ -107,7 +107,7 @@ static int create_whiteout_worker(const char *wh_path, struct pierrefs_sb_info *
 	return err;
 }
 
-int create_whiteout(const char *path, char *wh_path, struct pierrefs_sb_info *context) {
+int create_whiteout(const char *path, char *wh_path, struct hepunion_sb_info *context) {
 	int err;
 
 	pr_info("create_whiteout: %s, %p, %p\n", path, wh_path, context);
@@ -131,7 +131,7 @@ int create_whiteout(const char *path, char *wh_path, struct pierrefs_sb_info *co
 static int delete_whiteout(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
 	char wh_path[PATH_MAX];
 	struct readdir_context *ctx = (struct readdir_context*)buf;
-	struct pierrefs_sb_info *context = ctx->context;
+	struct hepunion_sb_info *context = ctx->context;
 
 	pr_info("delete_whiteout: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
 
@@ -146,7 +146,7 @@ static int delete_whiteout(void *buf, const char *name, int namlen, loff_t offse
 	return unlink(wh_path, context);
 }
 
-int find_whiteout(const char *path, struct pierrefs_sb_info *context, char *wh_path) {
+int find_whiteout(const char *path, struct hepunion_sb_info *context, char *wh_path) {
 	int err;
 
 	pr_info("find_whiteout: %s, %p, %p\n", path, context, wh_path);
@@ -161,7 +161,7 @@ int find_whiteout(const char *path, struct pierrefs_sb_info *context, char *wh_p
 	return check_exist(wh_path, context, 0);
 }
 
-int hide_directory_contents(const char *path, struct pierrefs_sb_info *context) {
+int hide_directory_contents(const char *path, struct hepunion_sb_info *context) {
 	int err;
 	struct file *ro_fd;
 	char rw_path[PATH_MAX];
@@ -214,7 +214,7 @@ static int hide_entry(void *buf, const char *name, int namlen, loff_t offset, u6
 	return create_whiteout_worker(wh_path, ctx->context);
 }
 
-int is_empty_dir(const char *path, const char *ro_path, const char *rw_path, struct pierrefs_sb_info *context) {
+int is_empty_dir(const char *path, const char *ro_path, const char *rw_path, struct hepunion_sb_info *context) {
 	int err = 0;
 	struct file *ro_fd;
 	struct file *rw_fd;
@@ -268,7 +268,7 @@ int is_empty_dir(const char *path, const char *ro_path, const char *rw_path, str
 	return err;
 }
 
-int unlink_rw_file(const char *path, const char *rw_path, struct pierrefs_sb_info *context, char has_ro_sure) {
+int unlink_rw_file(const char *path, const char *rw_path, struct hepunion_sb_info *context, char has_ro_sure) {
 	int err;
 	char has_ro = 0;
 	char ro_path[PATH_MAX];
@@ -304,7 +304,7 @@ int unlink_rw_file(const char *path, const char *rw_path, struct pierrefs_sb_inf
 	return 0;
 }
 
-int unlink_whiteout(const char *path, struct pierrefs_sb_info *context) {
+int unlink_whiteout(const char *path, struct hepunion_sb_info *context) {
 	int err;
 	char wh_path[PATH_MAX];
 

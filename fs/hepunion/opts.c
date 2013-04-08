@@ -1,6 +1,6 @@
 /**
- * \file pierrefs.c
- * \brief Exported functions by the PierreFS file system
+ * \file opts.c
+ * \brief Exported functions by the HEPunion file system
  * \author Pierre Schweitzer <pierre.jean.schweitzer@cern.ch>
  * \version 1.0
  * \date 10-Dec-2011
@@ -9,23 +9,23 @@
  * \todo Identical files on RO/RW after mod
  */
 
-#include "pierrefs.h"
+#include "hepunion.h"
 
-static int pierrefs_close(struct inode *inode, struct file *filp) {
+static int hepunion_close(struct inode *inode, struct file *filp) {
 	struct file *real_file = (struct file *)filp->private_data;
 
-	pr_info("pierrefs_close: %p, %p\n", inode, filp);
+	pr_info("hepunion_close: %p, %p\n", inode, filp);
 
 	validate_inode(inode);
 
 	return filp_close(real_file, NULL);
 }
 
-static int pierrefs_closedir(struct inode *inode, struct file *filp) {
+static int hepunion_closedir(struct inode *inode, struct file *filp) {
 	struct readdir_file *entry;
 	struct opendir_context *ctx = (struct opendir_context *)filp->private_data;
 
-	pr_info("pierrefs_closedir: %p, %p\n", inode, filp);
+	pr_info("hepunion_closedir: %p, %p\n", inode, filp);
 
 	validate_inode(inode);
 
@@ -48,16 +48,16 @@ static int pierrefs_closedir(struct inode *inode, struct file *filp) {
 	return 0;
 }
 
-static int pierrefs_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nameidata) {
+static int hepunion_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nameidata) {
 	int err;
-	struct pierrefs_sb_info *context = get_context_i(dir);
+	struct hepunion_sb_info *context = get_context_i(dir);
 	char *path = context->global1;
 	char *real_path = context->global2;
 	struct file* filp;
 	struct iattr attr;
 	struct inode *inode;
 
-	pr_info("pierrefs_create: %p, %p, %x, %p\n", dir, dentry, mode, nameidata);
+	pr_info("hepunion_create: %p, %p, %x, %p\n", dir, dentry, mode, nameidata);
 
 	will_use_buffers(context);
 	validate_inode(dir);
@@ -134,13 +134,13 @@ static int pierrefs_create(struct inode *dir, struct dentry *dentry, int mode, s
 	inode->i_ctime = CURRENT_TIME;
 	inode->i_blocks = 0;
 	inode->i_blkbits = 0;
-	inode->i_op = &pierrefs_iops;
-	inode->i_fop = &pierrefs_fops;
+	inode->i_op = &hepunion_iops;
+	inode->i_fop = &hepunion_fops;
 	inode->i_mode = mode;
 	inode->i_nlink = 1;
 	inode->i_ino = name_to_ino(path);
 #ifdef _DEBUG_
-	inode->i_private = (void *)PIERREFS_MAGIC;
+	inode->i_private = (void *)hepunion_MAGIC;
 #endif
 	insert_inode_hash(inode); 
 
@@ -155,12 +155,12 @@ static int pierrefs_create(struct inode *dir, struct dentry *dentry, int mode, s
 	return 0;
 }
 
-static int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *kstbuf) {
+static int hepunion_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *kstbuf) {
 	int err;
-	struct pierrefs_sb_info *context = get_context_d(dentry);
+	struct hepunion_sb_info *context = get_context_d(dentry);
 	char *path = context->global1;
 
-	pr_info("pierrefs_getattr: %p, %p, %p\n", mnt, dentry, kstbuf);
+	pr_info("hepunion_getattr: %p, %p, %p\n", mnt, dentry, kstbuf);
 
 	will_use_buffers(context);
 	validate_dentry(dentry);
@@ -183,15 +183,15 @@ static int pierrefs_getattr(struct vfsmount *mnt, struct dentry *dentry, struct 
 	return err;
 }
 
-static int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *dentry) {
+static int hepunion_link(struct dentry *old_dentry, struct inode *dir, struct dentry *dentry) {
 	int err, origin;
-	struct pierrefs_sb_info *context = get_context_d(old_dentry);
+	struct hepunion_sb_info *context = get_context_d(old_dentry);
 	char *from = context->global1;
 	char *to = context->global2;
 	char real_from[PATH_MAX];
 	char real_to[PATH_MAX];
 
-	pr_info("pierrefs_link: %p, %p, %p\n", old_dentry, dir, dentry);
+	pr_info("hepunion_link: %p, %p, %p\n", old_dentry, dir, dentry);
 
 	will_use_buffers(context);
 	validate_inode(dir);
@@ -268,11 +268,11 @@ static int pierrefs_link(struct dentry *old_dentry, struct inode *dir, struct de
 	return 0;
 }
 
-static loff_t pierrefs_llseek(struct file *file, loff_t offset, int origin) {
+static loff_t hepunion_llseek(struct file *file, loff_t offset, int origin) {
 	struct file *real_file = (struct file *)file->private_data;
 	loff_t ret;
 
-	pr_info("pierrefs_llseek: %p, %llx, %x\n", file, offset, origin);
+	pr_info("hepunion_llseek: %p, %llx, %x\n", file, offset, origin);
 
 	ret = vfs_llseek(real_file, offset, origin);
 	file->f_pos = real_file->f_pos;
@@ -280,10 +280,10 @@ static loff_t pierrefs_llseek(struct file *file, loff_t offset, int origin) {
 	return ret;
 }
 
-static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nameidata) {
+static struct dentry * hepunion_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nameidata) {
 	/* We are looking for "dentry" in "dir" */
 	int err;
-	struct pierrefs_sb_info *context = get_context_i(dir);
+	struct hepunion_sb_info *context = get_context_i(dir);
 	char *path = context->global1;
 	char *real_path = context->global2;
 	struct inode *inode = NULL;
@@ -291,13 +291,13 @@ static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry,
 	size_t namelen;
 	unsigned long ino;
 
-	pr_info("pierrefs_lookup: %p, %p, %p\n", dir, dentry, nameidata);
+	pr_info("hepunion_lookup: %p, %p, %p\n", dir, dentry, nameidata);
 
 	will_use_buffers(context);
 	validate_inode(dir);
 
 #ifdef _DEBUG_
-	dentry->d_fsdata = (void *)PIERREFS_MAGIC;
+	dentry->d_fsdata = (void *)HEPUNION_MAGIC;
 #endif
 
 	/* First get path of the file */
@@ -310,7 +310,7 @@ static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry,
 	pr_info("Looking for: %s\n", path);
 
 	/* Set our operations before we continue */
-	dentry->d_op = &pierrefs_dops;
+	dentry->d_op = &hepunion_dops;
 
 	/* Now, look for the file */
 	err = find_file(path, real_path, context, 0);
@@ -358,14 +358,14 @@ static struct dentry * pierrefs_lookup(struct inode *dir, struct dentry *dentry,
 	return NULL;
 }
 
-static int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
+static int hepunion_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 	int err;
 	struct inode *inode;
-	struct pierrefs_sb_info *context = get_context_i(dir);
+	struct hepunion_sb_info *context = get_context_i(dir);
 	char *path = context->global1;
 	char *real_path = context->global2;
 
-	pr_info("pierrefs_mkdir: %p, %p, %x\n", dir, dentry, mode);
+	pr_info("hepunion_mkdir: %p, %p, %x\n", dir, dentry, mode);
 
 	will_use_buffers(context);
 	validate_inode(dir);
@@ -442,13 +442,13 @@ static int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 	inode->i_ctime = CURRENT_TIME;
 	inode->i_blocks = 0;
 	inode->i_blkbits = 0;
-	inode->i_op = &pierrefs_dir_iops;
-	inode->i_fop = &pierrefs_dir_fops;
+	inode->i_op = &hepunion_dir_iops;
+	inode->i_fop = &hepunion_dir_fops;
 	inode->i_mode = mode;
 	inode->i_nlink = 1;
 	inode->i_ino = name_to_ino(path);
 #ifdef _DEBUG_
-	inode->i_private = (void *)PIERREFS_MAGIC;
+	inode->i_private = (void *)HEPUNION_MAGIC;
 #endif
 	insert_inode_hash(inode); 
 
@@ -463,13 +463,13 @@ static int pierrefs_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 	return 0;
 }
 
-static int pierrefs_mknod(struct inode *dir, struct dentry *dentry, int mode, dev_t rdev) {
+static int hepunion_mknod(struct inode *dir, struct dentry *dentry, int mode, dev_t rdev) {
 	int err;
-	struct pierrefs_sb_info *context = get_context_i(dir);
+	struct hepunion_sb_info *context = get_context_i(dir);
 	char *path = context->global1;
 	char *real_path = context->global2;
 
-	pr_info("pierrefs_mknod: %p, %p, %x, %x\n", dir, dentry, mode, rdev);
+	pr_info("hepunion_mknod: %p, %p, %x, %x\n", dir, dentry, mode, rdev);
 
 	will_use_buffers(context);
 	validate_inode(dir);
@@ -519,14 +519,14 @@ static int pierrefs_mknod(struct inode *dir, struct dentry *dentry, int mode, de
 	return 0;
 }
 
-static int pierrefs_open(struct inode *inode, struct file *file) {
+static int hepunion_open(struct inode *inode, struct file *file) {
 	int err, origin;
-	struct pierrefs_sb_info *context = get_context_i(inode);
+	struct hepunion_sb_info *context = get_context_i(inode);
 	char *path = context->global1;
 	char *real_path = context->global2;
 	short is_write_op = (file->f_flags & (O_WRONLY | O_RDWR));
 
-	pr_info("pierrefs_open: %p, %p\n", inode, file);
+	pr_info("hepunion_open: %p, %p\n", inode, file);
 
 	will_use_buffers(context);
 	validate_inode(inode);
@@ -561,7 +561,7 @@ static int pierrefs_open(struct inode *inode, struct file *file) {
 
 	/* Really open the file.
 	 * The associated file object on real file system is stored
-	 * as private data of the PierreFS file object. This is used
+	 * as private data of the HEPunion file object. This is used
 	 * to maintain data consistency and to forward requests on
 	 * the file to the lower file system.
 	 */
@@ -583,9 +583,9 @@ static int pierrefs_open(struct inode *inode, struct file *file) {
 	return 0;
 }
 
-static int pierrefs_opendir(struct inode *inode, struct file *file) {
+static int hepunion_opendir(struct inode *inode, struct file *file) {
 	int err;
-	struct pierrefs_sb_info *context = get_context_i(inode);
+	struct hepunion_sb_info *context = get_context_i(inode);
 	char *path = context->global1;
 	char *real_path = context->global2;
 	struct opendir_context *ctx;
@@ -594,7 +594,7 @@ static int pierrefs_opendir(struct inode *inode, struct file *file) {
 	size_t ro_len = 0;
 	size_t rw_len = 0;
 
-	pr_info("pierrefs_opendir: %p, %p\n", inode, file);
+	pr_info("hepunion_opendir: %p, %p\n", inode, file);
 
 	will_use_buffers(context);
 	validate_inode(inode);
@@ -674,13 +674,13 @@ static int pierrefs_opendir(struct inode *inode, struct file *file) {
 	return 0;
 }
 
-static int pierrefs_permission(struct inode *inode, int mask, struct nameidata *nd) {
+static int hepunion_permission(struct inode *inode, int mask, struct nameidata *nd) {
 	int err;
-	struct pierrefs_sb_info *context = get_context_i(inode);
+	struct hepunion_sb_info *context = get_context_i(inode);
 	char *path = context->global1;
 	char *real_path = context->global2;
 
-	pr_info("pierrefs_permission: %p, %x, %p\n", inode, mask, nd);
+	pr_info("hepunion_permission: %p, %x, %p\n", inode, mask, nd);
 
 	will_use_buffers(context);
 	validate_inode(inode);
@@ -709,7 +709,7 @@ static int pierrefs_permission(struct inode *inode, int mask, struct nameidata *
 	return err;
 }
 
-static ssize_t pierrefs_read(struct file *file, char __user *buf, size_t count, loff_t *offset) {
+static ssize_t hepunion_read(struct file *file, char __user *buf, size_t count, loff_t *offset) {
 	struct file *real_file = (struct file *)file->private_data;
 	ssize_t ret;
 
@@ -719,14 +719,14 @@ static ssize_t pierrefs_read(struct file *file, char __user *buf, size_t count, 
 	return ret;
 }
 
-static void pierrefs_read_inode(struct inode *inode) {
+static void hepunion_read_inode(struct inode *inode) {
 	int err;
 	struct kstat kstbuf;
 	struct list_head *entry;
 	struct read_inode_context *ctx;
-	struct pierrefs_sb_info *context = get_context_i(inode);
+	struct hepunion_sb_info *context = get_context_i(inode);
 
-	pr_info("pierrefs_read_inode: %p\n", inode);
+	pr_info("hepunion_read_inode: %p\n", inode);
 
 	/* Get path */
 	entry = context->read_inode_head.next;
@@ -768,22 +768,22 @@ static void pierrefs_read_inode(struct inode *inode) {
 
 	/* Set operations */
 	if (inode->i_mode & S_IFDIR) {
-		inode->i_op = &pierrefs_dir_iops;
-		inode->i_fop = &pierrefs_dir_fops;
+		inode->i_op = &hepunion_dir_iops;
+		inode->i_fop = &hepunion_dir_fops;
 	} else {
-		inode->i_op = &pierrefs_iops;
-		inode->i_fop = &pierrefs_fops;
+		inode->i_op = &hepunion_iops;
+		inode->i_fop = &hepunion_fops;
 	}
 
 #ifdef _DEBUG_
-	inode->i_private = (void *)PIERREFS_MAGIC;
+	inode->i_private = (void *)HEPUNION_MAGIC;
 #endif
 }
 
 static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
 	struct readdir_file *entry;
 	struct opendir_context *ctx = (struct opendir_context *)buf;
-	struct pierrefs_sb_info *context = ctx->context;
+	struct hepunion_sb_info *context = ctx->context;
 	char complete_path[PATH_MAX];
 	char *path;
 	size_t len;
@@ -863,7 +863,7 @@ static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset
 
 static int read_ro_branch(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
 	struct opendir_context *ctx = (struct opendir_context *)buf;
-	struct pierrefs_sb_info *context = ctx->context;
+	struct hepunion_sb_info *context = ctx->context;
 	char complete_path[PATH_MAX];
 	char *path;
 	size_t len;
@@ -935,17 +935,17 @@ static int read_ro_branch(void *buf, const char *name, int namlen, loff_t offset
 	return 0;
 }
 
-static int pierrefs_readdir(struct file *filp, void *dirent, filldir_t filldir) {
+static int hepunion_readdir(struct file *filp, void *dirent, filldir_t filldir) {
 	int err = 0;
 	int i = 0;
 	struct readdir_file *entry;
 	struct list_head *lentry;
 	struct opendir_context *ctx = (struct opendir_context *)filp->private_data;
 #ifdef _DEBUG_
-	struct pierrefs_sb_info *context = ctx->context;
+	struct hepunion_sb_info *context = ctx->context;
 #endif
 
-	pr_info("pierrefs_readdir: %p, %p, %p\n", filp, dirent, filldir);
+	pr_info("hepunion_readdir: %p, %p, %p\n", filp, dirent, filldir);
 
 	if (list_empty(&ctx->files_head)) {
 		/* Here fun begins.... */
@@ -1039,11 +1039,11 @@ cleanup:
 	return err;
 }
 
-static ssize_t pierrefs_readv(struct file *file, const struct iovec *vector, unsigned long count, loff_t *offset) {
+static ssize_t hepunion_readv(struct file *file, const struct iovec *vector, unsigned long count, loff_t *offset) {
 	struct file *real_file = (struct file *)file->private_data;
 	ssize_t ret;
 
-	pr_info("pierrefs_readv: %p, %p, %lu, %p(%llx)\n", file, vector, count, offset, *offset);
+	pr_info("hepunion_readv: %p, %p, %lu, %p(%llx)\n", file, vector, count, offset, *offset);
 
 	ret = vfs_readv(real_file, vector, count, offset);
 	file->f_pos = real_file->f_pos;
@@ -1051,8 +1051,8 @@ static ssize_t pierrefs_readv(struct file *file, const struct iovec *vector, uns
 	return ret;
 }
 
-static int pierrefs_revalidate(struct dentry *dentry, struct nameidata *nd) {
-	pr_info("pierrefs_revalidate: %p, %p\n", dentry, nd);
+static int hepunion_revalidate(struct dentry *dentry, struct nameidata *nd) {
+	pr_info("hepunion_revalidate: %p, %p\n", dentry, nd);
 
 	if (dentry->d_inode == NULL) {
 		return 0;
@@ -1061,18 +1061,18 @@ static int pierrefs_revalidate(struct dentry *dentry, struct nameidata *nd) {
 	return 1;
 }
 
-static int pierrefs_rmdir(struct inode *dir, struct dentry *dentry) {
+static int hepunion_rmdir(struct inode *dir, struct dentry *dentry) {
 	int err;
 	struct kstat kstbuf;
 	char me_path[PATH_MAX];
 	char wh_path[PATH_MAX];
 	char ro_path[PATH_MAX];
 	char has_ro = 0;
-	struct pierrefs_sb_info *context = get_context_i(dir);
+	struct hepunion_sb_info *context = get_context_i(dir);
 	char *path = context->global1;
 	char *real_path = context->global2;
 
-	pr_info("pierrefs_rmdir: %p, %p\n", dir, dentry);
+	pr_info("hepunion_rmdir: %p, %p\n", dir, dentry);
 
 	will_use_buffers(context);
 	validate_inode(dir);
@@ -1162,14 +1162,14 @@ static int pierrefs_rmdir(struct inode *dir, struct dentry *dentry) {
 	return err;
 }
 
-static int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
+static int hepunion_setattr(struct dentry *dentry, struct iattr *attr) {
 	int err;
 	struct dentry *real_dentry;
-	struct pierrefs_sb_info *context = get_context_d(dentry);
+	struct hepunion_sb_info *context = get_context_d(dentry);
 	char *path = context->global1;
 	char *real_path = context->global2;
 
-	pr_info("pierrefs_setattr: %p, %p\n", dentry, attr);
+	pr_info("hepunion_setattr: %p, %p\n", dentry, attr);
 
 	will_use_buffers(context);
 	validate_dentry(dentry);
@@ -1216,14 +1216,14 @@ static int pierrefs_setattr(struct dentry *dentry, struct iattr *attr) {
 	return err;
 }
 
-static int pierrefs_symlink(struct inode *dir, struct dentry *dentry, const char *symname) {
+static int hepunion_symlink(struct inode *dir, struct dentry *dentry, const char *symname) {
 	/* Create the link on the RW branch */
 	int err;
-	struct pierrefs_sb_info *context = get_context_i(dir);
+	struct hepunion_sb_info *context = get_context_i(dir);
 	char *to = context->global1;
 	char *real_to = context->global2;
 
-	pr_info("pierrefs_symlink: %p, %p, %s\n", dir, dentry, symname);
+	pr_info("hepunion_symlink: %p, %p, %s\n", dir, dentry, symname);
 
 	will_use_buffers(context);
 	validate_inode(dir);
@@ -1277,13 +1277,13 @@ static int pierrefs_symlink(struct inode *dir, struct dentry *dentry, const char
 	return 0;
 }
 
-static int pierrefs_statfs(struct dentry *dentry, struct kstatfs *buf) {
+static int hepunion_statfs(struct dentry *dentry, struct kstatfs *buf) {
 	struct super_block *sb = dentry->d_sb;
-	struct pierrefs_sb_info * sb_info = sb->s_fs_info;
+	struct hepunion_sb_info * sb_info = sb->s_fs_info;
 	struct file *filp;
 	int err;
 
-	pr_info("pierrefs_statfs: %p, %p\n", dentry, buf);
+	pr_info("hepunion_statfs: %p, %p\n", dentry, buf);
 
 	validate_dentry(dentry);
 
@@ -1305,22 +1305,22 @@ static int pierrefs_statfs(struct dentry *dentry, struct kstatfs *buf) {
 
 	/* Return them, but ensure we mark our stuff */
 	buf->f_type = sb->s_magic;
-	buf->f_fsid.val[0] = (u32)PIERREFS_SEED;
-	buf->f_fsid.val[1] = (u32)(PIERREFS_SEED >> 32);
+	buf->f_fsid.val[0] = (u32)HEPUNION_SEED;
+	buf->f_fsid.val[1] = (u32)(HEPUNION_SEED >> 32);
 
 	return 0;
 }
 
-static int pierrefs_unlink(struct inode *dir, struct dentry *dentry) {
+static int hepunion_unlink(struct inode *dir, struct dentry *dentry) {
 	int err;
-	struct pierrefs_sb_info *context = get_context_i(dir);
+	struct hepunion_sb_info *context = get_context_i(dir);
 	char *path = context->global1;
 	char *real_path = context->global2;
 	struct kstat kstbuf;
 	char me_path[PATH_MAX];
 	char wh_path[PATH_MAX];
 
-	pr_info("pierrefs_unlink: %p, %p\n", dir, dentry);
+	pr_info("hepunion_unlink: %p, %p\n", dir, dentry);
 
 	will_use_buffers(context);
 	validate_inode(dir);
@@ -1385,11 +1385,11 @@ static int pierrefs_unlink(struct inode *dir, struct dentry *dentry) {
 	return err;
 }
 
-static ssize_t pierrefs_write(struct file *file, const char __user *buf, size_t count, loff_t *offset) {
+static ssize_t hepunion_write(struct file *file, const char __user *buf, size_t count, loff_t *offset) {
 	struct file *real_file = (struct file *)file->private_data;
 	ssize_t ret;
 
-	pr_info("pierrefs_write: %p, %p, %zu, %p(%llx)\n", file, buf, count, offset, *offset);
+	pr_info("hepunion_write: %p, %p, %zu, %p(%llx)\n", file, buf, count, offset, *offset);
 
 	ret = vfs_write(real_file, buf, count, offset);
 	file->f_pos = real_file->f_pos;
@@ -1397,11 +1397,11 @@ static ssize_t pierrefs_write(struct file *file, const char __user *buf, size_t 
 	return ret;
 }
 
-static ssize_t pierrefs_writev(struct file *file, const struct iovec *vector, unsigned long count, loff_t *offset) {
+static ssize_t hepunion_writev(struct file *file, const struct iovec *vector, unsigned long count, loff_t *offset) {
 	struct file *real_file = (struct file *)file->private_data;
 	ssize_t ret;
 
-	pr_info("pierrefs_writev: %p, %p, %lu, %p(%llx)\n", file, vector, count, offset, *offset);
+	pr_info("hepunion_writev: %p, %p, %lu, %p(%llx)\n", file, vector, count, offset, *offset);
 
 	ret = vfs_writev(real_file, vector, count, offset);
 	file->f_pos = real_file->f_pos;
@@ -1409,50 +1409,50 @@ static ssize_t pierrefs_writev(struct file *file, const struct iovec *vector, un
 	return ret;
 }
 
-struct inode_operations pierrefs_iops = {
-	.getattr	= pierrefs_getattr,
-	.permission	= pierrefs_permission,
+struct inode_operations hepunion_iops = {
+	.getattr	= hepunion_getattr,
+	.permission	= hepunion_permission,
 #if 0
 	.readlink	= generic_readlink, /* dentry will already point on the right file */
 #endif
-	.setattr	= pierrefs_setattr,
+	.setattr	= hepunion_setattr,
 };
 
-struct inode_operations pierrefs_dir_iops = {
-	.create		= pierrefs_create,
-	.getattr	= pierrefs_getattr,
-	.link		= pierrefs_link,
-	.lookup		= pierrefs_lookup,
-	.mkdir		= pierrefs_mkdir,
-	.mknod		= pierrefs_mknod,
-	.permission	= pierrefs_permission,
-	.rmdir		= pierrefs_rmdir,
-	.setattr	= pierrefs_setattr,
-	.symlink	= pierrefs_symlink,
-	.unlink		= pierrefs_unlink,
+struct inode_operations hepunion_dir_iops = {
+	.create		= hepunion_create,
+	.getattr	= hepunion_getattr,
+	.link		= hepunion_link,
+	.lookup		= hepunion_lookup,
+	.mkdir		= hepunion_mkdir,
+	.mknod		= hepunion_mknod,
+	.permission	= hepunion_permission,
+	.rmdir		= hepunion_rmdir,
+	.setattr	= hepunion_setattr,
+	.symlink	= hepunion_symlink,
+	.unlink		= hepunion_unlink,
 };
 
-struct super_operations pierrefs_sops = {
-	.read_inode	= pierrefs_read_inode,
-	.statfs		= pierrefs_statfs,
+struct super_operations hepunion_sops = {
+	.read_inode	= hepunion_read_inode,
+	.statfs		= hepunion_statfs,
 };
 
-struct dentry_operations pierrefs_dops = {
-	.d_revalidate	= pierrefs_revalidate,
+struct dentry_operations hepunion_dops = {
+	.d_revalidate	= hepunion_revalidate,
 };
 
-struct file_operations pierrefs_fops = {
-	.llseek		= pierrefs_llseek,
-	.open		= pierrefs_open,
-	.read		= pierrefs_read,
-	.readv		= pierrefs_readv,
-	.release	= pierrefs_close,
-	.write		= pierrefs_write,
-	.writev		= pierrefs_writev,
+struct file_operations hepunion_fops = {
+	.llseek		= hepunion_llseek,
+	.open		= hepunion_open,
+	.read		= hepunion_read,
+	.readv		= hepunion_readv,
+	.release	= hepunion_close,
+	.write		= hepunion_write,
+	.writev		= hepunion_writev,
 };
 
-struct file_operations pierrefs_dir_fops = {
-	.open		= pierrefs_opendir,
-	.readdir	= pierrefs_readdir,
-	.release	= pierrefs_closedir,
+struct file_operations hepunion_dir_fops = {
+	.open		= hepunion_opendir,
+	.readdir	= hepunion_readdir,
+	.release	= hepunion_closedir,
 };

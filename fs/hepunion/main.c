@@ -1,6 +1,6 @@
 /**
  * \file main.c
- * \brief Entry point of the PierreFS file system
+ * \brief Entry point of the HEPunion file system
  * \author Pierre Schweitzer <pierre.jean.schweitzer@cern.ch>
  * \version 1.0
  * \date 21-Nov-2011
@@ -11,12 +11,12 @@
  * It fills in mount context in case of success.
  */
 
-#include "pierrefs.h"
+#include "hepunion.h"
 
 MODULE_AUTHOR("Pierre Schweitzer, CERN CH"
-	      " (http://pierrefs.sourceforge.net)");
-MODULE_DESCRIPTION("PierreFS " PIERREFS_VERSION
-		   " (http://pierrefs.sourceforge.net)");
+	      " (http://github.com/HeisSpiter/hepunion)");
+MODULE_DESCRIPTION("HEPunion " HEPUNION_VERSION
+		   " (http://github.com/HeisSpiter/hepunion)");
 MODULE_LICENSE("GPL");
 
 static int make_path(const char *s, size_t n, char **path) {
@@ -52,7 +52,7 @@ static int make_path(const char *s, size_t n, char **path) {
 static int get_branches(struct super_block *sb, const char *arg) {
 	int err, forced_ro = 0;
 	char *output, *type, *part2;
-	struct pierrefs_sb_info * sb_info = sb->s_fs_info;
+	struct hepunion_sb_info * sb_info = sb->s_fs_info;
 	struct inode * root_i;
 	umode_t root_m;
 	struct timespec atime, mtime, ctime;
@@ -209,11 +209,11 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	root_i->i_atime = atime;
 	root_i->i_mtime = mtime;
 	root_i->i_ctime = ctime;
-	root_i->i_op = &pierrefs_dir_iops;
-	root_i->i_fop = &pierrefs_dir_fops;
+	root_i->i_op = &hepunion_dir_iops;
+	root_i->i_fop = &hepunion_dir_fops;
 	root_i->i_nlink = 2;
 #ifdef _DEBUG_
-	root_i->i_private = (void *)PIERREFS_MAGIC;
+	root_i->i_private = (void *)HEPUNION_MAGIC;
 #endif
 
 	/* Create its directory entry */
@@ -223,14 +223,14 @@ static int get_branches(struct super_block *sb, const char *arg) {
 		iput(root_i);
 		return PTR_ERR(sb->s_root);
 	}
-	sb->s_root->d_op = &pierrefs_dops;
+	sb->s_root->d_op = &HEPUNION_dops;
 #ifdef _DEBUG_
-	sb->s_root->d_fsdata = (void *)PIERREFS_MAGIC;
+	sb->s_root->d_fsdata = (void *)HEPUNION_MAGIC;
 #endif
 
 	/* Set super block attributes */
-	sb->s_magic = PIERREFS_MAGIC;
-	sb->s_op = &pierrefs_sops;
+	sb->s_magic = HEPUNION_MAGIC;
+	sb->s_op = &hepunion_sops;
 	sb->s_time_gran = 1;
 
 	/* TODO: Add directory entries */
@@ -238,12 +238,12 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	return 0;
 }
 
-static int pierrefs_read_super(struct super_block *sb, void *raw_data,
+static int hepunion_read_super(struct super_block *sb, void *raw_data,
 			       int silent) {
 	int err;
-	struct pierrefs_sb_info *sb_info;
+	struct hepunion_sb_info *sb_info;
 
-	pr_info("pierrefs_read_super: %p, %p, %d, %s\n", sb, raw_data, silent, __TIME__);
+	pr_info("hepunion_read_super: %p, %p, %d, %s\n", sb, raw_data, silent, __TIME__);
 
 	/* Check for parameters */
 	if (!raw_data) {
@@ -253,7 +253,7 @@ static int pierrefs_read_super(struct super_block *sb, void *raw_data,
 
 	/* Allocate super block info structure */
 	sb_info =
-	sb->s_fs_info = kzalloc(sizeof(struct pierrefs_sb_info), GFP_KERNEL);
+	sb->s_fs_info = kzalloc(sizeof(struct hepunion_sb_info), GFP_KERNEL);
 	if (unlikely(!sb->s_fs_info)) {
 		pr_crit("Failed allocating super block info structure!\n");
 		return -ENOMEM;
@@ -286,17 +286,17 @@ static int pierrefs_read_super(struct super_block *sb, void *raw_data,
 	return 0;
 }
 
-static int pierrefs_get_sb(struct file_system_type *fs_type,
+static int hepunion_get_sb(struct file_system_type *fs_type,
 				     int flags, const char *dev_name,
 				     void *raw_data, struct vfsmount *mnt) {
 	int err = get_sb_nodev(fs_type, flags,
-					    raw_data, pierrefs_read_super, mnt);
+					    raw_data, hepunion_read_super, mnt);
 
 	return err;
 }
 
-static void pierrefs_kill_sb(struct super_block *sb) {
-	struct pierrefs_sb_info *sb_info;
+static void hepunion_kill_sb(struct super_block *sb) {
+	struct hepunion_sb_info *sb_info;
 
 	sb_info = sb->s_fs_info;
 
@@ -313,21 +313,21 @@ static void pierrefs_kill_sb(struct super_block *sb) {
 	kill_litter_super(sb);
 }
 
-static struct file_system_type pierrefs_fs_type = {
+static struct file_system_type hepunion_fs_type = {
 	.owner		= THIS_MODULE,
-	.name		= PIERREFS_NAME,
-	.get_sb		= pierrefs_get_sb,
-	.kill_sb	= pierrefs_kill_sb,
+	.name		= HEPUNION_NAME,
+	.get_sb		= hepunion_get_sb,
+	.kill_sb	= hepunion_kill_sb,
 	.fs_flags	= FS_REVAL_DOT,
 };
 
-static int __init init_pierrefs_fs(void) {
-	return register_filesystem(&pierrefs_fs_type);
+static int __init init_hepunion_fs(void) {
+	return register_filesystem(&hepunion_fs_type);
 }
 
-static void __exit exit_pierrefs_fs(void) {
-	unregister_filesystem(&pierrefs_fs_type);
+static void __exit exit_hepunion_fs(void) {
+	unregister_filesystem(&hepunion_fs_type);
 }
 
-module_init(init_pierrefs_fs);
-module_exit(exit_pierrefs_fs);
+module_init(init_hepunion_fs);
+module_exit(exit_hepunion_fs);

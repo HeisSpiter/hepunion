@@ -1,4 +1,4 @@
-PfConfStr = CONFIG_PIERREFS_FS=${CONFIG_PIERREFS_FS}
+PfConfStr = CONFIG_HEPUNION_FS=${CONFIG_HEPUNION_FS}
 
 define PfConf
 ifdef ${1}
@@ -9,7 +9,7 @@ endef
 PfConfAll =
 
 $(foreach i, ${PfConfAll}, \
-	$(eval $(call PfConf,CONFIG_PIERREFS_${i})))
+	$(eval $(call PfConf,CONFIG_HEPUNION_${i})))
 
 PfConfName = ${obj}/conf.str
 ${PfConfName}.tmp: FORCE

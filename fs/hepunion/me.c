@@ -1,12 +1,12 @@
 /**
  * \file me.c
- * \brief Metadata (ME) support for the PierreFS file system
+ * \brief Metadata (ME) support for the HEPunion file system
  * \author Pierre Schweitzer <pierre.jean.schweitzer@cern.ch>
  * \version 1.0
  * \date 10-Dec-2011
  * \copyright GNU General Public License - GPL
  *
- * Metadata support in PierreFS file system is different that
+ * Metadata support in HEPunion file system is different that
  * in the other union file systems.
  *
  * Here, a clear difference is made between data and metadata.
@@ -43,9 +43,9 @@
  * non alterable metadata.
  */
 
-#include "pierrefs.h"
+#include "hepunion.h"
 
-int create_me(const char *me_path, struct kstat *kstbuf, struct pierrefs_sb_info *context) {
+int create_me(const char *me_path, struct kstat *kstbuf, struct hepunion_sb_info *context) {
 	int err;
 	struct file *fd;
 	struct iattr attr;
@@ -81,7 +81,7 @@ int create_me(const char *me_path, struct kstat *kstbuf, struct pierrefs_sb_info
 	return err;
 }
 
-int find_me(const char *path, struct pierrefs_sb_info *context, char *me_path, struct kstat *kstbuf) {
+int find_me(const char *path, struct hepunion_sb_info *context, char *me_path, struct kstat *kstbuf) {
 	int err;
 
 	pr_info("find_me: %s, %p, %p, %p\n", path, context, me_path, kstbuf);
@@ -98,7 +98,7 @@ int find_me(const char *path, struct pierrefs_sb_info *context, char *me_path, s
 	return err;
 }
 
-int get_file_attr(const char *path, struct pierrefs_sb_info *context, struct kstat *kstbuf) {
+int get_file_attr(const char *path, struct hepunion_sb_info *context, struct kstat *kstbuf) {
 	char real_path[PATH_MAX];
 	int err;
 
@@ -114,7 +114,7 @@ int get_file_attr(const char *path, struct pierrefs_sb_info *context, struct kst
 	return get_file_attr_worker(path, real_path, context, kstbuf);
 }
 
-int get_file_attr_worker(const char *path, const char *real_path, struct pierrefs_sb_info *context, struct kstat *kstbuf) {
+int get_file_attr_worker(const char *path, const char *real_path, struct hepunion_sb_info *context, struct kstat *kstbuf) {
 	int err;
 	char me;
 	struct kstat kstme;
@@ -152,7 +152,7 @@ int get_file_attr_worker(const char *path, const char *real_path, struct pierref
 	return 0;
 }
 
-int set_me(const char *path, const char *real_path, struct kstat *kstbuf, struct pierrefs_sb_info *context, int flags) {
+int set_me(const char *path, const char *real_path, struct kstat *kstbuf, struct hepunion_sb_info *context, int flags) {
 	struct iattr attr;
 
 	pr_info("set_me: %s, %s, %p, %p, %x\n", path, real_path, kstbuf, context, flags);
@@ -181,7 +181,7 @@ int set_me(const char *path, const char *real_path, struct kstat *kstbuf, struct
 	return set_me_worker(path, real_path, &attr, context);
 }
 
-int set_me_worker(const char *path, const char *real_path, struct iattr *attr, struct pierrefs_sb_info *context) {
+int set_me_worker(const char *path, const char *real_path, struct iattr *attr, struct hepunion_sb_info *context) {
 	int err;
 	char me;
 	char me_path[PATH_MAX];

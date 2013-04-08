@@ -1,25 +1,25 @@
 /**
- * \file pierrefs.h
- * \brief Global header file included in all PierreFS files
+ * \file hepunion.h
+ * \brief Global header file included in all HEPunion files
  * \author Pierre Schweitzer <pierre.jean.schweitzer@cern.ch>
  * \version 1.0
  * \date 21-Nov-2011
  * \copyright GNU General Public License - GPL
  * \todo Implementing caching
  *
- * PierreFS file system intend to provide a file systems unioning
+ * HEPunion file system intend to provide a file systems unioning
  * solution that comes with several specifications:
  * - Copy-on-write
  * - Low redundancy in files
  * - Data and metadata separation
  */
 
-#ifndef __PIERREFS_H__
-#define __PIERREFS_H__
+#ifndef __HEPUNION_H__
+#define __HEPUNION_H__
 
 #ifdef __KERNEL__
 
-#include <linux/pierrefs_type.h>
+#include <linux/hepunion_type.h>
 #include <linux/fs.h>
 #include <linux/dcache.h>
 #include <linux/namei.h>
@@ -49,7 +49,7 @@ struct read_inode_context {
 	char name[1];
 };
 
-struct pierrefs_sb_info {
+struct hepunion_sb_info {
 	/**
 	 * Contains the full path of the RW branch
 	 * \warning It is not \ terminated
@@ -113,7 +113,7 @@ struct readdir_context {
 	/**
      * Context with which vfs_readdir was called
 	 */
-	struct pierrefs_sb_info *context;
+	struct hepunion_sb_info *context;
 };
 
 /**
@@ -162,7 +162,7 @@ struct opendir_context {
 	/**
 	 * Context used for opendir
 	 */
-	struct pierrefs_sb_info *context;
+	struct hepunion_sb_info *context;
 	/**
 	 * Head of the list containing all the files to be returned
 	 */
@@ -224,12 +224,12 @@ typedef enum _specials {
 	WH = 1
 } specials;
 
-extern struct inode_operations pierrefs_iops;
-extern struct inode_operations pierrefs_dir_iops;
-extern struct super_operations pierrefs_sops;
-extern struct dentry_operations pierrefs_dops;
-extern struct file_operations pierrefs_fops;
-extern struct file_operations pierrefs_dir_fops;
+extern struct inode_operations hepunion_iops;
+extern struct inode_operations hepunion_dir_iops;
+extern struct super_operations hepunion_sops;
+extern struct dentry_operations hepunion_dops;
+extern struct file_operations hepunion_fops;
+extern struct file_operations hepunion_dir_fops;
 
 /**
  * Rights mask used to handle shifting with st_mode rights definition.
@@ -293,7 +293,7 @@ extern struct file_operations pierrefs_dir_fops;
 /**
   * Defines the seed key for the inode numbers
  */
-#define PIERREFS_SEED 0x9F5109F5109F510BLLU
+#define HEPUNION_SEED 0x9F5109F5109F510BLLU
 
 /**
  * Mask that defines all the modes of a file that can be changed using the
@@ -356,15 +356,15 @@ extern struct file_operations pierrefs_dir_fops;
 /**
  * Get current context associated with dentry
  * \param[in]	d	dentry pointer
- * \return	It returns super block info structure (pierrefs_sb_info)
+ * \return	It returns super block info structure (hepunion_sb_info)
  */
-#define get_context_d(d) ((struct pierrefs_sb_info *)d->d_sb->s_fs_info)
+#define get_context_d(d) ((struct hepunion_sb_info *)d->d_sb->s_fs_info)
 /**
  * Get current context associated with inode
  * \param[in]	i	inode pointer
- * \return	It returns super block info structure (pierrefs_sb_info)
+ * \return	It returns super block info structure (hepunion_sb_info)
  */
-#define get_context_i(i) ((struct pierrefs_sb_info *)i->i_sb->s_fs_info)
+#define get_context_i(i) ((struct hepunion_sb_info *)i->i_sb->s_fs_info)
 /**
  * Generate the string matching the given path for a full RO path
  * \param[in]	p	The path for which full path is required
@@ -414,7 +414,7 @@ extern struct file_operations pierrefs_dir_fops;
  * \param[in]	n	The name to translate
  * \return	The associated inode number
  */
-#define name_to_ino(n) murmur_hash_64a(n, strlen(n) * sizeof(n[0]), PIERREFS_SEED)
+#define name_to_ino(n) murmur_hash_64a(n, strlen(n) * sizeof(n[0]), HEPUNION_SEED)
 /**
  * Kernel mode assertion
  * In case the expression is unverified, kernel panic
@@ -446,9 +446,9 @@ extern struct file_operations pierrefs_dir_fops;
 	assert(c->buffers_in_use == 1);	\
 	c->buffers_in_use = 0
 #define validate_inode(i)	\
-	assert((unsigned long)i->i_private == PIERREFS_MAGIC)
+	assert((unsigned long)i->i_private == HEPUNION_MAGIC)
 #define validate_dentry(d)	\
-	assert((unsigned long)d->d_fsdata == PIERREFS_MAGIC)
+	assert((unsigned long)d->d_fsdata == HEPUNION_MAGIC)
 
 #else
 #define open_worker(p, c, f) filp_open(p, f, 0)
@@ -477,7 +477,7 @@ extern struct file_operations pierrefs_dir_fops;
  * \param[in]	context	Calling context of the FS
  * \return	0 in case of a success, -1 otherwise. errno is set
  */
-int create_copyup(const char *path, const char *ro_path, char *rw_path, struct pierrefs_sb_info *context);
+int create_copyup(const char *path, const char *ro_path, char *rw_path, struct hepunion_sb_info *context);
 /**
  * Find a path that is available in RW.
  * If none exists, but RO path exists, then a copyup of the
@@ -487,7 +487,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
  * \param[in]	context		Calling context of the FS
  * \return	0 in case of a success, -err in case of error
  */
-int find_path(const char *path, char *real_path, struct pierrefs_sb_info *context);
+int find_path(const char *path, char *real_path, struct hepunion_sb_info *context);
 /**
  * Delete a copyup but restore attributes of the file through a me if required
  * \param[in]	path		Relative path of the file
@@ -495,7 +495,7 @@ int find_path(const char *path, char *real_path, struct pierrefs_sb_info *contex
  * \param[in]	context		Calling context of the FS
  * \return	0 in case of a success, -err in case of error
  */
-int unlink_copyup(const char *path, const char *copyup_path, struct pierrefs_sb_info *context);
+int unlink_copyup(const char *path, const char *copyup_path, struct hepunion_sb_info *context);
 
 /* Functions in me.c */
 /**
@@ -507,7 +507,7 @@ int unlink_copyup(const char *path, const char *copyup_path, struct pierrefs_sb_
  * \return	0 in case of a success, -err in case of an error
  * \note	To set metadata of a file, use set_me() instead
  */
-int create_me(const char *me_path, struct kstat *kstbuf, struct pierrefs_sb_info *context);
+int create_me(const char *me_path, struct kstat *kstbuf, struct hepunion_sb_info *context);
 /**
  * Find the metadata file associated with a file and query
  * its properties.
@@ -517,7 +517,7 @@ int create_me(const char *me_path, struct kstat *kstbuf, struct pierrefs_sb_info
  * \param[out]	kstbuf	Structure containing extracted metadata in case of a success
  * \return	0 in case of a success, -err in case of error
  */
-int find_me(const char *path, struct pierrefs_sb_info *context, char *me_path, struct kstat *kstbuf);
+int find_me(const char *path, struct hepunion_sb_info *context, char *me_path, struct kstat *kstbuf);
 /**
  * Query the unioned metadata of a file. This can include the read
  * of a metadata file.
@@ -527,7 +527,7 @@ int find_me(const char *path, struct pierrefs_sb_info *context, char *me_path, s
  * \return	0 in case of a success, -err in case of error
  * \note	In case you already have full path, prefer using get_file_attr_worker()
  */
-int get_file_attr(const char *path, struct pierrefs_sb_info *context, struct kstat *kstbuf);
+int get_file_attr(const char *path, struct hepunion_sb_info *context, struct kstat *kstbuf);
 /**
  * Query the unioned metadata of a file. This can include the read
  * of a metadata file.
@@ -538,7 +538,7 @@ int get_file_attr(const char *path, struct pierrefs_sb_info *context, struct kst
  * \return	0 in case of a success, -err in case of error
  * \note	In case you don't have full path, use get_file_attr() that will find it for you
  */
-int get_file_attr_worker(const char *path, const char *real_path, struct pierrefs_sb_info *context, struct kstat *kstbuf);
+int get_file_attr_worker(const char *path, const char *real_path, struct hepunion_sb_info *context, struct kstat *kstbuf);
 /**
  * Set the metadata for a file, using a metadata file.
  * \param[in]	path		Relative path of the file to set
@@ -551,7 +551,7 @@ int get_file_attr_worker(const char *path, const char *real_path, struct pierref
  * \note	In case you have an iattr struct, use set_me_worker() function
  * \todo	Would deserve a check for equality and .me. removal
  */
-int set_me(const char *path, const char *real_path, struct kstat *kstbuf, struct pierrefs_sb_info *context, int flags);
+int set_me(const char *path, const char *real_path, struct kstat *kstbuf, struct hepunion_sb_info *context, int flags);
 /**
  * Set the metadata for a file, using a metadata file.
  * \param[in]	path		Relative path of the file to set
@@ -564,7 +564,7 @@ int set_me(const char *path, const char *real_path, struct kstat *kstbuf, struct
  * \note	Only ATTR_UID, ATTR_GID, ATTR_ATIME, ATTR_MTIME, ATTR_MODE flags are supported
  * \todo	Would deserve a check for equality and .me. removal
  */
-int set_me_worker(const char *path, const char *real_path, struct iattr *attr, struct pierrefs_sb_info *context);
+int set_me_worker(const char *path, const char *real_path, struct iattr *attr, struct hepunion_sb_info *context);
 
 /* Functions in helpers.c */
 /**
@@ -576,7 +576,7 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr, s
  * \return	1 if calling process can access, -err in case of error
  * \note	This is checked against user, group, others permissions
  */
-int can_access(const char *path, const char *real_path, struct pierrefs_sb_info *context, int mode);
+int can_access(const char *path, const char *real_path, struct hepunion_sb_info *context, int mode);
 /**
  * Check permission for the calling process to create a file.
  * \param[in]	p	Relative path of the file to create
@@ -594,7 +594,7 @@ int can_access(const char *path, const char *real_path, struct pierrefs_sb_info 
  * \return	1 if calling process can remove, -err in case of error
  * \note	This is checked against user, group, others permissions for writing in parent directory
  */
-int can_remove(const char *path, const char *real_path, struct pierrefs_sb_info *context);
+int can_remove(const char *path, const char *real_path, struct hepunion_sb_info *context);
 /**
  * Check permission for the calling process to go through a tree.
  * \param[in]	path	Relative path of the tree to traverse
@@ -602,7 +602,7 @@ int can_remove(const char *path, const char *real_path, struct pierrefs_sb_info 
  * \return	1 if calling process can remove, 0 otherwise. errno is set
  * \note	This is checked against user, group, others permissions for execute in traverse directories
  */
-int can_traverse(const char *path, struct pierrefs_sb_info *context);
+int can_traverse(const char *path, struct hepunion_sb_info *context);
 /**
  * Check whether the given path exists.
  * \param[in]	pathname	Pathname to lookup
@@ -610,7 +610,7 @@ int can_traverse(const char *path, struct pierrefs_sb_info *context);
  * \param[in]	flag		Flag to use for looking up
  * \return dentry, or -err in case of error
  */
-int check_exist(const char *pathname, struct pierrefs_sb_info *context, int flag);
+int check_exist(const char *pathname, struct hepunion_sb_info *context, int flag);
 /**
  * Find a file either in RW or RO branch, taking into account whiteout files. It can copyup files if needed.
  * \param[in]	path		Relative path of the file to find
@@ -622,9 +622,9 @@ int check_exist(const char *pathname, struct pierrefs_sb_info *context, int flag
  * \note	In case you called the function with CREATE_COPYUP flag, and it succeded, then returned path is to RW file
  * \warning	There is absolutely no checks for flags consistency!
  */
-int find_file(const char *path, char *real_path, struct pierrefs_sb_info *context, char flags);
+int find_file(const char *path, char *real_path, struct hepunion_sb_info *context, char flags);
 /**
- * Get the full path of a dentry (might it be on PierreFS or lower file system).
+ * Get the full path of a dentry (might it be on HEPunion or lower file system).
  * \param[in]	dentry		Dentry that refers to the file
  * \param[out]	real_path	The real path that has been found
  * \return Length written in real_path in case of a success, an error code otherwise
@@ -637,33 +637,33 @@ int get_full_path_d(const struct dentry *dentry, char *real_path);
  * \return Length written in real_path in case of a success, an error code otherwise
  * \warning	The function will try to get the best dentry possible by browsing them all
  * \warning	It will compute the full path for each dentry and then, get its ino and compare with inode ino
- * \warning It will work best with PierreFS inode. For the rest, the last dentry will be used
+ * \warning It will work best with HEPunion inode. For the rest, the last dentry will be used
  */
 int get_full_path_i(const struct inode *inode, char *real_path);
 /**
- * Get the relative path (to / of PierreFS) of the provided file.
+ * Get the relative path (to / of HEPunion) of the provided file.
  * \param[in]	inode	Inode that refers to the file
  * \param[in]	dentry	Dentry that refers to the file
  * \param[in]	context		Calling context of the FS
  * \param[out]	path	The relative path that has been found
- * \param[in]	is_ours	Set to 1, it means that dentry & inode are local to PierreFS
+ * \param[in]	is_ours	Set to 1, it means that dentry & inode are local to HEPunion
  * \return 0 in case of a success, an error code otherwise
  * \note	It is possible not to provide a dentry (but not recommended). An inode must be provided then
  * \note	It is possible not to provide an inode. A dentry must be provided then
- * \warning	If no dentry is provided, the function might fail to find the path to the file even if it is on the PierreFS volume
+ * \warning	If no dentry is provided, the function might fail to find the path to the file even if it is on the HEPunion volume
  */
-int get_relative_path(const struct inode *inode, const struct dentry *dentry, const struct pierrefs_sb_info *context, char *path, int is_ours);
+int get_relative_path(const struct inode *inode, const struct dentry *dentry, const struct hepunion_sb_info *context, char *path, int is_ours);
 /**
- * Get the relative path (to / of PierreFS) for the creation of the provided file.
+ * Get the relative path (to / of HEPunion) for the creation of the provided file.
  * \param[in]	dir		Inode that refers to the directory in which the file is to be created
  * \param[in]	dentry	Dentry that refers to the file to create in the directory
  * \param[in]	context	Calling context of the FS
  * \param[out]	path	The relative path that has been found
- * \param[in]	is_ours	Set to 1, it means that dentry & inode are local to PierreFS
+ * \param[in]	is_ours	Set to 1, it means that dentry & inode are local to HEPunion
  * \return 0 in case of a success, an error code otherwise
  * \warning	This fuction relies on get_relative_path() and its limitations apply here
  */
-int get_relative_path_for_file(const struct inode *dir, const struct dentry *dentry, const struct pierrefs_sb_info *context, char *path, int is_ours);
+int get_relative_path_for_file(const struct inode *dir, const struct dentry *dentry, const struct hepunion_sb_info *context, char *path, int is_ours);
 /**
  * Get the dentry representing the given path.
  * \param[in]	pathname	Pathname to lookup
@@ -671,9 +671,9 @@ int get_relative_path_for_file(const struct inode *dir, const struct dentry *den
  * \param[in]	flag		Flag to use for opening
  * \return dentry, or -err in case of error
  */
-struct dentry* get_path_dentry(const char *pathname, struct pierrefs_sb_info *context, int flag);
+struct dentry* get_path_dentry(const char *pathname, struct hepunion_sb_info *context, int flag);
 /**
- * Given a PierreFS relative path transforms it to full path for either wh or me
+ * Given a HEPunion relative path transforms it to full path for either wh or me
  * \param[in]	path	The path to transform
  * \param[in]	type	Type of special file wanted (see specials)
  * \param[in]	context	Calling context of the FS
@@ -681,7 +681,7 @@ struct dentry* get_path_dentry(const char *pathname, struct pierrefs_sb_info *co
  * \return 0 in case of a success, an error code otherwise
  * \warning This function assumes that the path is PATH_MAX big
  */
-int path_to_special(const char *path, specials type, const struct pierrefs_sb_info *context, char *outpath);
+int path_to_special(const char *path, specials type, const struct hepunion_sb_info *context, char *outpath);
 /**
  * Implementation taken from Linux kernel (and simplified). It's here to allow creation
  * of a link using pathname.
@@ -690,7 +690,7 @@ int path_to_special(const char *path, specials type, const struct pierrefs_sb_in
  * \param[in]	context	Calling context of the FS
  * \return	0 in case of a success, -err otherwise
  */
-long link(const char *oldname, const char *newname, struct pierrefs_sb_info *context);
+long link(const char *oldname, const char *newname, struct hepunion_sb_info *context);
 /**
  * Implementation taken from the Linux kernel (and simplitied). It's here to query files attributes
  * \param[in]	pathname	Path of which querying attributes
@@ -698,7 +698,7 @@ long link(const char *oldname, const char *newname, struct pierrefs_sb_info *con
  * \param[out]	stat		Queried attributes
  * \return	0 in case of a success, -err otherwise
  */
-int lstat(const char *pathname, struct pierrefs_sb_info *context, struct kstat *stat);
+int lstat(const char *pathname, struct hepunion_sb_info *context, struct kstat *stat);
 /**
  * Implementation taken from Linux kernel. It's here to allow creation of a directory
  * using pathname.
@@ -707,7 +707,7 @@ int lstat(const char *pathname, struct pierrefs_sb_info *context, struct kstat *
  * \param[in]	mode		Mode to set to the directory (see mkdir man page)
  * \return	0 in case of a success, -err otherwise
  */
-long mkdir(const char *pathname, struct pierrefs_sb_info *context, int mode);
+long mkdir(const char *pathname, struct hepunion_sb_info *context, int mode);
 /**
  * Wrapper for mknod that allows creation of a FIFO file using pathname.
  * \param[in]	pathname	FIFO file to create
@@ -715,7 +715,7 @@ long mkdir(const char *pathname, struct pierrefs_sb_info *context, int mode);
  * \param[in]	mode		Mode to set to the file (see mkfifo man page)
  * \return 	0 in case of a success, -err otherwise
  */
-int mkfifo(const char *pathname, struct pierrefs_sb_info *context, int mode);
+int mkfifo(const char *pathname, struct hepunion_sb_info *context, int mode);
 /**
  * Implementation taken from Linux kernel. It's here to allow creation of a special
  * file using pathname.
@@ -725,7 +725,7 @@ int mkfifo(const char *pathname, struct pierrefs_sb_info *context, int mode);
  * \param[in]	dev			Special device
  * \return	0 in case of a success, -err otherwise
  */
-long mknod(const char *pathname, struct pierrefs_sb_info *context, int mode, unsigned dev);
+long mknod(const char *pathname, struct hepunion_sb_info *context, int mode, unsigned dev);
 /**
  * Implementation taken from Linux kernel. It's here to allow link readding (seems like
  * that's not the job vfs_readdlink is doing).
@@ -735,7 +735,7 @@ long mknod(const char *pathname, struct pierrefs_sb_info *context, int mode, uns
  * \param[in]	bufsiz	Output buffer size
  * \return	0 in case of a success, -err otherwise 
  */
-long readlink(const char *path, char *buf, struct pierrefs_sb_info *context, int bufsiz);
+long readlink(const char *path, char *buf, struct hepunion_sb_info *context, int bufsiz);
 /**
  * Implementation taken from Linux kernel. It's here to allow deletion of a directory
  * using pathname.
@@ -743,7 +743,7 @@ long readlink(const char *path, char *buf, struct pierrefs_sb_info *context, int
  * \param[in]	context		Calling context of the FS
  * \return	0 in case of a success, -err otherwise
  */
-long rmdir(const char *pathname, struct pierrefs_sb_info *context);
+long rmdir(const char *pathname, struct hepunion_sb_info *context);
 /**
  * Implementation taken from Linux kernel. It's here to allow creation of a symlink
  * using pathname.
@@ -752,7 +752,7 @@ long rmdir(const char *pathname, struct pierrefs_sb_info *context);
  * \param[in]	context	Calling context of the FS
  * \return	0 in case of a success, -err otherwise
  */
-long symlink(const char *oldname, const char *newname, struct pierrefs_sb_info *context);
+long symlink(const char *oldname, const char *newname, struct hepunion_sb_info *context);
 /**
  * Implementation taken from Linux kernel. It's here to allow deletion of a file
  * using pathname.
@@ -760,7 +760,7 @@ long symlink(const char *oldname, const char *newname, struct pierrefs_sb_info *
  * \param[in]	context		Calling context of the FS
  * \return	0 in case of a success, -err otherwise
  */
-long unlink(const char *pathname, struct pierrefs_sb_info *context);
+long unlink(const char *pathname, struct hepunion_sb_info *context);
 /**
  * Worker for debug purpose. It first checks opening mode and branch, and then call open.
  * This is used to catch bad calls to RO branch
@@ -769,7 +769,7 @@ long unlink(const char *pathname, struct pierrefs_sb_info *context);
  * \param[in]	flags		Flags for file opening (see open man page)
  * \return	-1 in case of a failure, 0 otherwise. errno is set
  */
-struct file* dbg_open(const char *pathname, const struct pierrefs_sb_info *context, int flags);
+struct file* dbg_open(const char *pathname, const struct hepunion_sb_info *context, int flags);
 /**
  * Worker for debug purpose. It first checks opening mode and branch, and then call open.
  * This is used to catch bad calls to RO branch
@@ -779,7 +779,7 @@ struct file* dbg_open(const char *pathname, const struct pierrefs_sb_info *conte
  * \param[in]	mode		Mode to set to the file (see open man page)
  * \return	-1 in case of a failure, 0 otherwise. errno is set
  */
-struct file* dbg_open_2(const char *pathname, const struct pierrefs_sb_info *context, int flags, mode_t mode);
+struct file* dbg_open_2(const char *pathname, const struct hepunion_sb_info *context, int flags, mode_t mode);
 /**
  * Worker for debug purpose. It checks if the file is to be created on the right branch
  * and then call creat
@@ -788,7 +788,7 @@ struct file* dbg_open_2(const char *pathname, const struct pierrefs_sb_info *con
  * \param[in]	mode		Mode to set to the file (see open man page)
  * \return	-1 in case of a failure, 0 otherwise. errno is set
  */
-struct file* dbg_creat(const char *pathname, const struct pierrefs_sb_info *context, mode_t mode);
+struct file* dbg_creat(const char *pathname, const struct hepunion_sb_info *context, mode_t mode);
 /**
  * Worker for debug purpose. It checks if the directory is to be created on the right branch
  * and then call mkdir
@@ -797,7 +797,7 @@ struct file* dbg_creat(const char *pathname, const struct pierrefs_sb_info *cont
  * \param[in]	mode		Mode to set to the directory (see mkdir man page)
  * \return	-1 in case of a failure, 0 otherwise. errno is set
  */
-int dbg_mkdir(const char *pathname, struct pierrefs_sb_info *context, mode_t mode);
+int dbg_mkdir(const char *pathname, struct hepunion_sb_info *context, mode_t mode);
 /**
  * Worker for debug purpose. It checks if the special file is to be created on the right branch
  * and then call mknod
@@ -807,7 +807,7 @@ int dbg_mkdir(const char *pathname, struct pierrefs_sb_info *context, mode_t mod
  * \param[in]	dev			Attributes of the device (see mknod man page)
  * \return	-1 in case of a failure, 0 otherwise. errno is set
  */
-int dbg_mknod(const char *pathname, struct pierrefs_sb_info *context, mode_t mode, dev_t dev);
+int dbg_mknod(const char *pathname, struct hepunion_sb_info *context, mode_t mode, dev_t dev);
 /**
  * Worker for debug purpose. It checks if the FIFO is to be created on the right branch
  * and then call mkfifo
@@ -816,7 +816,7 @@ int dbg_mknod(const char *pathname, struct pierrefs_sb_info *context, mode_t mod
  * \param[in]	mode		Mode to set to the directory (see mkfifo man page)
  * \return	-1 in case of a failure, 0 otherwise. errno is set
  */
-int dbg_mkfifo(const char *pathname, struct pierrefs_sb_info *context, mode_t mode);
+int dbg_mkfifo(const char *pathname, struct hepunion_sb_info *context, mode_t mode);
 /**
  * Worker for debug purpose. It checks if the symlink is to be created on the right branch
  * and then call symlink
@@ -825,7 +825,7 @@ int dbg_mkfifo(const char *pathname, struct pierrefs_sb_info *context, mode_t mo
  * \param[in]	context	Calling context of the FS
  * \return	-1 in case of a failure, 0 otherwise. errno is set
  */
-int dbg_symlink(const char *oldpath, const char *newpath, struct pierrefs_sb_info *context);
+int dbg_symlink(const char *oldpath, const char *newpath, struct hepunion_sb_info *context);
 /**
  * Worker for debug purpose. It checks if the link is to be created on the right branch
  * and then call link
@@ -834,7 +834,7 @@ int dbg_symlink(const char *oldpath, const char *newpath, struct pierrefs_sb_inf
  * \param[in]	context	Calling context of the FS
  * \return	-1 in case of a failure, 0 otherwise. errno is set
  */
-int dbg_link(const char *oldpath, const char *newpath, struct pierrefs_sb_info *context);
+int dbg_link(const char *oldpath, const char *newpath, struct hepunion_sb_info *context);
 
 /* Functions in wh.c */
 /**
@@ -844,7 +844,7 @@ int dbg_link(const char *oldpath, const char *newpath, struct pierrefs_sb_info *
  * \param[in]	context	Calling context of the FS
  * \return	-1 in case of a failure, 0 otherwise. errno is set
  */
-int create_whiteout(const char *path, char *wh_path, struct pierrefs_sb_info *context);
+int create_whiteout(const char *path, char *wh_path, struct hepunion_sb_info *context);
 /**
  * Find the whiteout that might hide a file.
  * \param[in]	path	Relative path of the file to check
@@ -852,7 +852,7 @@ int create_whiteout(const char *path, char *wh_path, struct pierrefs_sb_info *co
  * \param[out]	wh_path	Full path of the found whiteout
  * \return	0 in case of a success, -1 otherwise. errno is set
  */
-int find_whiteout(const char *path, struct pierrefs_sb_info *context, char *wh_path);
+int find_whiteout(const char *path, struct hepunion_sb_info *context, char *wh_path);
 /**
  * Create a whiteout for each file contained in a directory.
  * \param[in]	path	Relative path of the directory where to hide files
@@ -860,7 +860,7 @@ int find_whiteout(const char *path, struct pierrefs_sb_info *context, char *wh_p
  * \return	0 in case of a success, -err otherwise.
  * \note	In case directory doesn't exist on RO branch, it's a success
  */
-int hide_directory_contents(const char *path, struct pierrefs_sb_info *context);
+int hide_directory_contents(const char *path, struct hepunion_sb_info *context);
 /**
  * Check, using unionion, whether is directory is empty. If regarding union it's, ensure it really is.
  * \param[in]	path	Relative path of the directory to check
@@ -870,7 +870,7 @@ int hide_directory_contents(const char *path, struct pierrefs_sb_info *context);
  * \return	1 if empty, -err otherwise
  * \note	If you don't provide RW branch, no union will be done, it will just check for RO emptyness
  */
-int is_empty_dir(const char *path, const char *ro_path, const char *rw_path, struct pierrefs_sb_info *context);
+int is_empty_dir(const char *path, const char *ro_path, const char *rw_path, struct hepunion_sb_info *context);
 /**
  * Unlink a file on RW branch, and whiteout possible file on RO branch.
  * \param[in]	path		Relative path of the file to unlink
@@ -879,15 +879,15 @@ int is_empty_dir(const char *path, const char *ro_path, const char *rw_path, str
  * \param[in]	has_ro_sure	Optional, set to 1 if you check that file exists on RO
  * \return	0 in case of a success, -1 otherwise. errno is set
  */
-int unlink_rw_file(const char *path, const char *rw_path, struct pierrefs_sb_info *context, char has_ro_sure);
+int unlink_rw_file(const char *path, const char *rw_path, struct hepunion_sb_info *context, char has_ro_sure);
 /**
  * Unlink the whiteout hidding a file.
  * \param[in]	path	Relative path of the file to "restore"
  * \param[in]	context	Calling context of the FS
  * \return	0 in case of a success, -1 otherwise. errno is set
  */
-int unlink_whiteout(const char *path, struct pierrefs_sb_info *context);
+int unlink_whiteout(const char *path, struct hepunion_sb_info *context);
 
 #endif /* #ifdef __KERNEL__ */
 
-#endif /* #ifndef __PIERREFS_H__ */
+#endif /* #ifndef __HEPUNION_H__ */

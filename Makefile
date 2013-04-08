@@ -9,39 +9,39 @@ else
 $(warning could not find kernel config file. internal auto-config may fail)
 endif
 
-CONFIG_PIERREFS_FS = m
-PIERREFS_DEF_CONFIG = -UCONFIG_PIERREFS
+CONFIG_HEPUNION_FS = m
+HEPUNION_DEF_CONFIG = -UCONFIG_HEPUNION
 include config.mk
-export CONFIG_PIERREFS_FS
+export CONFIG_HEPUNION_FS
 
 EXTRA_CFLAGS := -I${CURDIR}/include
-EXTRA_CFLAGS += ${PIERREFS_DEF_CONFIG}
+EXTRA_CFLAGS += ${HEPUNION_DEF_CONFIG}
 
-MakeMod = ${MAKE} -C ${KDIR} M=${CURDIR}/fs/pierrefs EXTRA_CFLAGS="${EXTRA_CFLAGS}"
+MakeMod = ${MAKE} -C ${KDIR} M=${CURDIR}/fs/hepunion EXTRA_CFLAGS="${EXTRA_CFLAGS}"
 
-all: pierrefs.ko usr/include/linux/pierrefs_type.h
+all: hepunion.ko usr/include/linux/hepunion_type.h
 
 clean:
 	${MakeMod} $@
 	find . -type f -name '*~' | xargs -r ${RM}
-	${RM} -r pierrefs.ko usr
+	${RM} -r hepunion.ko usr
 
-install: fs/pierrefs/pierrefs.ko
+install: fs/hepunion/hepunion.ko
 	${MakeMod} modules_install
 
-install_header install_headers: usr/include/linux/pierrefs_type.h
-	install -o root -g root -p usr/include/linux/pierrefs_type.h \
+install_header install_headers: usr/include/linux/hepunion_type.h
+	install -o root -g root -p usr/include/linux/hepunion_type.h \
 		${DESTDIR}/usr/include/linux
 
-pierrefs.ko: fs/pierrefs/pierrefs.ko
+hepunion.ko: fs/hepunion/hepunion.ko
 	ln -f $< $@
 
-fs/pierrefs/pierrefs.ko:
+fs/hepunion/hepunion.ko:
 	@echo ${EXTRA_CFLAGS}
 	${MakeMod} modules
 
-usr/include/linux/pierrefs_type.h: d = $(shell echo ${CURDIR} | cut -c2-)
-usr/include/linux/pierrefs_type.h:
+usr/include/linux/hepunion_type.h: d = $(shell echo ${CURDIR} | cut -c2-)
+usr/include/linux/hepunion_type.h:
 	echo '$$(install-file):srctree= $$(install-file):objtree=' |\
 	tr ' ' '\n' |\
 	${MAKE} -rR -C ${KDIR} \

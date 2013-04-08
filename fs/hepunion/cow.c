@@ -1,6 +1,6 @@
 /**
  * \file cow.c
- * \brief Copy-On-Write (COW) support for the PierreFS file system
+ * \brief Copy-On-Write (COW) support for the HEPunion file system
  * \author Pierre Schweitzer <pierre.jean.schweitzer@cern.ch>
  * \version 1.0
  * \date 11-Jan-2012
@@ -17,12 +17,12 @@
  * COW process is also used on directories.
  *
  * Unlike all the other implementations of file system unions,
- * in PierreFS, copyup are not created when an attempt to change
+ * in HEPunion, copyup are not created when an attempt to change
  * file metadata is done. Metadata are handled separately. This
  * reduces copyup use.
  *
  * Unlike all the other implementations of file system unions,
- * the PierreFS file system will do its best to try to reduce
+ * the HEPunion file system will do its best to try to reduce
  * redundancy by removing copyup when it appears they are useless
  * (same contents than the original file).
  *
@@ -30,7 +30,7 @@
  * team.
  */
 
-#include "pierrefs.h"
+#include "hepunion.h"
 
 static int copy_child(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
 	char tmp_path[PATH_MAX];
@@ -57,7 +57,7 @@ static int copy_child(void *buf, const char *name, int namlen, loff_t offset, u6
 	return create_copyup(tmp_path, tmp_ro_path, tmp_rw_path, ctx->context);
 }
 
-int create_copyup(const char *path, const char *ro_path, char *rw_path, struct pierrefs_sb_info *context) {
+int create_copyup(const char *path, const char *ro_path, char *rw_path, struct hepunion_sb_info *context) {
 	/* Once here, two things are sure:
 	 * RO exists, RW does not
 	 */
@@ -257,7 +257,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct p
 	return 0;
 }
 
-static int find_path_worker(const char *path, char *real_path, struct pierrefs_sb_info *context) {
+static int find_path_worker(const char *path, char *real_path, struct hepunion_sb_info *context) {
 	/* Try to find that tree */
 	int err;
 	char read_only[PATH_MAX];
@@ -374,7 +374,7 @@ static int find_path_worker(const char *path, char *real_path, struct pierrefs_s
 	return 0;
 }
 
-int find_path(const char *path, char *real_path, struct pierrefs_sb_info *context) {
+int find_path(const char *path, char *real_path, struct hepunion_sb_info *context) {
 	pr_info("find_path: %s, %s, %p\n", path, real_path, context);
 
 	if (real_path) {
@@ -386,7 +386,7 @@ int find_path(const char *path, char *real_path, struct pierrefs_sb_info *contex
 	}
 }
 
-int unlink_copyup(const char *path, const char *copyup_path, struct pierrefs_sb_info *context) {
+int unlink_copyup(const char *path, const char *copyup_path, struct hepunion_sb_info *context) {
 	int err;
 	struct kstat kstbuf;
 	char real_path[PATH_MAX];
