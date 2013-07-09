@@ -223,7 +223,7 @@ static int get_branches(struct super_block *sb, const char *arg) {
 		iput(root_i);
 		return PTR_ERR(sb->s_root);
 	}
-	sb->s_root->d_op = &HEPUNION_dops;
+	sb->s_root->d_op = &hepunion_dops;
 #ifdef _DEBUG_
 	sb->s_root->d_fsdata = (void *)HEPUNION_MAGIC;
 #endif

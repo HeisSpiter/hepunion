@@ -140,9 +140,9 @@ static int hepunion_create(struct inode *dir, struct dentry *dentry, int mode, s
 	inode->i_nlink = 1;
 	inode->i_ino = name_to_ino(path);
 #ifdef _DEBUG_
-	inode->i_private = (void *)hepunion_MAGIC;
+	inode->i_private = (void *)HEPUNION_MAGIC;
 #endif
-	insert_inode_hash(inode); 
+	insert_inode_hash(inode);
 
 	d_instantiate(dentry, inode);
 	mark_inode_dirty(dir);
