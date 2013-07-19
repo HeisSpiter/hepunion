@@ -32,8 +32,8 @@
  * And int size must be 4 bytes
  * See the implemtation site for more information
  */
-static_assert(sizeof(unsigned long) == sizeof(uint64_t), size_no_match);
-static_assert(sizeof(int) == 4, int_no_match);
+//static_assert(sizeof(unsigned long) == sizeof(uint64_t), size_no_match);
+//static_assert(sizeof(int) == 4, int_no_match);
 
 /**
  * Computes the hash of a given buffer using the MurmurHash2 function

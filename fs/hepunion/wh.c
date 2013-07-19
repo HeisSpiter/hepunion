@@ -20,18 +20,21 @@
  *
  * Whiteouts consist in files called .wh.{original file}
  *
- * This is based on the great work done by the UnionFS driver
+ * This is based on the great work done by the UnionFS driv
+er
  * team.
  */
 
 #include "hepunion.h"
 
+
 static int hide_entry(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type);
 
 static int check_whiteout(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
-	char wh_path[PATH_MAX];
-	char file_path[PATH_MAX];
-	struct readdir_context *ctx = (struct readdir_context*)buf;
+	char *wh_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	char *file_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	struct readdir_context *ctx = kmalloc(sizeof(struct readdir_context), GFP_KERNEL);
+         ctx = (struct readdir_context*)buf;
 
 	pr_info("check_whiteout: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
 
@@ -129,7 +132,7 @@ int create_whiteout(const char *path, char *wh_path, struct hepunion_sb_info *co
 }
 
 static int delete_whiteout(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
-	char wh_path[PATH_MAX];
+        char *wh_path = kmalloc(PATH_MAX, GFP_KERNEL);
 	struct readdir_context *ctx = (struct readdir_context*)buf;
 	struct hepunion_sb_info *context = ctx->context;
 
@@ -164,8 +167,8 @@ int find_whiteout(const char *path, struct hepunion_sb_info *context, char *wh_p
 int hide_directory_contents(const char *path, struct hepunion_sb_info *context) {
 	int err;
 	struct file *ro_fd;
-	char rw_path[PATH_MAX];
-	char ro_path[PATH_MAX];
+	char *rw_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	char *ro_path = kmalloc(PATH_MAX, GFP_KERNEL);
 
 	pr_info("hide_directory_contents: %s, %p\n", path, context);
 
@@ -202,7 +205,7 @@ int hide_directory_contents(const char *path, struct hepunion_sb_info *context) 
 }
 
 static int hide_entry(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
-	char wh_path[PATH_MAX];
+	char *wh_path = kmalloc(PATH_MAX, GFP_KERNEL);
 	struct readdir_context *ctx = (struct readdir_context*)buf;
 
 	pr_info("hide_entry: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
@@ -271,8 +274,8 @@ int is_empty_dir(const char *path, const char *ro_path, const char *rw_path, str
 int unlink_rw_file(const char *path, const char *rw_path, struct hepunion_sb_info *context, char has_ro_sure) {
 	int err;
 	char has_ro = 0;
-	char ro_path[PATH_MAX];
-	char wh_path[PATH_MAX];
+	char *ro_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	char *wh_path = kmalloc(PATH_MAX, GFP_KERNEL);
 
 	pr_info("unlink_rw_file: %s, %s, %p, %u\n", path, rw_path, context, has_ro_sure);
 
@@ -300,13 +303,14 @@ int unlink_rw_file(const char *path, const char *rw_path, struct hepunion_sb_inf
 	if (has_ro) {
 		create_whiteout(path, wh_path, context);
 	}
-
+        kfree(ro_path);
+        kfree(wh_path); 
 	return 0;
 }
 
 int unlink_whiteout(const char *path, struct hepunion_sb_info *context) {
 	int err;
-	char wh_path[PATH_MAX];
+	char *wh_path = kmalloc(PATH_MAX, GFP_KERNEL);
 
 	pr_info("unlink_whiteout: %s, %p\n", path, context);
 

@@ -99,9 +99,9 @@ int find_me(const char *path, struct hepunion_sb_info *context, char *me_path, s
 }
 
 int get_file_attr(const char *path, struct hepunion_sb_info *context, struct kstat *kstbuf) {
-	char real_path[PATH_MAX];
+	char *real_path = kmalloc(PATH_MAX, GFP_KERNEL);
 	int err;
-
+        int sak;
 	pr_info("get_file_attr: %s, %p, %p\n", path, context, kstbuf);
 
 	/* First, find file */
@@ -111,14 +111,17 @@ int get_file_attr(const char *path, struct hepunion_sb_info *context, struct kst
 	}
 
 	/* Call worker */
-	return get_file_attr_worker(path, real_path, context, kstbuf);
+	 
+        sak = get_file_attr_worker(path, real_path, context, kstbuf);
+        kfree(real_path);
+        return sak;
 }
 
 int get_file_attr_worker(const char *path, const char *real_path, struct hepunion_sb_info *context, struct kstat *kstbuf) {
 	int err;
 	char me;
 	struct kstat kstme;
-	char me_file[PATH_MAX];
+	char *me_file = kmalloc(PATH_MAX, GFP_KERNEL);
 
 	pr_info("get_file_attr_worker: %s, %s, %p, %p\n", path, real_path, context, kstbuf);
 
@@ -184,7 +187,8 @@ int set_me(const char *path, const char *real_path, struct kstat *kstbuf, struct
 int set_me_worker(const char *path, const char *real_path, struct iattr *attr, struct hepunion_sb_info *context) {
 	int err;
 	char me;
-	char me_path[PATH_MAX];
+	char *me_path = kmalloc(PATH_MAX, GFP_KERNEL);
+ 
 	struct kstat kstme;
 	struct file *fd;
 	umode_t mode;
@@ -262,6 +266,6 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr, s
 		filp_close(fd, NULL);
 		pop_root();
 	}
-
+        kfree(me_path); 
 	return err;
 }

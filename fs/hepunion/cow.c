@@ -33,11 +33,11 @@
 #include "hepunion.h"
 
 static int copy_child(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
-	char tmp_path[PATH_MAX];
-	char tmp_ro_path[PATH_MAX];
-	char tmp_rw_path[PATH_MAX];
+	char *tmp_path = kmalloc(PATH_MAX, GFP_KERNEL);
+        char *tmp_ro_path = kmalloc(PATH_MAX, GFP_KERNEL);
+        char *tmp_rw_path = kmalloc(PATH_MAX, GFP_KERNEL);
 	struct readdir_context *ctx = (struct readdir_context*)buf;
-
+        int sak;
 	pr_info("copy_child: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
 
 	/* Don't copy special entries */
@@ -54,20 +54,19 @@ static int copy_child(void *buf, const char *name, int namlen, loff_t offset, u6
 	}
 
 	/* Recreate everything recursively */
-	return create_copyup(tmp_path, tmp_ro_path, tmp_rw_path, ctx->context);
+	 
+        sak = create_copyup(tmp_path, tmp_ro_path, tmp_rw_path, ctx->context);
+        return sak;
 }
 
 int create_copyup(const char *path, const char *ro_path, char *rw_path, struct hepunion_sb_info *context) {
-	/* Once here, two things are sure:
-	 * RO exists, RW does not
-	 */
 	int err, len;
-	char tmp[PATH_MAX];
-	char me_path[PATH_MAX];
-	struct kstat kstbuf;
+	char *tmp = kmalloc(PATH_MAX, GFP_KERNEL);
+        char *me_path = kmalloc(PATH_MAX, GFP_KERNEL);
+        struct kstat kstbuf;
 	struct file *ro_fd, *rw_fd;
 	ssize_t rcount;
-	char buf[MAXSIZE];
+	char *buf = kmalloc(MAXSIZE, GFP_KERNEL);
 	struct dentry *dentry;
 	struct iattr attr;
 	struct readdir_context ctx;
@@ -253,16 +252,19 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct h
 	if (find_me(path, context, me_path, &kstbuf) >= 0) {
 		unlink(me_path, context);
 	}
-
+        kfree(tmp);
+        kfree(me_path);
+        kfree(buf);
 	return 0;
 }
 
 static int find_path_worker(const char *path, char *real_path, struct hepunion_sb_info *context) {
 	/* Try to find that tree */
 	int err;
-	char read_only[PATH_MAX];
-	char tree_path[PATH_MAX];
-	char real_tree_path[PATH_MAX];
+	char *read_only = kmalloc(PATH_MAX, GFP_KERNEL);
+	char *tree_path = kmalloc(PATH_MAX, GFP_KERNEL);
+        char *real_tree_path = kmalloc(PATH_MAX, GFP_KERNEL);        
+
 	types tree_path_present;
 	char *old_directory;
 	char *directory;
@@ -371,26 +373,31 @@ static int find_path_worker(const char *path, char *real_path, struct hepunion_s
 	strcat(real_path, last);
 
 	/* It's over */
+        kfree(read_only);
+        kfree(tree_path);
+        kfree(real_tree_path); 
 	return 0;
 }
 
 int find_path(const char *path, char *real_path, struct hepunion_sb_info *context) {
-	pr_info("find_path: %s, %s, %p\n", path, real_path, context);
-
+	int sak;
+        pr_info("find_path: %s, %s, %p\n", path, real_path, context);
+        
 	if (real_path) {
 		return find_path_worker(path, real_path, context);
 	}
 	else {
-		char tmp_path[PATH_MAX];
-		return find_path_worker(path, tmp_path, context);
+		char *tmp_path = kmalloc(PATH_MAX, GFP_KERNEL);
+		sak = find_path_worker(path, tmp_path, context);
+                return sak;
 	}
 }
 
 int unlink_copyup(const char *path, const char *copyup_path, struct hepunion_sb_info *context) {
 	int err;
+        int sak;
 	struct kstat kstbuf;
-	char real_path[PATH_MAX];
-
+	char *real_path = kmalloc(PATH_MAX, GFP_KERNEL);
 	pr_info("unlink_copyup: %s, %s\n", path, copyup_path);
 
 	/* First get copyup attributes */
@@ -414,5 +421,6 @@ int unlink_copyup(const char *path, const char *copyup_path, struct hepunion_sb_
 	}
 
 	/* Create me if required */
-	return set_me(path, real_path, &kstbuf, context, MODE | TIME | OWNER);
+	sak = set_me(path, real_path, &kstbuf, context, MODE | TIME | OWNER);
+        return sak;
 }

@@ -102,8 +102,8 @@ static int hepunion_create(struct inode *dir, struct dentry *dentry, int mode, s
 	}
 
 	/* Set its correct owner in case of creation */
-	attr.ia_uid = current->uid;
-	attr.ia_gid = current->gid;
+	attr.ia_uid = current_fsuid();
+	attr.ia_gid = current_fsgid();
 	attr.ia_valid = ATTR_UID | ATTR_GID;
 
 	push_root();
@@ -126,9 +126,9 @@ static int hepunion_create(struct inode *dir, struct dentry *dentry, int mode, s
 	}
 
 	/* And fill it in */
-	dir->i_nlink++;
-	inode->i_uid = current->fsuid;
-	inode->i_gid = current->fsgid;
+	dir->__i_nlink++;
+	inode->i_uid = current_fsuid();
+	inode->i_gid = current_fsgid();
 	inode->i_mtime = CURRENT_TIME;
 	inode->i_atime = CURRENT_TIME;
 	inode->i_ctime = CURRENT_TIME;
@@ -137,12 +137,12 @@ static int hepunion_create(struct inode *dir, struct dentry *dentry, int mode, s
 	inode->i_op = &hepunion_iops;
 	inode->i_fop = &hepunion_fops;
 	inode->i_mode = mode;
-	inode->i_nlink = 1;
+	inode->__i_nlink = 1;
 	inode->i_ino = name_to_ino(path);
 #ifdef _DEBUG_
 	inode->i_private = (void *)HEPUNION_MAGIC;
 #endif
-	insert_inode_hash(inode);
+	insert_inode_hash(inode); 
 
 	d_instantiate(dentry, inode);
 	mark_inode_dirty(dir);
@@ -188,9 +188,9 @@ static int hepunion_link(struct dentry *old_dentry, struct inode *dir, struct de
 	struct hepunion_sb_info *context = get_context_d(old_dentry);
 	char *from = context->global1;
 	char *to = context->global2;
-	char real_from[PATH_MAX];
-	char real_to[PATH_MAX];
-
+	char *real_from = kmalloc(PATH_MAX, GFP_KERNEL);
+	char *real_to = kmalloc(PATH_MAX, GFP_KERNEL); 
+       
 	pr_info("hepunion_link: %p, %p, %p\n", old_dentry, dir, dentry);
 
 	will_use_buffers(context);
@@ -263,7 +263,8 @@ static int hepunion_link(struct dentry *old_dentry, struct inode *dir, struct de
 
 	/* Remove possible whiteout */
 	unlink_whiteout(to, context);
-
+        kfree(real_from);
+        kfree(real_to); 
 	release_buffers(context);
 	return 0;
 }
@@ -339,7 +340,7 @@ static struct dentry * hepunion_lookup(struct inode *dir, struct dentry *dentry,
 	list_add(&ctx->read_inode_entry, &context->read_inode_head);
 
 	/* Get inode */
-	inode = iget(dir->i_sb, ino);
+	inode = iget_locked(dir->i_sb, ino);
 	if (!inode) {
 		inode = ERR_PTR(-EACCES);
 	} else {
@@ -434,9 +435,9 @@ static int hepunion_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 	}
 
 	/* And fill it in */
-	dir->i_nlink++;
-	inode->i_uid = current->fsuid;
-	inode->i_gid = current->fsgid;
+	dir->__i_nlink++;
+	inode->i_uid = current_fsuid();
+	inode->i_gid = current_fsgid();
 	inode->i_mtime = CURRENT_TIME;
 	inode->i_atime = CURRENT_TIME;
 	inode->i_ctime = CURRENT_TIME;
@@ -445,7 +446,7 @@ static int hepunion_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 	inode->i_op = &hepunion_dir_iops;
 	inode->i_fop = &hepunion_dir_fops;
 	inode->i_mode = mode;
-	inode->i_nlink = 1;
+	inode->__i_nlink = 1;
 	inode->i_ino = name_to_ino(path);
 #ifdef _DEBUG_
 	inode->i_private = (void *)HEPUNION_MAGIC;
@@ -589,8 +590,8 @@ static int hepunion_opendir(struct inode *inode, struct file *file) {
 	char *path = context->global1;
 	char *real_path = context->global2;
 	struct opendir_context *ctx;
-	char ro_path[PATH_MAX];
-	char rw_path[PATH_MAX];
+	char *ro_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	char *rw_path = kmalloc(PATH_MAX, GFP_KERNEL);
 	size_t ro_len = 0;
 	size_t rw_len = 0;
 
@@ -671,6 +672,8 @@ static int hepunion_opendir(struct inode *inode, struct file *file) {
 	file->private_data = ctx;
 
 	release_buffers(context);
+        kfree(ro_path);
+        kfree(rw_path); 
 	return 0;
 }
 
@@ -684,12 +687,12 @@ static int hepunion_permission(struct inode *inode, int mask, struct nameidata *
 
 	will_use_buffers(context);
 	validate_inode(inode);
-	if (nd && nd->dentry) {
-		validate_dentry(nd->dentry);
+	if (nd && nd->path.dentry) {
+		validate_dentry(nd->path.dentry);
 	}
 
 	/* Get path */
-	err = get_relative_path(inode, (nd ? nd->dentry : NULL), context, path, 1);
+	err = get_relative_path(inode, (nd ? nd->path.dentry : NULL), context, path, 1);
 	if (err) {
 		release_buffers(context);
 		return err;
@@ -719,72 +722,12 @@ static ssize_t hepunion_read(struct file *file, char __user *buf, size_t count, 
 	return ret;
 }
 
-static void hepunion_read_inode(struct inode *inode) {
-	int err;
-	struct kstat kstbuf;
-	struct list_head *entry;
-	struct read_inode_context *ctx;
-	struct hepunion_sb_info *context = get_context_i(inode);
-
-	pr_info("hepunion_read_inode: %p\n", inode);
-
-	/* Get path */
-	entry = context->read_inode_head.next;
-	while (entry != &context->read_inode_head) {
-		ctx = list_entry(entry, struct read_inode_context, read_inode_entry);
-		if (ctx->ino == inode->i_ino) {
-			break;
-		}
-
-		entry = entry->next;
-	}
-
-	/* Quit if no context found */
-	if (entry == &context->read_inode_head) {
-		pr_info("Context not found for: %lu\n", inode->i_ino);
-		return;
-	}
-
-	pr_info("Reading inode: %s\n", ctx->name);
-
-	/* Call worker */
-	err = get_file_attr(ctx->name, context, &kstbuf);
-	if (err < 0) {
-		pr_info("read_inode: %d\n", err);
-		return;
-	}
-
-	/* Set inode */
-	inode->i_mode = kstbuf.mode;
-	inode->i_atime = kstbuf.atime;
-	inode->i_mtime = kstbuf.mtime;
-	inode->i_ctime = kstbuf.ctime;
-	inode->i_uid = kstbuf.uid;
-	inode->i_gid = kstbuf.gid;
-	inode->i_size = kstbuf.size;
-	inode->i_nlink = kstbuf.nlink;
-	inode->i_blocks = kstbuf.blocks;
-	inode->i_blkbits = kstbuf.blksize;
-
-	/* Set operations */
-	if (inode->i_mode & S_IFDIR) {
-		inode->i_op = &hepunion_dir_iops;
-		inode->i_fop = &hepunion_dir_fops;
-	} else {
-		inode->i_op = &hepunion_iops;
-		inode->i_fop = &hepunion_fops;
-	}
-
-#ifdef _DEBUG_
-	inode->i_private = (void *)HEPUNION_MAGIC;
-#endif
-}
 
 static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
 	struct readdir_file *entry;
 	struct opendir_context *ctx = (struct opendir_context *)buf;
 	struct hepunion_sb_info *context = ctx->context;
-	char complete_path[PATH_MAX];
+	char *complete_path = kmalloc(PATH_MAX, GFP_KERNEL);
 	char *path;
 	size_t len;
 
@@ -857,14 +800,14 @@ static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset
 
 		entry->ino = name_to_ino(complete_path);
 	}
-
+        kfree(complete_path);
 	return 0;
 }
 
 static int read_ro_branch(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
 	struct opendir_context *ctx = (struct opendir_context *)buf;
 	struct hepunion_sb_info *context = ctx->context;
-	char complete_path[PATH_MAX];
+	char *complete_path = kmalloc(PATH_MAX, GFP_KERNEL);
 	char *path;
 	size_t len;
 	struct readdir_file *entry;
@@ -931,7 +874,7 @@ static int read_ro_branch(void *buf, const char *name, int namlen, loff_t offset
 	complete_path[len + namlen] = '\0';
 
 	entry->ino = name_to_ino(complete_path);
-
+        kfree(complete_path); 
 	return 0;
 }
 
@@ -1039,17 +982,7 @@ cleanup:
 	return err;
 }
 
-static ssize_t hepunion_readv(struct file *file, const struct iovec *vector, unsigned long count, loff_t *offset) {
-	struct file *real_file = (struct file *)file->private_data;
-	ssize_t ret;
 
-	pr_info("hepunion_readv: %p, %p, %lu, %p(%llx)\n", file, vector, count, offset, *offset);
-
-	ret = vfs_readv(real_file, vector, count, offset);
-	file->f_pos = real_file->f_pos;
-
-	return ret;
-}
 
 static int hepunion_revalidate(struct dentry *dentry, struct nameidata *nd) {
 	pr_info("hepunion_revalidate: %p, %p\n", dentry, nd);
@@ -1064,10 +997,10 @@ static int hepunion_revalidate(struct dentry *dentry, struct nameidata *nd) {
 static int hepunion_rmdir(struct inode *dir, struct dentry *dentry) {
 	int err;
 	struct kstat kstbuf;
-	char me_path[PATH_MAX];
-	char wh_path[PATH_MAX];
-	char ro_path[PATH_MAX];
-	char has_ro = 0;
+	char *me_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	char *wh_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	char *ro_path = kmalloc(PATH_MAX, GFP_KERNEL);
+        char has_ro = 0;
 	struct hepunion_sb_info *context = get_context_i(dir);
 	char *path = context->global1;
 	char *real_path = context->global2;
@@ -1159,6 +1092,9 @@ static int hepunion_rmdir(struct inode *dir, struct dentry *dentry) {
 	}
 
 	release_buffers(context);
+        kfree(me_path); 
+	kfree(wh_path); 
+	kfree(ro_path); 
 	return err;
 }
 
@@ -1296,7 +1232,7 @@ static int hepunion_statfs(struct dentry *dentry, struct kstatfs *buf) {
 		return PTR_ERR(filp);
 	}
 
-	err = vfs_statfs(filp->f_dentry, buf);
+	err = vfs_statfs(&filp->f_path, buf);
 	filp_close(filp, NULL);
 
 	if (unlikely(err)) {
@@ -1317,8 +1253,8 @@ static int hepunion_unlink(struct inode *dir, struct dentry *dentry) {
 	char *path = context->global1;
 	char *real_path = context->global2;
 	struct kstat kstbuf;
-	char me_path[PATH_MAX];
-	char wh_path[PATH_MAX];
+	char *me_path = kmalloc(PATH_MAX, GFP_KERNEL);
+        char *wh_path = kmalloc(PATH_MAX, GFP_KERNEL);        
 
 	pr_info("hepunion_unlink: %p, %p\n", dir, dentry);
 
@@ -1375,9 +1311,9 @@ static int hepunion_unlink(struct inode *dir, struct dentry *dentry) {
 
 	/* Kill the inode now */
 	if (err == 0) {
-		dir->i_nlink--;
+		dir->__i_nlink--;
 		mark_inode_dirty(dir);
-        dentry->d_inode->i_nlink--;
+        dentry->d_inode->__i_nlink--;
         mark_inode_dirty(dentry->d_inode);
 	}
 
@@ -1397,21 +1333,10 @@ static ssize_t hepunion_write(struct file *file, const char __user *buf, size_t 
 	return ret;
 }
 
-static ssize_t hepunion_writev(struct file *file, const struct iovec *vector, unsigned long count, loff_t *offset) {
-	struct file *real_file = (struct file *)file->private_data;
-	ssize_t ret;
-
-	pr_info("hepunion_writev: %p, %p, %lu, %p(%llx)\n", file, vector, count, offset, *offset);
-
-	ret = vfs_writev(real_file, vector, count, offset);
-	file->f_pos = real_file->f_pos;
-
-	return ret;
-}
 
 struct inode_operations hepunion_iops = {
 	.getattr	= hepunion_getattr,
-	.permission	= hepunion_permission,
+//	.permission	= hepunion_permission,
 #if 0
 	.readlink	= generic_readlink, /* dentry will already point on the right file */
 #endif
@@ -1419,13 +1344,13 @@ struct inode_operations hepunion_iops = {
 };
 
 struct inode_operations hepunion_dir_iops = {
-	.create		= hepunion_create,
+//	.create		= hepunion_create,
 	.getattr	= hepunion_getattr,
 	.link		= hepunion_link,
-	.lookup		= hepunion_lookup,
-	.mkdir		= hepunion_mkdir,
-	.mknod		= hepunion_mknod,
-	.permission	= hepunion_permission,
+//	.lookup		= hepunion_lookup,
+//	.mkdir		= hepunion_mkdir,
+//	.mknod		= hepunion_mknod,
+//	.permission	= hepunion_permission,
 	.rmdir		= hepunion_rmdir,
 	.setattr	= hepunion_setattr,
 	.symlink	= hepunion_symlink,
@@ -1433,22 +1358,19 @@ struct inode_operations hepunion_dir_iops = {
 };
 
 struct super_operations hepunion_sops = {
-	.read_inode	= hepunion_read_inode,
 	.statfs		= hepunion_statfs,
 };
 
 struct dentry_operations hepunion_dops = {
-	.d_revalidate	= hepunion_revalidate,
+//	.d_revalidate	= hepunion_revalidate,
 };
 
 struct file_operations hepunion_fops = {
 	.llseek		= hepunion_llseek,
 	.open		= hepunion_open,
 	.read		= hepunion_read,
-	.readv		= hepunion_readv,
 	.release	= hepunion_close,
 	.write		= hepunion_write,
-	.writev		= hepunion_writev,
 };
 
 struct file_operations hepunion_dir_fops = {

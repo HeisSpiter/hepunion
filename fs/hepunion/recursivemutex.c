@@ -20,21 +20,22 @@ void recursive_mutex_init(recursive_mutex_t *mutex) {
 }
 
 void recursive_mutex_lock(recursive_mutex_t *mutex) {
-	struct task_struct *task = current;
+	struct task_struct *task =current;
+        struct thread_info* ti= task_thread_info(task);
 	/* Increase reference count */
 	int count = atomic_add_return(1, &mutex->count);
 	/* If noone was locking it, lock */
 	if (count == 1) {
 		spin_lock(&mutex->lock);
 		/* And set owner */
-		mutex->owner = task->thread_info;
+		mutex->owner = ti;
 	} else {
 		/* Otherwise, someone was locking, then
 		 * ensure it's no ourselves.
 		 * If it's ourselves, just do nothing
 		 * If not, wait for spin lock
 		 */
-		if (mutex->owner != task->thread_info) {
+		if (mutex->owner != ti) {
 			spin_lock(&mutex->lock);
 		}
 	}

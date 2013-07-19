@@ -28,6 +28,7 @@
 #include <linux/statfs.h>
 #include <linux/uaccess.h>
 #include <linux/security.h>
+#include <linux/cred.h>
 #include "hash.h"
 #include "recursivemutex.h"
 
@@ -383,19 +384,32 @@ extern struct file_operations hepunion_dir_fops;
  * Switch the current context user and group to root to allow
  * modifications on child file systems
  */
-#define pop_root()								\
-	current->fsuid = context->uid;				\
-	current->fsgid = context->gid;				\
-	recursive_mutex_unlock(&context->id_lock)
-/**
+
+#define pop_root()\
+        do\
+        {\
+        struct cred *new1 = prepare_creds();\       
+        new1->fsuid = context->uid;\
+	new1->fsgid = context->gid;\
+	commit_creds(new1);\
+        }while(0);
+//	recursive_mutex_unlock(&context->id_lock)
+/**     
  * Switch the current context back to real user and real group
  */
-#define push_root()								\
-	recursive_mutex_lock(&context->id_lock);	\
-	context->uid = current->fsuid;				\
-	context->gid = current->fsgid;				\
-	current->fsuid = 0;							\
-	current->fsgid = 0
+
+#define push_root() \
+   //     recursive_mutex_lock(&context->id_lock);\
+        context->uid = current_fsuid();\
+	context->gid = current_fsgid();\				
+        do\
+        {\ 
+        struct cred *new2 = prepare_creds();\
+	new2->fsuid = 0;\
+	new2->fsgid = 0;\
+        commit_creds(new2);\
+        }while(0);
+     
 /**
  * Switch the current data segment to disable buffers checking
  * To be used when calling a VFS function wanting an usermode
