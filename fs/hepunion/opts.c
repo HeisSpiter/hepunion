@@ -188,8 +188,8 @@ static int hepunion_link(struct dentry *old_dentry, struct inode *dir, struct de
 	struct hepunion_sb_info *context = get_context_d(old_dentry);
 	char *from = context->global1;
 	char *to = context->global2;
-	char *real_from = kmalloc(PATH_MAX, GFP_KERNEL);
-	char *real_to = kmalloc(PATH_MAX, GFP_KERNEL); 
+	char *real_from = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
+	char *real_to = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem 
        
 	pr_info("hepunion_link: %p, %p, %p\n", old_dentry, dir, dentry);
 
@@ -1253,8 +1253,8 @@ static int hepunion_unlink(struct inode *dir, struct dentry *dentry) {
 	char *path = context->global1;
 	char *real_path = context->global2;
 	struct kstat kstbuf;
-	char *me_path = kmalloc(PATH_MAX, GFP_KERNEL);
-        char *wh_path = kmalloc(PATH_MAX, GFP_KERNEL);        
+	char *me_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
+        char *wh_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem        
 
 	pr_info("hepunion_unlink: %p, %p\n", dir, dentry);
 
@@ -1317,7 +1317,9 @@ static int hepunion_unlink(struct inode *dir, struct dentry *dentry) {
         mark_inode_dirty(dentry->d_inode);
 	}
 
-	release_buffers(context);
+	release_buffers(context); 
+        kfree(me_path);
+        kfree(wh_path);       
 	return err;
 }
 
@@ -1336,33 +1338,33 @@ static ssize_t hepunion_write(struct file *file, const char __user *buf, size_t 
 
 struct inode_operations hepunion_iops = {
 	.getattr	= hepunion_getattr,
-//	.permission	= hepunion_permission,
+	.permission	= hepunion_permission,
 #if 0
 	.readlink	= generic_readlink, /* dentry will already point on the right file */
 #endif
-	.setattr	= hepunion_setattr,
+	.setattr	= hepunion_setattr
 };
 
 struct inode_operations hepunion_dir_iops = {
-//	.create		= hepunion_create,
+	.create		= hepunion_create,
 	.getattr	= hepunion_getattr,
 	.link		= hepunion_link,
-//	.lookup		= hepunion_lookup,
-//	.mkdir		= hepunion_mkdir,
-//	.mknod		= hepunion_mknod,
-//	.permission	= hepunion_permission,
+	.lookup		= hepunion_lookup,
+	.mkdir		= hepunion_mkdir,
+	.mknod		= hepunion_mknod,
+	.permission	= hepunion_permission,
 	.rmdir		= hepunion_rmdir,
 	.setattr	= hepunion_setattr,
 	.symlink	= hepunion_symlink,
-	.unlink		= hepunion_unlink,
+	.unlink		= hepunion_unlink
 };
 
 struct super_operations hepunion_sops = {
-	.statfs		= hepunion_statfs,
+	.statfs		= hepunion_statfs
 };
 
 struct dentry_operations hepunion_dops = {
-//	.d_revalidate	= hepunion_revalidate,
+	.d_revalidate	= hepunion_revalidate
 };
 
 struct file_operations hepunion_fops = {
@@ -1370,11 +1372,11 @@ struct file_operations hepunion_fops = {
 	.open		= hepunion_open,
 	.read		= hepunion_read,
 	.release	= hepunion_close,
-	.write		= hepunion_write,
+	.write		= hepunion_write
 };
 
 struct file_operations hepunion_dir_fops = {
 	.open		= hepunion_opendir,
 	.readdir	= hepunion_readdir,
-	.release	= hepunion_closedir,
+	.release	= hepunion_closedir
 };

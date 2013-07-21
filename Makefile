@@ -19,7 +19,7 @@ EXTRA_CFLAGS += ${HEPUNION_DEF_CONFIG}
 
 MakeMod = ${MAKE} -C ${KDIR} M=${CURDIR}/fs/hepunion EXTRA_CFLAGS="${EXTRA_CFLAGS}"
 
-all: hepunion.ko include/linux/hepunion_type.h
+all: hepunion.ko include/linux/hepunion_type.h //code is building with this change 
 
 clean:
 	${MakeMod} $@

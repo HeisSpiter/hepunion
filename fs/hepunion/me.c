@@ -99,9 +99,9 @@ int find_me(const char *path, struct hepunion_sb_info *context, char *me_path, s
 }
 
 int get_file_attr(const char *path, struct hepunion_sb_info *context, struct kstat *kstbuf) {
-	char *real_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	char *real_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
 	int err;
-        int sak;
+        int sak;//temporary variable to free dynamic array//temporary variable to free dynamic array
 	pr_info("get_file_attr: %s, %p, %p\n", path, context, kstbuf);
 
 	/* First, find file */
@@ -121,7 +121,7 @@ int get_file_attr_worker(const char *path, const char *real_path, struct hepunio
 	int err;
 	char me;
 	struct kstat kstme;
-	char *me_file = kmalloc(PATH_MAX, GFP_KERNEL);
+	char *me_file = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
 
 	pr_info("get_file_attr_worker: %s, %s, %p, %p\n", path, real_path, context, kstbuf);
 
@@ -151,7 +151,7 @@ int get_file_attr_worker(const char *path, const char *real_path, struct hepunio
 		/* Finally, apply .me. modes */
 		kstbuf->mode |= kstme.mode;
 	}
-
+        kfree(me_file);
 	return 0;
 }
 
@@ -187,7 +187,7 @@ int set_me(const char *path, const char *real_path, struct kstat *kstbuf, struct
 int set_me_worker(const char *path, const char *real_path, struct iattr *attr, struct hepunion_sb_info *context) {
 	int err;
 	char me;
-	char *me_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	char *me_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
  
 	struct kstat kstme;
 	struct file *fd;
