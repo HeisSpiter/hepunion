@@ -536,23 +536,23 @@ long mknod(const char *pathname, struct hepunion_sb_info *context, int mode, uns
         pop_root();
 	error = PTR_ERR(dentry);
 
-	if (!IS_POSIXACL(nd.path.dentry->d_inode))
+	if (!IS_POSIXACL(path.dentry->d_inode))
 		mode &= ~current->fs->umask;
 	if (!IS_ERR(dentry)) {
 		switch (mode & S_IFMT) {
 			case 0: case S_IFREG:
 				push_root();
-				error = vfs_create(nd.path.dentry->d_inode,dentry,mode,&nd);
+				error = vfs_create(path.dentry->d_inode,dentry,mode,&nd);
 				pop_root();
 				break;
 			case S_IFCHR: case S_IFBLK:
 				push_root();
-				error = vfs_mknod(nd.path.dentry->d_inode,dentry,mode, new_decode_dev(dev));
+				error = vfs_mknod(path.dentry->d_inode,dentry,mode, new_decode_dev(dev));
 				pop_root();
 				break;
 			case S_IFIFO: case S_IFSOCK:
 				push_root();
-				error = vfs_mknod(nd.path.dentry->d_inode,dentry,mode,0);
+				error = vfs_mknod(path.dentry->d_inode,dentry,mode,0);
 				pop_root();
 				break;
 			case S_IFDIR:
@@ -563,7 +563,7 @@ long mknod(const char *pathname, struct hepunion_sb_info *context, int mode, uns
 		}
 		dput(dentry);
 	}
-	path_put(&nd.path);
+	path_put(&path);
         kfree(dentry);
 	return error;
 }
@@ -594,7 +594,7 @@ long symlink(const char *oldname, const char *newname, struct hepunion_sb_info *
 	}
 
 	push_root();
-	//dentry = lookup_create(&nd, 0);//lookup_create has been removed, need to find an alternative
+	dentry = kern_path_create(AT_FDCWD, newname, &path, LOOKUP_DIRECTORY);//lookup_create has been removed
 	pop_root();
 	error = PTR_ERR(dentry);
 	if (!IS_ERR(dentry)) {
@@ -631,7 +631,7 @@ long link(const char *oldname, const char *newname, struct hepunion_sb_info *con
 	if (old_nd.path.mnt != nd.path.mnt)
 		goto out_release;
 	push_root();
-	//new_dentry = lookup_create(&nd.path, 0);//lookup_create has been removed, need to find an alternative
+	new_dentry = kern_path_create(AT_FDCWD, newname, &nd.path, LOOKUP_DIRECTORY);//lookup_create has been removed
 	pop_root();
 	error = PTR_ERR(new_dentry);
 	if (!IS_ERR(new_dentry)) {

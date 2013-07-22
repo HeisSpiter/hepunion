@@ -318,7 +318,7 @@ static struct file_system_type hepunion_fs_type = {
 	.name		= HEPUNION_NAME,
 	.mount		= hepunion_mount_sb,//get_sb system call replaced by .mount
 	.kill_sb	= hepunion_kill_sb,
-	.fs_flags	= FS_REVAL_DOT,
+	.fs_flags	= FS_REVAL_DOT
 };
 
 static int __init init_hepunion_fs(void) {
