@@ -392,13 +392,14 @@ extern struct file_operations hepunion_dir_fops;
         new1->fsuid = context->uid;\
 	new1->fsgid = context->gid;\
 	commit_creds(new1);\
-        }while(0);
-
+        }while(0);\
+        recursive_mutex_unlock(&context->id_lock)
 /**     
  * Switch the current context back to real user and real group
  */
 
 #define push_root() \
+        recursive_mutex_lock(&context->id_lock);\
         context->uid = current_fsuid();\
 	context->gid = current_fsgid();\				
         do\

@@ -1367,6 +1367,26 @@ static void hepunion_put_super(struct super_block *sb)
 }
 
 
+static int hepunion_update(struct hepunion_sb_info *info, int vfs_ino, int *size, int *timestamp, int *perms)
+{
+//      /*need to implemnt hepunion_read_file_entry andhepunion_write_file_entry*/
+//	int i;
+//	int retval;
+
+//      /*need to figure out what is the structure for file entry*/
+//      /*suppose it is file_entry*/
+
+//	if ((retval = hepunion_read_file_entry(info, vfs_ino, &file_entry)) < 0)
+//	{
+//		return retval;
+//	}
+
+//      /*update the changed parameters at the read inode*/	
+        return 1;//return hepunion_write_file_entry(info, vfs_ino, &fe);
+
+}
+
+
 static int hepunion_write_inode(struct inode *inode, struct writeback_control *wbc)
 {
         /*function will enable changing the meta data of file.*/
@@ -1388,8 +1408,7 @@ static int hepunion_write_inode(struct inode *inode, struct writeback_control *w
 	perms |= (inode->i_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) ? 1 : 0;
 
 	pr_info(" Writing inode with %d bytes @ %d secs w/ %o\n", size, timestamp, perms);
-        //below function has to be written 
-	//return hepunion_update(info, inode->i_ino, &size, &timestamp, &perms); // TODO: Fill up the dfs_update
+        return hepunion_update(sb_info, inode->i_ino, &size, &timestamp, &perms); // TODO: Fill up the dfs_update
         return 1;
 }
 
@@ -1399,7 +1418,7 @@ struct inode_operations hepunion_iops = {
 #if 0
 	.readlink	= generic_readlink, /* dentry will already point on the right file */
 #endif
-	.setattr	= hepunion_setattr,
+	.setattr	= hepunion_setattr
 };
 
 struct inode_operations hepunion_dir_iops = {
@@ -1413,18 +1432,18 @@ struct inode_operations hepunion_dir_iops = {
 	.rmdir		= hepunion_rmdir,
 	.setattr	= hepunion_setattr,
 	.symlink	= hepunion_symlink,
-	.unlink		= hepunion_unlink,
+	.unlink		= hepunion_unlink
 };
 
 struct super_operations hepunion_sops = {
 	//.read_inode	= hepunion_read_inode,//system-call no longer supported
 	.statfs		= hepunion_statfs,
         .put_super      = hepunion_put_super,
-	.write_inode    = hepunion_write_inode,
+	.write_inode    = hepunion_write_inode
 };
 
 struct dentry_operations hepunion_dops = {
-	.d_revalidate	= hepunion_revalidate,
+	.d_revalidate	= hepunion_revalidate
 };
 
 struct file_operations hepunion_fops = {
@@ -1433,19 +1452,19 @@ struct file_operations hepunion_fops = {
 	.read		= hepunion_read,
 	//.readv		= hepunion_readv,//system-call no longer supported
 	.release	= hepunion_close,
-	.write		= hepunion_write,
+	.write		= hepunion_write
 	//.writev		= hepunion_writev,//system-call no longer supported
 };
 
 struct file_operations hepunion_dir_fops = {
 	.open		= hepunion_opendir,
 	.readdir	= hepunion_readdir,
-	.release	= hepunion_closedir,
+	.release	= hepunion_closedir
 };
 
 struct address_space_operations hepunion_aops =
 {
 	.readpage = hepunion_readpage,
-	.writepage = hepunion_writepage,
+	.writepage = hepunion_writepage
 
 };

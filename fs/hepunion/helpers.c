@@ -518,20 +518,21 @@ long mknod(const char *pathname, struct hepunion_sb_info *context, int mode, uns
 	int error = 0;
 	struct dentry *dentry = kmalloc(sizeof(struct dentry), GFP_KERNEL);
 	struct nameidata nd;
+        struct path path;
 	pr_info("mknod: %s, %p, %x, %u\n", pathname, context, mode, dev);
 
 	if (S_ISDIR(mode))
 		return -EPERM;
 
 	push_root();
-	error = kern_path(pathname, LOOKUP_PARENT, &nd.path);
+	error = kern_path(pathname, LOOKUP_PARENT, &path);
 	pop_root();
 	if (error) {
 		return error;
 	}
 
 	push_root();
-	//dentry = lookup_create(&nd, 0);//lookup_create has been removed, need to find an alternative
+	dentry = kern_path_create(AT_FDCWD, pathname, &path, LOOKUP_DIRECTORY);//lookup_create has been removed
         pop_root();
 	error = PTR_ERR(dentry);
 
