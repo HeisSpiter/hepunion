@@ -188,9 +188,14 @@ static int hepunion_link(struct dentry *old_dentry, struct inode *dir, struct de
 	struct hepunion_sb_info *context = get_context_d(old_dentry);
 	char *from = context->global1;
 	char *to = context->global2;
-	char *real_from = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
-	char *real_to = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem 
-       
+	char *real_from; 
+        real_from= kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
+	if(!real_from)
+            return -ENOMEM;
+        char *real_to; 
+        real_to= kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem 
+       if(!real_to)
+            return -ENOMEM;
 	pr_info("hepunion_link: %p, %p, %p\n", old_dentry, dir, dentry);
 
 	will_use_buffers(context);
@@ -590,9 +595,15 @@ static int hepunion_opendir(struct inode *inode, struct file *file) {
 	char *path = context->global1;
 	char *real_path = context->global2;
 	struct opendir_context *ctx;
-	char *ro_path = kmalloc(PATH_MAX, GFP_KERNEL);
-	char *rw_path = kmalloc(PATH_MAX, GFP_KERNEL);
-	size_t ro_len = 0;
+	char *ro_path;
+        ro_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if(!ro_path)
+            return -ENOMEM;
+        char *rw_path;  
+        rw_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if(!rw_path)
+            return -ENOMEM;
+        size_t ro_len = 0;
 	size_t rw_len = 0;
 
 	pr_info("hepunion_opendir: %p, %p\n", inode, file);
@@ -722,14 +733,85 @@ static ssize_t hepunion_read(struct file *file, char __user *buf, size_t count, 
 	return ret;
 }
 
+/*this function has replaced hepunion_read_inode*/
+struct inode *hepunion_iget(struct super_block *sb, unsigned long ino) {
+	int err;
+	struct kstat kstbuf;
+	struct list_head *entry;
+	struct read_inode_context *ctx;
+	struct inode *inode;
+              
+        inode = iget_locked(sb, ino);
+        struct hepunion_sb_info *context = get_context_i(inode);
+        pr_info("hepunion_read_inode: %p\n", inode);
+
+        if(!inode)
+            return;
+        
+	/* Get path */
+	entry = context->read_inode_head.next;
+	while (entry != &context->read_inode_head) {
+		ctx = list_entry(entry, struct read_inode_context, read_inode_entry);
+		if (ctx->ino == inode->i_ino) {
+			break;
+		}
+
+		entry = entry->next;
+	}
+
+	/* Quit if no context found */
+	if (entry == &context->read_inode_head) {
+		pr_info("Context not found for: %lu\n", inode->i_ino);
+		return;
+	}
+
+	pr_info("Reading inode: %s\n", ctx->name);
+
+	/* Call worker */
+	err = get_file_attr(ctx->name, context, &kstbuf);
+	if (err < 0) {
+		pr_info("read_inode: %d\n", err);
+		return;
+	}
+
+	/* Set inode */
+	inode->i_mode = kstbuf.mode;
+	inode->i_atime = kstbuf.atime;
+	inode->i_mtime = kstbuf.mtime;
+	inode->i_ctime = kstbuf.ctime;
+	inode->i_uid = kstbuf.uid;
+	inode->i_gid = kstbuf.gid;
+	inode->i_size = kstbuf.size;
+	inode->__i_nlink = kstbuf.nlink;
+	inode->i_blocks = kstbuf.blocks;
+	inode->i_blkbits = kstbuf.blksize;
+
+	/* Set operations */
+	if (inode->i_mode & S_IFDIR) {
+		inode->i_op = &hepunion_dir_iops;
+		inode->i_fop = &hepunion_dir_fops;
+	} else {
+		inode->i_op = &hepunion_iops;
+		inode->i_fop = &hepunion_fops;
+	}
+
+#ifdef _DEBUG_
+	inode->i_private = (void *)HEPUNION_MAGIC;
+#endif
+        unlock_new_inode(inode);
+        return inode;
+}
 
 
 static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
 	struct readdir_file *entry;
 	struct opendir_context *ctx = (struct opendir_context *)buf;
 	struct hepunion_sb_info *context = ctx->context;
-	char *complete_path = kmalloc(PATH_MAX, GFP_KERNEL);
-	char *path;
+	char *complete_path;
+        complete_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if(!complete_path)
+            return -ENOMEM;
+        char *path;
 	size_t len;
 
 	pr_info("read_rw_branch: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
@@ -808,8 +890,11 @@ static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset
 static int read_ro_branch(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
 	struct opendir_context *ctx = (struct opendir_context *)buf;
 	struct hepunion_sb_info *context = ctx->context;
-	char *complete_path = kmalloc(PATH_MAX, GFP_KERNEL);
-	char *path;
+	char *complete_path;
+        complete_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if(!complete_path)
+            return -ENOMEM;
+       char *path;
 	size_t len;
 	struct readdir_file *entry;
 	struct list_head *lentry;
@@ -996,9 +1081,18 @@ static int hepunion_revalidate(struct dentry *dentry, struct nameidata *nd) {
 static int hepunion_rmdir(struct inode *dir, struct dentry *dentry) {
 	int err;
 	struct kstat kstbuf;
-	char *me_path = kmalloc(PATH_MAX, GFP_KERNEL);
-	char *wh_path = kmalloc(PATH_MAX, GFP_KERNEL);
-	char *ro_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	char *me_path;
+        me_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if(!me_path)
+            return -ENOMEM;
+        char *wh_path;
+        wh_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if(!wh_path)
+            return -ENOMEM;
+        char *ro_path; 
+        ro_path = kmalloc(PATH_MAX, GFP_KERNEL);
+        if(!ro_path)
+            return -ENOMEM;
         char has_ro = 0;
 	struct hepunion_sb_info *context = get_context_i(dir);
 	char *path = context->global1;
@@ -1253,9 +1347,14 @@ static int hepunion_unlink(struct inode *dir, struct dentry *dentry) {
 	char *path = context->global1;
 	char *real_path = context->global2;
 	struct kstat kstbuf;
-	char *me_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
-        char *wh_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem        
-
+	char *me_path;
+        me_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
+        if(!me_path)
+            return -ENOMEM;
+        char *wh_path;
+        wh_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem        
+        if(!wh_path)
+            return -ENOMEM; 
 	pr_info("hepunion_unlink: %p, %p\n", dir, dentry);
 
 	will_use_buffers(context);
@@ -1357,9 +1456,8 @@ static void hepunion_put_super(struct super_block *sb)
 {
        /* this function used for umounting the fs*/	
        struct hepunion_sb_info * sb_info = sb->s_fs_info; 
-	
-        pr_info("hepunion_put_super\n");
-	if (sb_info)
+       pr_info("hepunion_put_super\n");
+       if (sb_info)
 	{
 		kfree(sb_info);
 		sb->s_fs_info = NULL;
@@ -1367,49 +1465,42 @@ static void hepunion_put_super(struct super_block *sb)
 }
 
 
-static int hepunion_update(struct hepunion_sb_info *info, int vfs_ino, int *size, int *timestamp, int *perms)
+static int hepunion_update(struct hepunion_sb_info *context)
 {
-//      /*need to implemnt hepunion_read_file_entry andhepunion_write_file_entry*/
-//	int i;
-//	int retval;
-
-//      /*need to figure out what is the structure for file entry*/
-//      /*suppose it is file_entry*/
-
-//	if ((retval = hepunion_read_file_entry(info, vfs_ino, &file_entry)) < 0)
-//	{
-//		return retval;
-//	}
-
-//      /*update the changed parameters at the read inode*/	
-        return 1;//return hepunion_write_file_entry(info, vfs_ino, &fe);
+      //TODO:fillup this function  
+      return 1;
 
 }
 
 
-static int hepunion_write_inode(struct inode *inode, struct writeback_control *wbc)
+static int hepunion_write_inode(struct inode *dir, struct dentry *dentry, int mode)
 {
         /*function will enable changing the meta data of file.*/
         /*useful for operations like chown, chmod*/
-        /*At present it is generic, need to implement it only for RW branch*/
-        struct hepunion_sb_info * sb_info = inode->i_sb->s_fs_info;
-        int size, timestamp, perms;
+        int err, mask;
+        struct hepunion_sb_info *context = get_context_i(dir);
+        char *path = context->global1;
+        char *real_path = context->global2;
+	
+        pr_info("hepunion_write_inode: %p, %p, %p\n", dir, dentry, context);
 
-	pr_info("hepunion_write_inode (i_ino = %ld)\n", inode->i_ino);
-
-	if (!(S_ISREG(inode->i_mode))) // checking for regular files
-		return 0;
-
-	size = i_size_read(inode);
-	timestamp = inode->i_mtime.tv_sec > inode->i_ctime.tv_sec ? inode->i_mtime.tv_sec : inode->i_ctime.tv_sec;
-	perms = 0;
-	perms |= (inode->i_mode & (S_IRUSR | S_IRGRP | S_IROTH)) ? 4 : 0;
-	perms |= (inode->i_mode & (S_IWUSR | S_IWGRP | S_IWOTH)) ? 2 : 0;
-	perms |= (inode->i_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) ? 1 : 0;
-
-	pr_info(" Writing inode with %d bytes @ %d secs w/ %o\n", size, timestamp, perms);
-        return hepunion_update(sb_info, inode->i_ino, &size, &timestamp, &perms); // TODO: Fill up the dfs_update
-        return 1;
+	validate_inode(dir);
+        validate_dentry(dentry);
+        
+        /* Try to find the file first */
+	err = get_relative_path_for_file(dir, dentry, context, path, 1);
+	if (err < 0) 
+		return err;
+	
+	
+	/* Now, check for RW file */
+	if (find_file(path, real_path, context, 1) == -1)
+	     return -1;
+	else
+        {
+	 pr_info(" Writing inode \n");
+         return hepunion_update(context); 
+        }
 }
 
 struct inode_operations hepunion_iops = {

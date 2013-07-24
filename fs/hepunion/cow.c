@@ -33,11 +33,23 @@
 #include "hepunion.h"
 
 static int copy_child(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
-	char *tmp_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-        char *tmp_ro_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-        char *tmp_rw_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-	struct readdir_context *ctx = (struct readdir_context*)buf;
-        int sak;//temporary variable to allow freeing of dynamic arrays
+	char *tmp_path; 
+        tmp_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
+        if(!tmp_path)
+            return -ENOMEM;
+        
+        char *tmp_ro_path; 
+        tmp_ro_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
+        if(!tmp_ro_path)
+            return -ENOMEM;
+        
+        char *tmp_rw_path;
+        tmp_rw_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
+	if(!tmp_rw_path)
+            return -ENOMEM;
+       
+        struct readdir_context *ctx = (struct readdir_context*)buf;
+        int ret;//temporary variable to allow freeing of dynamic arrays
 	pr_info("copy_child: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
 
 	/* Don't copy special entries */
@@ -54,22 +66,40 @@ static int copy_child(void *buf, const char *name, int namlen, loff_t offset, u6
 	}
 
 	/* Recreate everything recursively */
-        sak = create_copyup(tmp_path, tmp_ro_path, tmp_rw_path, ctx->context);
+        ret = create_copyup(tmp_path, tmp_ro_path, tmp_rw_path, ctx->context);
+        
         kfree(tmp_path);
         kfree(tmp_ro_path);
         kfree(tmp_rw_path);
-        return sak;
+        
+        return ret;
 }
 
 int create_copyup(const char *path, const char *ro_path, char *rw_path, struct hepunion_sb_info *context) {
-	int err, len;
-	char *tmp = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-        char *me_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
+	 /* Once here, two things are sure:
+	 * RO exists, RW does not
+	 */
+         int err, len;	 
+         char *tmp;
+         tmp = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
+         if(!tmp)
+            return -ENOMEM;
+         
+         char *me_path;
+         me_path= kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
+         if(!me_path)
+            return -ENOMEM;
+        
         struct kstat kstbuf;
 	struct file *ro_fd, *rw_fd;
 	ssize_t rcount;
-	char *buf = kmalloc(MAXSIZE, GFP_KERNEL);//dynamic allocation to avoid stack error
-	struct dentry *dentry;
+	
+        char *buf; 
+        buf= kmalloc(MAXSIZE, GFP_KERNEL);//dynamic allocation to avoid stack error
+	if(!buf)
+            return -ENOMEM;
+        
+        struct dentry *dentry;
 	struct iattr attr;
 	struct readdir_context ctx;
 	mm_segment_t oldfs;
@@ -254,19 +284,33 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct h
 	if (find_me(path, context, me_path, &kstbuf) >= 0) {
 		unlink(me_path, context);
 	}
+        
         kfree(tmp);
         kfree(me_path);
         kfree(buf);
-	return 0;
+	
+        return 0;
 }
 
 static int find_path_worker(const char *path, char *real_path, struct hepunion_sb_info *context) {
 	/* Try to find that tree */
 	int err;
-	char *read_only = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-	char *tree_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-        char *real_tree_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error        
-
+	
+        char *read_only; 
+        read_only = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
+	if(!read_only)
+            return -ENOMEM;
+        
+        char *tree_path;
+        tree_path= kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
+        if(!tree_path)
+            return -ENOMEM;
+        
+        char *real_tree_path;
+        real_tree_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error        
+        if(!real_tree_path)
+            return -ENOMEM;
+     
 	types tree_path_present;
 	char *old_directory;
 	char *directory;
@@ -378,30 +422,40 @@ static int find_path_worker(const char *path, char *real_path, struct hepunion_s
         kfree(read_only);
         kfree(tree_path);
         kfree(real_tree_path); 
-	return 0;
+	
+        return 0;
 }
 
 int find_path(const char *path, char *real_path, struct hepunion_sb_info *context) {
-	int sak;//temporary variable to allow freeing of dynamic arrays
+	int ret;//temporary variable to allow freeing of dynamic arrays
         pr_info("find_path: %s, %s, %p\n", path, real_path, context);
         
 	if (real_path) {
 		return find_path_worker(path, real_path, context);
 	}
 	else {
-		char *tmp_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-		sak = find_path_worker(path, tmp_path, context);
+		char *tmp_path;
+                tmp_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
+		if(!tmp_path)
+                     return -ENOMEM;
+                
+                ret = find_path_worker(path, tmp_path, context);
                 kfree(tmp_path); 
-                return sak;
+                return ret;
 	}
 }
 
 int unlink_copyup(const char *path, const char *copyup_path, struct hepunion_sb_info *context) {
 	int err;
-        int sak;//temporary variable to allow freeing of dynamic arrays
+        int ret;//temporary variable to allow freeing of dynamic arrays
 	struct kstat kstbuf;
-	char *real_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-	pr_info("unlink_copyup: %s, %s\n", path, copyup_path);
+
+	char *real_path;
+        real_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
+	if(!real_path)
+            return -ENOMEM;
+
+        pr_info("unlink_copyup: %s, %s\n", path, copyup_path);
 
 	/* First get copyup attributes */
 	err = lstat(copyup_path, context, &kstbuf);
@@ -424,7 +478,7 @@ int unlink_copyup(const char *path, const char *copyup_path, struct hepunion_sb_
 	}
 
 	/* Create me if required */
-	sak = set_me(path, real_path, &kstbuf, context, MODE | TIME | OWNER);
+	ret = set_me(path, real_path, &kstbuf, context, MODE | TIME | OWNER);
         kfree(real_path);
-        return sak;
+        return ret;
 }

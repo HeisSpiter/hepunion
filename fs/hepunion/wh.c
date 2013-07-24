@@ -30,9 +30,15 @@
 static int hide_entry(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type);
 
 static int check_whiteout(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
-	char *wh_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
-	char *file_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
-	struct readdir_context *ctx = kmalloc(sizeof(struct readdir_context), GFP_KERNEL);
+	char *wh_path;
+        wh_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
+        if(!wh_path)
+            return -ENOMEM;
+	char *file_path; 
+        file_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
+	if(!file_path)
+            return -ENOMEM;
+        struct readdir_context *ctx = kmalloc(sizeof(struct readdir_context), GFP_KERNEL);
          ctx = (struct readdir_context*)buf;
 
 	pr_info("check_whiteout: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
@@ -133,8 +139,11 @@ int create_whiteout(const char *path, char *wh_path, struct hepunion_sb_info *co
 }
 
 static int delete_whiteout(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
-        char *wh_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
-	struct readdir_context *ctx = (struct readdir_context*)buf;
+        char *wh_path;
+        wh_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
+	if(!wh_path)
+            return -ENOMEM;
+        struct readdir_context *ctx = (struct readdir_context*)buf;
 	struct hepunion_sb_info *context = ctx->context;
 
 	pr_info("delete_whiteout: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
@@ -169,8 +178,12 @@ int hide_directory_contents(const char *path, struct hepunion_sb_info *context) 
 	int err;
 	struct file *ro_fd;
 	char *rw_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
-	char *ro_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
-
+	if(!rw_path)
+            return -ENOMEM;
+        char *ro_path;
+        ro_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
+        if(!ro_path)
+            return -ENOMEM;
 	pr_info("hide_directory_contents: %s, %p\n", path, context);
 
 	if (snprintf(ro_path, PATH_MAX, "%s%s", context->read_only_branch, path) > PATH_MAX) {
@@ -207,8 +220,11 @@ int hide_directory_contents(const char *path, struct hepunion_sb_info *context) 
 }
 
 static int hide_entry(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
-	char *wh_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
-	struct readdir_context *ctx = (struct readdir_context*)buf;
+	 char *wh_path;
+         wh_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
+	 if(!wh_path)
+            return -ENOMEM;
+        struct readdir_context *ctx = (struct readdir_context*)buf;
 
 	pr_info("hide_entry: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
 
@@ -276,9 +292,14 @@ int is_empty_dir(const char *path, const char *ro_path, const char *rw_path, str
 int unlink_rw_file(const char *path, const char *rw_path, struct hepunion_sb_info *context, char has_ro_sure) {
 	int err;
 	char has_ro = 0;
-	char *ro_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
-	char *wh_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
-
+	char *ro_path;
+        ro_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
+	if(!ro_path)
+            return -ENOMEM;
+        char *wh_path;
+        wh_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
+        if(!wh_path)
+            return -ENOMEM;
 	pr_info("unlink_rw_file: %s, %s, %p, %u\n", path, rw_path, context, has_ro_sure);
 
 	/* Check if RO exists */
@@ -312,8 +333,10 @@ int unlink_rw_file(const char *path, const char *rw_path, struct hepunion_sb_inf
 
 int unlink_whiteout(const char *path, struct hepunion_sb_info *context) {
 	int err;
-	char *wh_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
-
+	char *wh_path;
+        wh_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
+        if(!wh_path)
+            return -ENOMEM;
 	pr_info("unlink_whiteout: %s, %p\n", path, context);
 
 	/* Get wh path */

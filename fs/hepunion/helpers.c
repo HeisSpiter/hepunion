@@ -16,7 +16,7 @@
 int can_access(const char *path, const char *real_path, struct hepunion_sb_info *context, int mode) {
 	struct kstat stbuf;
 	int err;
-        uid_t sak;//temporary variable //temporary variable  
+        uid_t ret;//temporary variable //temporary variable  
 	pr_info("can_access: %s, %s, %p, %x\n", path, real_path, context, mode);
 
 	/* Get file attributes */
@@ -27,8 +27,8 @@ int can_access(const char *path, const char *real_path, struct hepunion_sb_info 
 
 	/* If root user, allow almost everything */
 	
-        sak = current_fsuid();  
-        if (sak == 0) {
+        ret = current_fsuid();  
+        if (ret == 0) {
 		if (mode & MAY_EXEC) {
 			/* Root needs at least on X
 			 * For rights details, see below
@@ -62,10 +62,10 @@ int can_access(const char *path, const char *real_path, struct hepunion_sb_info 
 	 * Check is done from more specific to general.
 	 * This explains order and values
 	 */
-	if (sak == stbuf.uid) {
+	if (ret == stbuf.uid) {
 		mode <<= (RIGHTS_MASK * 2);
 	}
-	else if (sak == stbuf.gid) {
+	else if (ret == stbuf.gid) {
 		mode <<= RIGHTS_MASK;
 	}
 
@@ -79,8 +79,12 @@ int can_access(const char *path, const char *real_path, struct hepunion_sb_info 
 }
 
 int can_remove(const char *path, const char *real_path, struct hepunion_sb_info *context) {
-        char *parent_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error//dynamic allocation to avoid stack error;	
-        int sak;
+        char *parent_path;
+        parent_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error//dynamic allocation to avoid stack error;	
+        if(!parent_path)
+            return -ENOMEM;
+
+        int ret;
 	/* Find parent directory */
 	char *parent = strrchr(real_path, '/');
 
@@ -96,15 +100,23 @@ int can_remove(const char *path, const char *real_path, struct hepunion_sb_info 
 
 	/* Caller must be able to write in parent dir */
 	 
-        sak = can_access(path, parent_path, context, MAY_WRITE);
+        ret = can_access(path, parent_path, context, MAY_WRITE);
         kfree(parent_path);
-        return sak;
+        return ret;
 }
 
 int can_traverse(const char *path, struct hepunion_sb_info *context) {
-	char *short_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-        char *long_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-	int err;
+	char *short_path;
+        short_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
+        if(!short_path)
+            return -ENOMEM;
+
+        char *long_path;
+        long_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
+	if(!long_path)
+            return -ENOMEM;
+
+        int err;
 	char *last, *old_directory, *directory;
 
 	pr_info("can_traverse: %s, %p\n", path, context);
@@ -165,9 +177,16 @@ int check_exist(const char *pathname, struct hepunion_sb_info *context, int flag
 
 int find_file(const char *path, char *real_path, struct hepunion_sb_info *context, char flags) {
 	int err;
-        char *tmp_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-        char *wh_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-	
+        char *tmp_path;
+        tmp_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
+        if(!tmp_path)
+            return -ENOMEM;
+
+        char *wh_path;
+        wh_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
+	if(!wh_path)
+            return -ENOMEM;
+
 	pr_info("find_file: %s, %p, %p, %x\n", path, real_path, context, flags);
 
 	/* Do not check flags validity
@@ -290,8 +309,12 @@ int get_full_path_i(const struct inode *inode, char *real_path) {
 
 /* Adapted from nfs_path function */
 int get_full_path_d(const struct dentry *dentry, char *real_path) {
-	char *tmp_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-	char *end = tmp_path + PATH_MAX;
+	char *tmp_path;
+        tmp_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
+	if(!tmp_path)
+            return -ENOMEM;
+
+        char *end = tmp_path + PATH_MAX;
 	int namelen = 0, buflen = PATH_MAX;
         
 	pr_info("get_full_path_d: %p, %p\n", dentry, real_path);
@@ -300,7 +323,7 @@ int get_full_path_d(const struct dentry *dentry, char *real_path) {
 
 	*--end = '\0';
 	buflen--;
-	spin_lock(&dentry->d_inode->i_lock);
+	//spin_lock(&dentry->d_inode->i_lock);need to find alternative
 	while (!IS_ROOT(dentry)) {
 		namelen = dentry->d_name.len;
 		buflen -= namelen + 1;
@@ -311,7 +334,7 @@ int get_full_path_d(const struct dentry *dentry, char *real_path) {
 		*--end = '/';
 		dentry = dentry->d_parent;
 	}
-	spin_unlock(&dentry->d_inode->i_lock);
+	//spin_unlock(&dentry->d_inode->i_lock);
 
 	if (buflen == PATH_MAX - 1) {
 		*--end = '/';
@@ -353,7 +376,10 @@ struct dentry * get_path_dentry(const char *pathname, struct hepunion_sb_info *c
 
 int get_relative_path(const struct inode *inode, const struct dentry *dentry, const struct hepunion_sb_info *context, char *path, int is_ours) {
 	int len;
-	char *real_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
+	char *real_path;
+        real_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
+        if(!real_path)
+            return -ENOMEM;
 
 	pr_info("get_relative_path: %p, %p, %p, %p, %d\n", inode, dentry, context, path, is_ours);
 
@@ -516,8 +542,12 @@ long mkdir(const char *pathname, struct hepunion_sb_info *context, int mode) {
 /* Imported from Linux kernel */
 long mknod(const char *pathname, struct hepunion_sb_info *context, int mode, unsigned dev) {
 	int error = 0;
-	struct dentry *dentry = kmalloc(sizeof(struct dentry), GFP_KERNEL);
-	struct nameidata nd;
+	struct dentry *dentry;
+        dentry = kmalloc(sizeof(struct dentry), GFP_KERNEL);
+	if(!dentry)
+            return -ENOMEM;
+
+        struct nameidata nd;
         struct path path;
 	pr_info("mknod: %s, %p, %x, %u\n", pathname, context, mode, dev);
 
@@ -581,7 +611,10 @@ int mkfifo(const char *pathname, struct hepunion_sb_info *context, int mode) {
 /* Imported from Linux kernel */
 long symlink(const char *oldname, const char *newname, struct hepunion_sb_info *context) {
 	int error = 0;
-	struct dentry *dentry = kmalloc(sizeof(struct dentry), GFP_KERNEL);
+	struct dentry *dentry;
+        dentry = kmalloc(sizeof(struct dentry), GFP_KERNEL);
+        if(!dentry)
+            return -ENOMEM;
 
 	struct path path;
 	pr_info("symlink: %s, %s, %p\n", oldname, newname, context);
@@ -610,8 +643,12 @@ long symlink(const char *oldname, const char *newname, struct hepunion_sb_info *
 
 /* Imported from Linux kernel - simplified */
 long link(const char *oldname, const char *newname, struct hepunion_sb_info *context) {
-	struct dentry *new_dentry = kmalloc(sizeof(struct dentry), GFP_KERNEL);
-	struct nameidata nd, old_nd;
+	struct dentry *new_dentry;
+        new_dentry = kmalloc(sizeof(struct dentry), GFP_KERNEL);
+	if(!new_dentry)
+            return -ENOMEM;
+
+        struct nameidata nd, old_nd;
 	int error;
         pr_info("link: %s, %s, %p\n", oldname, newname, context);
 
@@ -685,7 +722,11 @@ long rmdir(const char *pathname, struct hepunion_sb_info *context) {
 	int err;
 	short lookup = 0;
 	struct inode *dir;
-	struct dentry *dentry = kmalloc(sizeof(struct dentry), GFP_KERNEL);
+	struct dentry *dentry;
+        dentry = kmalloc(sizeof(struct dentry), GFP_KERNEL);
+        if(!dentry)
+            return -ENOMEM;
+
         struct path path;
 	pr_info("rmdir: %s, %p\n", pathname, context);
 
@@ -726,7 +767,11 @@ long unlink(const char *pathname, struct hepunion_sb_info *context) {
 	int err;
 	short lookup = 0;
 	struct inode *dir;
-	struct dentry *dentry = kmalloc(sizeof(struct dentry), GFP_KERNEL);
+	struct dentry *dentry;
+        dentry = kmalloc(sizeof(struct dentry), GFP_KERNEL);
+        if(!dentry)
+            return -ENOMEM;
+
         struct path path;
 	pr_info("unlink: %s, %p\n", pathname, context);
 
