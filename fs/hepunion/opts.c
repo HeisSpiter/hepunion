@@ -142,7 +142,7 @@ static int hepunion_create(struct inode *dir, struct dentry *dentry, int mode, s
 #ifdef _DEBUG_
 	inode->i_private = (void *)HEPUNION_MAGIC;
 #endif
-	insert_inode_hash(inode);
+	insert_inode_hash(inode); 
 
 	d_instantiate(dentry, inode);
 	mark_inode_dirty(dir);
@@ -780,6 +780,66 @@ static void hepunion_read_inode(struct inode *inode) {
 #endif
 }
 
+static int hepunion_update(struct hepunion_sb_info *context, int *timestamp, int *perms)
+{
+      int err;
+      struct file *filp;
+      filp = filp_open(context->read_write_branch, O_RDWR, 0);
+
+      if (IS_ERR(filp)) 
+      {
+        pr_info("Failed opening RW branch!\n");
+        return PTR_ERR(filp);
+      }
+      
+      char *path = context->global1;
+      char *real_path = context->global2;
+      
+      
+      pr_info("hepunion_write_inode: %p, %p, %p\n", filp->f_dentry->d_inode, filp->f_dentry, context);
+      validate_dentry(filp->f_dentry);
+      validate_inode(filp->f_dentry->d_inode);
+      
+        
+      /* Try to find the file first */
+      err = get_relative_path_for_file(filp->f_dentry->d_inode, filp->f_dentry, context, path, 1);
+      if (err < 0) 
+         return err;
+  
+      /* Now, check for RW file */
+      if (find_file(path, real_path, context, MUST_READ_WRITE) <  0)
+             return -1;
+      else
+      {
+          
+       filp->f_dentry->d_inode->i_mtime.tv_sec  =  timestamp;
+       filp->f_dentry->d_inode->i_mode = perms;
+
+       filp_close(filp, NULL);
+       return 1;
+     } 
+}   
+
+static int hepunion_write_inode(struct inode *inode, struct writeback_control *wbc)
+{
+        int timestamp, perms;//local variables
+
+        struct hepunion_sb_info *context = get_context_i(inode);
+         
+        //Timestamp of inode 
+        timestamp = inode->i_mtime.tv_sec > inode->i_ctime.tv_sec ? inode->i_mtime.tv_sec : inode->i_ctime.tv_sec;
+        //checking between modification time sec and creation time
+
+        //Permission of inode
+        perms |= (inode->i_mode & (S_IRUSR | S_IRGRP | S_IROTH)) ? 4 : 0;
+        perms |= (inode->i_mode & (S_IWUSR | S_IWGRP | S_IWOTH)) ? 2 : 0;
+        perms |= (inode->i_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) ? 1 : 0;
+
+        pr_info("Writing inode with %d secs w/ %o\n", timestamp, perms);  
+        return hepunion_update(context, &timestamp, &perms);
+            
+}
+
 static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
 	struct readdir_file *entry;
 	struct opendir_context *ctx = (struct opendir_context *)buf;
@@ -1292,7 +1352,7 @@ static int hepunion_statfs(struct dentry *dentry, struct kstatfs *buf) {
 	/* First, get RO data */
 	filp = filp_open(sb_info->read_only_branch, O_RDONLY, 0);
 	if (IS_ERR(filp)) {
-		pr_err("Failed opening RO branch!\n");
+		pr_info("Failed opening RO branch!\n");
 		return PTR_ERR(filp);
 	}
 
@@ -1434,6 +1494,7 @@ struct inode_operations hepunion_dir_iops = {
 
 struct super_operations hepunion_sops = {
 	.read_inode	= hepunion_read_inode,
+        .write_inode    = hepunion_write_inode,
 	.statfs		= hepunion_statfs,
 };
 
