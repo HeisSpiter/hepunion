@@ -25,6 +25,7 @@ clean:
 	${MakeMod} $@
 	find . -type f -name '*~' | xargs -r ${RM}
 	${RM} -r hepunion.ko usr
+	${MAKE} -C tests clean
 
 install: fs/hepunion/hepunion.ko
 	${MakeMod} modules_install
@@ -50,3 +51,8 @@ usr/include/linux/hepunion_type.h:
 		-f Makefile \
 		obj=${d}/include/linux dst=${d}/usr/include/linux
 	test -s $@
+
+tests:
+	${MAKE} -C tests
+
+.PHONY: tests
