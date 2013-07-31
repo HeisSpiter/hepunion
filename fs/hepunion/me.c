@@ -100,24 +100,25 @@ int find_me(const char *path, struct hepunion_sb_info *context, char *me_path, s
 
 int get_file_attr(const char *path, struct hepunion_sb_info *context, struct kstat *kstbuf) {
 	char *real_path;
-        real_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
-	if(!real_path)
-            return -ENOMEM;
-        int err;
-        int ret;//temporary variable to free dynamic array//temporary variable to free dynamic array
+	int err;
 	pr_info("get_file_attr: %s, %p, %p\n", path, context, kstbuf);
+
+	real_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (!real_path) {
+		return -ENOMEM;
+	}
 
 	/* First, find file */
 	err = find_file(path, real_path, context, 0);
 	if (err < 0) {
+		kfree(real_path);
 		return err;
 	}
 
 	/* Call worker */
-	 
-        ret = get_file_attr_worker(path, real_path, context, kstbuf);
-        kfree(real_path);
-        return ret;
+	err = get_file_attr_worker(path, real_path, context, kstbuf);
+	kfree(real_path);
+	return err;
 }
 
 int get_file_attr_worker(const char *path, const char *real_path, struct hepunion_sb_info *context, struct kstat *kstbuf) {
@@ -125,15 +126,21 @@ int get_file_attr_worker(const char *path, const char *real_path, struct hepunio
 	char me;
 	struct kstat kstme;
 	char *me_file;
-        me_file = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
-        if(!me_file)
-            return -ENOMEM;
+
 	pr_info("get_file_attr_worker: %s, %s, %p, %p\n", path, real_path, context, kstbuf);
+
+	me_file = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
+	if (!me_file) {
+		return -ENOMEM;
+	}
 
 	/* Look for a me file */
 	me = (find_me(path, context, me_file, &kstme) >= 0);
 
 	pr_info("me file status: %d\n", me);
+
+	/* We don't need its name info about */
+	kfree(me_file);
 
 	/* Get attributes */
 	err = lstat(real_path, context, kstbuf);
@@ -156,7 +163,7 @@ int get_file_attr_worker(const char *path, const char *real_path, struct hepunio
 		/* Finally, apply .me. modes */
 		kstbuf->mode |= kstme.mode;
 	}
-        kfree(me_file);
+
 	return 0;
 }
 
@@ -193,9 +200,6 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr, s
 	int err;
 	char me;
 	char *me_path;
-        me_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
-        if(!me_path)
-            return -ENOMEM;
 	struct kstat kstme;
 	struct file *fd;
 	umode_t mode;
@@ -205,6 +209,11 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr, s
 	/* Ensure input is correct */
 	attr->ia_valid &= ATTR_UID | ATTR_GID | ATTR_ATIME | ATTR_MTIME | ATTR_MODE;
 
+	me_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
+	if (!me_path) {
+		return -ENOMEM;
+	}
+
 	/* Look for a me file */
 	me = (find_me(path, context, me_path, &kstme) >= 0);
 
@@ -212,13 +221,13 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr, s
 		/* Read real file info */
 		err = lstat(real_path, context, &kstme);
 		if (err < 0) {
-			return err;
+			goto cleanup;
 		}
 
 		/* Recreate path up to the .me. file */
 		err = find_path(path, NULL, context);
 		if (err < 0) {
-			return err;
+			goto cleanup;
 		}
 
 		/* .me. does not exist, create it with appropriate mode */
@@ -227,7 +236,8 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr, s
 
 		fd = creat_worker(me_path, context, mode);
 		if (IS_ERR(fd)) {
-			return PTR_ERR(fd);
+			err = PTR_ERR(fd);
+			goto cleanup;
 		}
 
 		/* Remove mode if it was set */
@@ -256,7 +266,8 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr, s
 	else {
 		fd = open_worker(me_path, context, O_RDWR);
 		if (IS_ERR(fd)) {
-			return PTR_ERR(fd);
+			err = PTR_ERR(fd);
+			goto cleanup;
 		}
 
 		/* Only change if there are changes */
@@ -273,6 +284,8 @@ int set_me_worker(const char *path, const char *real_path, struct iattr *attr, s
 		filp_close(fd, NULL);
 		pop_root();
 	}
-        kfree(me_path); 
+
+cleanup:
+	kfree(me_path); 
 	return err;
 }
