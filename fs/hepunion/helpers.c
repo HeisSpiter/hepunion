@@ -82,12 +82,8 @@ int can_access(const char *path, const char *real_path, struct hepunion_sb_info 
 }
 
 int can_remove(const char *path, const char *real_path, struct hepunion_sb_info *context) {
-        char *parent_path;
-        parent_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error//dynamic allocation to avoid stack error;	
-        if(!parent_path)
-            return -ENOMEM;
-
-        int ret;
+	char *parent_path;
+	int ret;
 	/* Find parent directory */
 	char *parent = strrchr(real_path, '/');
 
@@ -98,43 +94,50 @@ int can_remove(const char *path, const char *real_path, struct hepunion_sb_info 
 		return -EACCES;
 	}
 
+	parent_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (!parent_path) {
+		return -ENOMEM;
+	}
+
 	strncpy(parent_path, real_path, parent - real_path);
 	parent_path[parent - real_path] = '\0';
 
 	/* Caller must be able to write in parent dir */
-	 
-        ret = can_access(path, parent_path, context, MAY_WRITE);
-        kfree(parent_path);
-        return ret;
+	ret = can_access(path, parent_path, context, MAY_WRITE);
+	kfree(parent_path);
+	return ret;
 }
 
 int can_traverse(const char *path, struct hepunion_sb_info *context) {
-	char *short_path;
-        short_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-        if(!short_path)
-            return -ENOMEM;
-
-        char *long_path;
-        long_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-	if(!long_path)
-            return -ENOMEM;
-
-        int err;
+	char *short_path = NULL, *long_path = NULL;
+	int err = -ENOMEM;
 	char *last, *old_directory, *directory;
 
 	pr_info("can_traverse: %s, %p\n", path, context);
 
+	short_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (!short_path) {
+		return -ENOMEM;
+	}
+
+	long_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
+	if (!long_path) {
+		goto cleanup;
+	}
+
 	/* Prepare strings */
 	snprintf(short_path, PATH_MAX, "%c", '/');
 	if (snprintf(long_path, PATH_MAX, "%s/", context->read_only_branch) > PATH_MAX) {
-		return -ENAMETOOLONG;
+		err = -ENAMETOOLONG;
+		goto cleanup;
 	}
 
 	/* Get directory */
 	last = strrchr(path, '/');
 	/* If that's last (traversing root is always possible) */
 	if (path == last) {
-		return 0;
+		err = 0;
+		goto cleanup;
 	}
 
 	/* Really get directory */
@@ -145,7 +148,7 @@ int can_traverse(const char *path, struct hepunion_sb_info *context) {
 		strncat(long_path, old_directory, (directory - old_directory) / sizeof(char));
 		err = can_access(short_path, long_path, context, MAY_EXEC);
 		if (err < 0) {
-			return err;
+			goto cleanup;
 		}
 
 		/* Next iteration (skip /) */
@@ -154,15 +157,23 @@ int can_traverse(const char *path, struct hepunion_sb_info *context) {
 	}
 
 	/* If that point is reached, it can access */
-	kfree(short_path);
-        kfree(long_path);
-        return 0;
+	err = 0;
+
+cleanup:
+	if (short_path) {
+		kfree(short_path);
+	}
+
+	if (long_path) {
+		kfree(long_path);
+	}
+
+	return err;
 }
 
 int check_exist(const char *pathname, struct hepunion_sb_info *context, int flag) {
 	int err;
-	struct nameidata nd;
-        struct path path;
+	struct path path;
 
 	pr_info("check_exist: %s, %p, %x\n", pathname, context, flag);
 
@@ -173,22 +184,14 @@ int check_exist(const char *pathname, struct hepunion_sb_info *context, int flag
 		return err;
 	}
 
-	path_put(&nd.path);
+	path_put(&path);
 
 	return 0;
 }
 
 int find_file(const char *path, char *real_path, struct hepunion_sb_info *context, char flags) {
-	int err;
-        char *tmp_path;
-        tmp_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-        if(!tmp_path)
-            return -ENOMEM;
-
-        char *wh_path;
-        wh_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-	if(!wh_path)
-            return -ENOMEM;
+	int err = -ENOMEM;
+	char *tmp_path = NULL, *wh_path = NULL;
 
 	pr_info("find_file: %s, %p, %p, %x\n", path, real_path, context, flags);
 
@@ -219,68 +222,91 @@ int find_file(const char *path, char *real_path, struct hepunion_sb_info *contex
 		}
 	}
 
+	tmp_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (!tmp_path) {
+		return -ENOMEM;
+	}
+
+	wh_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (!wh_path) {
+		goto cleanup;
+	}
+
 	/* Be smart, we might have to create a copyup */
 	if (is_flag_set(flags, CREATE_COPYUP)) {
 		if (make_ro_path(path, tmp_path) > PATH_MAX) {
-			return -ENAMETOOLONG;
+			err = -ENAMETOOLONG;
+			goto cleanup;
 		}
 
 		err = check_exist(tmp_path, context, 0);
 		if (err < 0) {
 			/* If file does not exist, even in RO, fail */
-			return err;
+			goto cleanup;
 		}
 
 		if (!is_flag_set(flags, IGNORE_WHITEOUT)) {
 			/* Check whether it was deleted */
 			err = find_whiteout(path, context, wh_path);
 			if (err == 0) {
-				return -ENOENT;
+				err = -ENOENT;
+				goto cleanup;
 			}
 		}
 
 		/* Check for access */
 		err = can_traverse(path, context);
 		if (err < 0) {
-			return err;
+			goto cleanup;
 		}
 
 		err = create_copyup(path, tmp_path, real_path, context);
 		if (err == 0) {
-			return READ_WRITE_COPYUP;
+			err = READ_WRITE_COPYUP;
+			goto cleanup;
 		}
 	}
 	else {
 		/* It was not found on RW, try RO */
 		if (make_ro_path(path, real_path) > PATH_MAX) {
-			return -ENAMETOOLONG;
+			err = -ENAMETOOLONG;
+			goto cleanup;
 		}
 
 		err = check_exist(real_path, context, 0);
 		if (err < 0) {
-			return err;
+			goto cleanup;
 		}
 
 		if (!is_flag_set(flags, IGNORE_WHITEOUT)) {
 			/* Check whether it was deleted */
 			err = find_whiteout(path, context, wh_path);
 			if (err == 0) {
-				return -ENOENT;
+				err = -ENOENT;
+				goto cleanup;
 			}
 		}
 
 		/* Check for access */
 		err = can_traverse(path, context);
 		if (err < 0) {
-			return err;
+			goto cleanup;
 		}
 
-		return READ_ONLY;
+		/* We fall back here instead of deleting, to get the memory freed */
+		err = READ_ONLY;
 	}
 
-	/* It was not found at all */
-        kfree(tmp_path);
-        kfree(wh_path); 
+	/* If we arrive here, it was not found at all (excepted for upper case) */
+cleanup:
+	if (tmp_path) {
+		kfree(tmp_path);
+	}
+
+	if (wh_path) {
+		kfree(wh_path);
+	}
+
 	return err;
 }
 
@@ -312,17 +338,17 @@ int get_full_path_i(const struct inode *inode, char *real_path) {
 
 /* Adapted from nfs_path function */
 int get_full_path_d(const struct dentry *dentry, char *real_path) {
-	char *tmp_path;
-        tmp_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-	if(!tmp_path)
-            return -ENOMEM;
-
-        char *end = tmp_path + PATH_MAX;
+	char *tmp_path = NULL, *end;
 	int namelen = 0, buflen = PATH_MAX;
         
 	pr_info("get_full_path_d: %p, %p\n", dentry, real_path);
-
 	pr_info("Getting full path of: %s\n", dentry->d_name.name);
+
+	tmp_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (!tmp_path) {
+		return -ENOMEM;
+	}
+	end = tmp_path + PATH_MAX;
 
 	*--end = '\0';
 	buflen--;
@@ -330,8 +356,10 @@ int get_full_path_d(const struct dentry *dentry, char *real_path) {
 	while (!IS_ROOT(dentry)) {
 		namelen = dentry->d_name.len;
 		buflen -= namelen + 1;
-		if (buflen < 0)
-			goto Elong_unlock;
+		if (buflen < 0) {
+			buflen = -ENAMETOOLONG;
+			goto cleanup;
+		}
 		end -= namelen;
 		memcpy(end, dentry->d_name.name, namelen);
 		*--end = '/';
@@ -348,12 +376,10 @@ int get_full_path_d(const struct dentry *dentry, char *real_path) {
 	memcpy(real_path, end, buflen);
 
 	pr_info("Full path: %s\n", real_path);
-        kfree(tmp_path);
-	return buflen;
 
-Elong_unlock:
-	spin_unlock(&dentry->d_inode->i_lock);
-	return -ENAMETOOLONG;
+cleanup:
+	kfree(tmp_path);
+	return buflen;
 }
 
 struct dentry * get_path_dentry(const char *pathname, struct hepunion_sb_info *context, int flag) {
@@ -380,11 +406,13 @@ struct dentry * get_path_dentry(const char *pathname, struct hepunion_sb_info *c
 int get_relative_path(const struct inode *inode, const struct dentry *dentry, const struct hepunion_sb_info *context, char *path, int is_ours) {
 	int len;
 	char *real_path;
-        real_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-        if(!real_path)
-            return -ENOMEM;
 
 	pr_info("get_relative_path: %p, %p, %p, %p, %d\n", inode, dentry, context, path, is_ours);
+
+	real_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (!real_path) {
+		return -ENOMEM;
+	}
 
 	/* First, get full path */
 	if (dentry) {
@@ -393,7 +421,7 @@ int get_relative_path(const struct inode *inode, const struct dentry *dentry, co
 		len = get_full_path_i(inode, real_path);
 	}
 	if (len < 0) {
-		return len;
+		goto cleanup;
 	}
 
 	/* If those structures are owned by HEPunion, there's no
@@ -401,22 +429,29 @@ int get_relative_path(const struct inode *inode, const struct dentry *dentry, co
 	 */
 	if (is_ours) {
 		memcpy(path, real_path, len);
-		return 0;
+		len = 0;
+		goto cleanup;
 	}
 
 	/* Check if it's on RO */
 	if (strncmp(context->read_only_branch, real_path, context->ro_len) == 0) {
 		memcpy(path, real_path + 1 + context->ro_len, len - 1 - context->ro_len);
-		return 0;
+		len = 0;
+		goto cleanup;
 	}
 
 	/* Check if it's on RW */
 	if (strncmp(context->read_write_branch, real_path, context->rw_len) == 0) {
 		memcpy(path, real_path + 1 + context->rw_len, len - 1 - context->rw_len);
-		return 0;
+		len = 0;
+		goto cleanup;
 	}
-        kfree(real_path);
-	return -EINVAL;
+
+	len = -EINVAL;
+
+cleanup:
+	kfree(real_path);
+	return len;
 }
 
 int get_relative_path_for_file(const struct inode *dir, const struct dentry *dentry, const struct hepunion_sb_info *context, char *path, int is_ours) {
@@ -487,8 +522,7 @@ int path_to_special(const char *path, specials type, const struct hepunion_sb_in
 }
 
 /* Imported for Linux kernel and simplified */
-int lstat(const char *pathname, struct hepunion_sb_info *context, struct kstat *stat)
-{
+int lstat(const char *pathname, struct hepunion_sb_info *context, struct kstat *stat) {
 	struct path path;
 	int error;
 
@@ -512,9 +546,9 @@ long mkdir(const char *pathname, struct hepunion_sb_info *context, int mode) {
 	int error = 0;
 	struct dentry *dentry;
 	struct path path;
+
 	pr_info("mkdir: %s, %p, %x\n", pathname, context, mode);
-        
-	
+
 	push_root();
 	error = kern_path(pathname, LOOKUP_PARENT, &path);
 	pop_root();
@@ -546,12 +580,7 @@ long mkdir(const char *pathname, struct hepunion_sb_info *context, int mode) {
 long mknod(const char *pathname, struct hepunion_sb_info *context, int mode, unsigned dev) {
 	int error = 0;
 	struct dentry *dentry;
-        dentry = kmalloc(sizeof(struct dentry), GFP_KERNEL);
-	if(!dentry)
-            return -ENOMEM;
-
-        struct nameidata nd;
-        struct path path;
+	struct path path;
 	pr_info("mknod: %s, %p, %x, %u\n", pathname, context, mode, dev);
 
 	if (S_ISDIR(mode))
@@ -566,7 +595,7 @@ long mknod(const char *pathname, struct hepunion_sb_info *context, int mode, uns
 
 	push_root();
 	dentry = kern_path_create(AT_FDCWD, pathname, &path, LOOKUP_DIRECTORY);//lookup_create has been removed
-        pop_root();
+	pop_root();
 	error = PTR_ERR(dentry);
 
 	if (!IS_POSIXACL(path.dentry->d_inode))
@@ -575,7 +604,7 @@ long mknod(const char *pathname, struct hepunion_sb_info *context, int mode, uns
 		switch (mode & S_IFMT) {
 			case 0: case S_IFREG:
 				push_root();
-				error = vfs_create(path.dentry->d_inode,dentry,mode,&nd);
+				error = vfs_create(path.dentry->d_inode, dentry,mode, true);
 				pop_root();
 				break;
 			case S_IFCHR: case S_IFBLK:
@@ -597,7 +626,6 @@ long mknod(const char *pathname, struct hepunion_sb_info *context, int mode, uns
 		dput(dentry);
 	}
 	path_put(&path);
-        kfree(dentry);
 	return error;
 }
 
@@ -615,10 +643,6 @@ int mkfifo(const char *pathname, struct hepunion_sb_info *context, int mode) {
 long symlink(const char *oldname, const char *newname, struct hepunion_sb_info *context) {
 	int error = 0;
 	struct dentry *dentry;
-        dentry = kmalloc(sizeof(struct dentry), GFP_KERNEL);
-        if(!dentry)
-            return -ENOMEM;
-
 	struct path path;
 	pr_info("symlink: %s, %s, %p\n", oldname, newname, context);
 
@@ -640,51 +664,46 @@ long symlink(const char *oldname, const char *newname, struct hepunion_sb_info *
 		dput(dentry);
 	}
 	path_put(&path);
-        kfree(dentry);
 	return error;
 }
 
 /* Imported from Linux kernel - simplified */
 long link(const char *oldname, const char *newname, struct hepunion_sb_info *context) {
 	struct dentry *new_dentry;
-        new_dentry = kmalloc(sizeof(struct dentry), GFP_KERNEL);
-	if(!new_dentry)
-            return -ENOMEM;
-
-        struct nameidata nd, old_nd;
+	struct path path, old_path;
 	int error;
-        pr_info("link: %s, %s, %p\n", oldname, newname, context);
+
+	pr_info("link: %s, %s, %p\n", oldname, newname, context);
 
 	push_root();
-	error = kern_path(oldname, 0, &old_nd.path);
+	error = kern_path(oldname, 0, &old_path);
 	pop_root();
 	if (error) {
 		return error;
 	}
 
 	push_root();
-	error = kern_path(newname, LOOKUP_PARENT, &nd.path);
+	error = kern_path(newname, LOOKUP_PARENT, &path);
 	pop_root();
 	if (error)
 		goto out;
 	error = -EXDEV;
-	if (old_nd.path.mnt != nd.path.mnt)
+	if (old_path.mnt != path.mnt)
 		goto out_release;
 	push_root();
-	new_dentry = kern_path_create(AT_FDCWD, newname, &nd.path, LOOKUP_DIRECTORY);//lookup_create has been removed
+	new_dentry = kern_path_create(AT_FDCWD, newname, &path, LOOKUP_DIRECTORY);//lookup_create has been removed
 	pop_root();
 	error = PTR_ERR(new_dentry);
 	if (!IS_ERR(new_dentry)) {
 		push_root();
-		error = vfs_link(old_nd.path.dentry, nd.path.dentry->d_inode, new_dentry);
+		error = vfs_link(old_path.dentry, path.dentry->d_inode, new_dentry);
 		pop_root();
 		dput(new_dentry);
 	}
 	out_release:
-	path_put(&nd.path);
+	path_put(&path);
 out:
-	path_put(&old_nd.path);
-        kfree(new_dentry);
+	path_put(&old_path);
 	return error;
 }
 
@@ -693,30 +712,31 @@ long readlink(const char *path, char *buf, struct hepunion_sb_info *context, int
 	struct inode *inode;
 	int error;
 	mm_segment_t oldfs;
-        struct path path1;
+	struct path spath;
+
 	pr_info("readlink: %s, %p, %p, %d\n", path, buf, context, bufsiz);
 
 	if (bufsiz <= 0)
 		return -EINVAL;
 
 	push_root();
-	error = kern_path(path, 0, &path1);
+	error = kern_path(path, 0, &spath);
 	pop_root();
 	if (!error) {
-		inode = path1.dentry->d_inode;
+		inode = spath.dentry->d_inode;
 		error = -EINVAL;
 		if (inode->i_op && inode->i_op->readlink) {
 			push_root();
-			error = security_inode_readlink(path1.dentry);
+			error = security_inode_readlink(spath.dentry);
 			if (!error) {
-				//touch_atime(path1.mnt, path1.dentry);
+				touch_atime(&spath);
 				call_usermode();
-				error = inode->i_op->readlink(path1.dentry, buf, bufsiz);
+				error = inode->i_op->readlink(spath.dentry, buf, bufsiz);
 				restore_kernelmode();
 			}
 			pop_root();
 		}
-		path_put(&path1);
+		path_put(&spath);
 	}
 	return error;
 }
@@ -726,11 +746,7 @@ long rmdir(const char *pathname, struct hepunion_sb_info *context) {
 	short lookup = 0;
 	struct inode *dir;
 	struct dentry *dentry;
-        dentry = kmalloc(sizeof(struct dentry), GFP_KERNEL);
-        if(!dentry)
-            return -ENOMEM;
-
-        struct path path;
+	struct path path;
 	pr_info("rmdir: %s, %p\n", pathname, context);
 
 	/* Get dir dentry */
@@ -762,7 +778,7 @@ long rmdir(const char *pathname, struct hepunion_sb_info *context) {
 		path_put(&path);
 	}
 	dput(dentry);
-        kfree(dentry);
+
 	return err;
 }
 
@@ -771,11 +787,7 @@ long unlink(const char *pathname, struct hepunion_sb_info *context) {
 	short lookup = 0;
 	struct inode *dir;
 	struct dentry *dentry;
-        dentry = kmalloc(sizeof(struct dentry), GFP_KERNEL);
-        if(!dentry)
-            return -ENOMEM;
-
-        struct path path;
+	struct path path;
 	pr_info("unlink: %s, %p\n", pathname, context);
 
 	/* Get file dentry */
