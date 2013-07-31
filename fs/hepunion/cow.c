@@ -33,23 +33,10 @@
 #include "hepunion.h"
 
 static int copy_child(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
-	char *tmp_path; 
-        tmp_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-        if(!tmp_path)
-            return -ENOMEM;
-        
-        char *tmp_ro_path; 
-        tmp_ro_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-        if(!tmp_ro_path)
-            return -ENOMEM;
-        
-        char *tmp_rw_path;
-        tmp_rw_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-	if(!tmp_rw_path)
-            return -ENOMEM;
-       
-        struct readdir_context *ctx = (struct readdir_context*)buf;
-        int ret;//temporary variable to allow freeing of dynamic arrays
+	int ret = -ENOMEM;
+	struct readdir_context *ctx = (struct readdir_context*)buf;
+    char *tmp_path = NULL, *tmp_ro_path = NULL, *tmp_rw_path = NULL;
+
 	pr_info("copy_child: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
 
 	/* Don't copy special entries */
@@ -57,65 +44,94 @@ static int copy_child(void *buf, const char *name, int namlen, loff_t offset, u6
 		return 0;
 	}
 
+	/* Dynamic allocations to avoid stack errors
+	 * TODO: Optimize later on with lookaside allocations
+	 */
+    tmp_path = kmalloc(PATH_MAX, GFP_KERNEL);
+    if(!tmp_path) {
+		return -ENOMEM;
+	}
+
+	tmp_ro_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if(!tmp_ro_path) {
+		goto cleanup;
+	}
+
+	tmp_rw_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if(!tmp_rw_path) {
+		goto cleanup;
+	}
+
 	if (snprintf(tmp_ro_path, PATH_MAX, "%s/%s", ctx->ro_path, name) > PATH_MAX) {
-		return -ENAMETOOLONG;
+		ret = -ENAMETOOLONG;
+		goto cleanup;
 	}
 
 	if (snprintf(tmp_path, PATH_MAX, "%s/%s", ctx->path, name) > PATH_MAX) {
-		return -ENAMETOOLONG;
+		ret = -ENAMETOOLONG;
+		goto cleanup;
 	}
 
 	/* Recreate everything recursively */
-        ret = create_copyup(tmp_path, tmp_ro_path, tmp_rw_path, ctx->context);
-        
-        kfree(tmp_path);
-        kfree(tmp_ro_path);
-        kfree(tmp_rw_path);
-        
-        return ret;
+	ret = create_copyup(tmp_path, tmp_ro_path, tmp_rw_path, ctx->context);
+
+cleanup:
+	if (tmp_path) {
+		kfree(tmp_path);
+	}
+
+	if (tmp_ro_path) {
+		kfree(tmp_ro_path);
+	}
+
+	if (tmp_rw_path) {
+		kfree(tmp_rw_path);
+	}
+
+	return ret;
 }
 
 int create_copyup(const char *path, const char *ro_path, char *rw_path, struct hepunion_sb_info *context) {
 	 /* Once here, two things are sure:
 	 * RO exists, RW does not
 	 */
-         int err, len;	 
-         char *tmp;
-         tmp = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-         if(!tmp)
-            return -ENOMEM;
-         
-         char *me_path;
-         me_path= kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-         if(!me_path)
-            return -ENOMEM;
-        
-        struct kstat kstbuf;
+	int err = -ENOMEM, len;	 
+	char *tmp = NULL, *me_path = NULL, *buf = NULL;
+	struct kstat kstbuf;
 	struct file *ro_fd, *rw_fd;
 	ssize_t rcount;
-	
-        char *buf; 
-        buf= kmalloc(MAXSIZE, GFP_KERNEL);//dynamic allocation to avoid stack error
-	if(!buf)
-            return -ENOMEM;
-        
-        struct dentry *dentry;
+	struct dentry *dentry;
 	struct iattr attr;
 	struct readdir_context ctx;
 	mm_segment_t oldfs;
 
 	pr_info("create_copyup: %s, %s, %s, %p\n", path, ro_path, rw_path, context);
 
+	tmp = kmalloc(PATH_MAX, GFP_KERNEL);
+	if(!tmp) {
+		return -ENOMEM;
+	}
+
+	me_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if(!me_path) {
+		goto cleanup;
+	}
+
+	buf = kmalloc(MAXSIZE, GFP_KERNEL);
+	if(!buf) {
+		goto cleanup;
+	}
+
 	/* Get file attributes */
 	err = get_file_attr_worker(path, ro_path, context, &kstbuf);
 	if (err < 0) {
-		return err;
+		goto cleanup;
 	}
 
 	/* Copyup dirs if required */
 	err = find_path(path, rw_path, context);
 	if (err < 0) {
-		return err;
+		goto cleanup;
 	}
 
 	/* Handle the file properly */
@@ -125,14 +141,15 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct h
 			/* Read destination */
 			len = readlink(ro_path, tmp, context, sizeof(tmp) - 1);
 			if (len < 0) {
-				return len;
+				err = len;
+				goto cleanup;
 			}
 			tmp[len] = '\0';
 
 			/* And create a new symbolic link */
 			err = symlink_worker(tmp, rw_path, context);
 			if (err < 0) {
-				return err;
+				goto cleanup;
 			}
 			break;
 
@@ -141,14 +158,16 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct h
 			/* Open read only... */
 			ro_fd = open_worker(ro_path, context, O_RDONLY);
 			if (IS_ERR(ro_fd)) {
-				return PTR_ERR(ro_fd);
+				err = PTR_ERR(ro_fd);
+				goto cleanup;
 			}
 
 			/* Then, create copyup... */
 			rw_fd = open_worker_2(rw_path, context, O_CREAT | O_WRONLY | O_EXCL, kstbuf.mode); 
 			if (IS_ERR(rw_fd)) {
 				filp_close(ro_fd, NULL);
-				return PTR_ERR(rw_fd);
+				err = PTR_ERR(rw_fd);
+				goto cleanup;
 			}
 
 
@@ -171,7 +190,8 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct h
 						/* Delete copyup */
 						unlink(rw_path, context);
 
-						return rcount;
+						err = rcount;
+						goto cleanup;
 					} else if (rcount == 0) {
 						break;
 					}
@@ -190,7 +210,8 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct h
 						/* Delete copyup */
 						unlink(rw_path, context);
 
-						return rcount;
+						err = rcount;
+						goto cleanup;
 					}
 				}
 			}
@@ -208,7 +229,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct h
 			/* Recreate a node */
 			err = mknod_worker(rw_path, context, kstbuf.mode, kstbuf.rdev);
 			if (err < 0) {
-				return err;
+				goto cleanup;
 			}
 			break;
 
@@ -216,14 +237,15 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct h
 			/* Recreate a dir */
 			err = mkdir_worker(rw_path, context, kstbuf.mode);
 			if (err < 0) {
-				return err;
+				goto cleanup;
 			}
 
 			/* Recreate dir structure */
 			ro_fd = open_worker(ro_path, context, O_RDONLY);
 			if (IS_ERR(ro_fd)) {
 				unlink(rw_path, context);
-				return PTR_ERR(ro_fd);
+				err = PTR_ERR(ro_fd);
+				goto cleanup;
 			}
 
 			/* Create a copyup of each file & dir */
@@ -238,7 +260,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct h
 			/* Handle failure */
 			if (err < 0) {
 				unlink(rw_path, context);
-				return err;
+				goto cleanup;
 			}
 
 			break;
@@ -247,7 +269,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct h
 			/* Recreate FIFO */
 			err = mkfifo_worker(rw_path, context, kstbuf.mode);
 			if (err < 0) {
-				return err;
+				goto cleanup;
 			}
 			break;
 	}
@@ -255,7 +277,8 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct h
 	/* Get dentry for the copyup */
 	dentry = get_path_dentry(rw_path, context, LOOKUP_REVAL);
 	if (IS_ERR(dentry)) {
-		return PTR_ERR(dentry);
+		err = PTR_ERR(dentry);
+		goto cleanup;
 	}
 
 	/* Set copyup attributes */
@@ -275,7 +298,7 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct h
 		vfs_unlink(dentry->d_parent->d_inode, dentry);
 		pop_root();
 		dput(dentry);
-		return err;
+		goto cleanup;
 	}
 
 	dput(dentry);
@@ -284,33 +307,28 @@ int create_copyup(const char *path, const char *ro_path, char *rw_path, struct h
 	if (find_me(path, context, me_path, &kstbuf) >= 0) {
 		unlink(me_path, context);
 	}
-        
-        kfree(tmp);
-        kfree(me_path);
-        kfree(buf);
-	
-        return 0;
+
+	err = 0;
+cleanup:
+	if (tmp) {
+		kfree(tmp);
+	}
+
+	if (me_path) {
+		kfree(me_path);
+	}
+
+	if (buf) {
+		kfree(buf);
+	}
+
+	return err;
 }
 
 static int find_path_worker(const char *path, char *real_path, struct hepunion_sb_info *context) {
 	/* Try to find that tree */
-	int err;
-	
-        char *read_only; 
-        read_only = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-	if(!read_only)
-            return -ENOMEM;
-        
-        char *tree_path;
-        tree_path= kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-        if(!tree_path)
-            return -ENOMEM;
-        
-        char *real_tree_path;
-        real_tree_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error        
-        if(!real_tree_path)
-            return -ENOMEM;
-     
+	int err = -ENOMEM;
+	char *read_only = NULL, *tree_path = NULL, *real_tree_path = NULL;
 	types tree_path_present;
 	char *old_directory;
 	char *directory;
@@ -326,40 +344,62 @@ static int find_path_worker(const char *path, char *real_path, struct hepunion_s
 		return -EINVAL;
 	}
 
+	read_only = kmalloc(PATH_MAX, GFP_KERNEL);
+	if(!read_only) {
+		return -ENOMEM;
+	}
+
+	tree_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if(!tree_path) {
+		goto cleanup;
+	}
+
+	real_tree_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if(!real_tree_path) {
+		goto cleanup;
+	}
+
 	memcpy(tree_path, path, last - path + 1);
 	tree_path[last - path + 1] = '\0';
 	tree_path_present = find_file(tree_path, real_tree_path, context, 0);
 	/* Path should at least exist RO */
 	if (tree_path_present < 0) {
-		return -tree_path_present;
+		err = -tree_path_present;
+		goto cleanup;
 	}
 	/* Path is already present, nothing to do */
 	else if (tree_path_present == READ_WRITE) {
 		/* Execpt filing in output buffer */
 		if (snprintf(real_path, PATH_MAX, "%s%s", context->read_write_branch, path) > PATH_MAX) {
-			return -ENAMETOOLONG;
+			err = -ENAMETOOLONG;
+			goto cleanup;
 		}
 
-		return 0;
+		err = 0;
+		goto cleanup;
 	}
 
 	/* Once here, recreating tree by COW is mandatory */
 	if (snprintf(real_path, PATH_MAX, "%s/", context->read_write_branch) > PATH_MAX) {
-		return -ENAMETOOLONG;
+		err = -ENAMETOOLONG;
+		goto cleanup; 
 	}
 
 	/* Also prepare for RO branch */
 	if (snprintf(read_only, PATH_MAX, "%s/", context->read_only_branch) > PATH_MAX) {
-		return -ENAMETOOLONG;
+		err = -ENAMETOOLONG;
+		goto cleanup;
 	}
 
 	/* If that's last (creating dir at root) */
 	if (last == path) {
 		if (snprintf(real_path, PATH_MAX, "%s/", context->read_write_branch) > PATH_MAX) {
-			return -ENAMETOOLONG;
+			err = -ENAMETOOLONG;
+			goto cleanup;
 		}
 
-		return 0;
+		err = 0;
+		goto cleanup;
 	}
 
 	/* Really get directory */
@@ -375,20 +415,21 @@ static int find_path_worker(const char *path, char *real_path, struct hepunion_s
 			/* Get previous dir properties */
 			err = lstat(read_only, context, &kstbuf);
 			if (err < 0) {
-				return err;
+				goto cleanup;
 			}
 
 			/* Create directory */
 			err = mkdir_worker(real_path, context, kstbuf.mode);
 			if (err < 0) {
-				return err;
+				goto cleanup;
 			}
 
 			/* Now, set all the previous attributes */
 			dentry = get_path_dentry(real_path, context, LOOKUP_DIRECTORY);
 			if (IS_ERR(dentry)) {
 				/* FIXME: Should delete in case of failure */
-				return PTR_ERR(dentry);
+				err = PTR_ERR(dentry);
+				goto cleanup;
 			}
 
 			attr.ia_valid = ATTR_ATIME | ATTR_MTIME | ATTR_UID | ATTR_GID;
@@ -403,7 +444,7 @@ static int find_path_worker(const char *path, char *real_path, struct hepunion_s
 			if (err < 0) {
 				vfs_rmdir(dentry->d_parent->d_inode, dentry);
 				dput(dentry);
-				return err;
+				goto cleanup;
 			}
 
 			dput(dentry);
@@ -418,44 +459,53 @@ static int find_path_worker(const char *path, char *real_path, struct hepunion_s
 	/* Append name to create */
 	strcat(real_path, last);
 
+
 	/* It's over */
-        kfree(read_only);
-        kfree(tree_path);
-        kfree(real_tree_path); 
-	
-        return 0;
+	err = 0;
+
+cleanup:
+	if (read_only) {
+		kfree(read_only);
+	}
+
+	if (tree_path) {
+		kfree(tree_path);
+	}
+
+	if (real_tree_path) {
+		kfree(real_tree_path);
+	}
+
+	return err;
 }
 
 int find_path(const char *path, char *real_path, struct hepunion_sb_info *context) {
-	int ret;//temporary variable to allow freeing of dynamic arrays
-        pr_info("find_path: %s, %s, %p\n", path, real_path, context);
+	int ret;
+
+	pr_info("find_path: %s, %s, %p\n", path, real_path, context);
         
 	if (real_path) {
 		return find_path_worker(path, real_path, context);
 	}
 	else {
 		char *tmp_path;
-                tmp_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-		if(!tmp_path)
-                     return -ENOMEM;
+		tmp_path = kmalloc(PATH_MAX, GFP_KERNEL);
+		if(!tmp_path) {
+			return -ENOMEM;
+		}
                 
-                ret = find_path_worker(path, tmp_path, context);
-                kfree(tmp_path); 
-                return ret;
+		ret = find_path_worker(path, tmp_path, context);
+		kfree(tmp_path); 
+		return ret;
 	}
 }
 
 int unlink_copyup(const char *path, const char *copyup_path, struct hepunion_sb_info *context) {
 	int err;
-        int ret;//temporary variable to allow freeing of dynamic arrays
+	char *real_path;
 	struct kstat kstbuf;
 
-	char *real_path;
-        real_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic allocation to avoid stack error
-	if(!real_path)
-            return -ENOMEM;
-
-        pr_info("unlink_copyup: %s, %s\n", path, copyup_path);
+	pr_info("unlink_copyup: %s, %s\n", path, copyup_path);
 
 	/* First get copyup attributes */
 	err = lstat(copyup_path, context, &kstbuf);
@@ -469,16 +519,22 @@ int unlink_copyup(const char *path, const char *copyup_path, struct hepunion_sb_
 		return err;
 	}
 
+	real_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if(!real_path) {
+		return -ENOMEM;
+	}
+
 	/* Now, find RO file */
 	if (find_file(path, real_path, context, 0) == -ENOENT) {
 		/* File doesn't exist anylonger?
 		 * Don't bother and work less
 		 */
+		kfree(real_path);
 		return 0;
 	}
 
 	/* Create me if required */
-	ret = set_me(path, real_path, &kstbuf, context, MODE | TIME | OWNER);
-        kfree(real_path);
-        return ret;
+	err = set_me(path, real_path, &kstbuf, context, MODE | TIME | OWNER);
+	kfree(real_path);
+	return err;
 }
