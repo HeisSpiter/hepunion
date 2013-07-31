@@ -300,7 +300,7 @@ extern struct file_operations hepunion_dir_fops;
  * Mask that defines all the modes of a file that can be changed using the
  * metadata mechanism
  */
-#define VALID_MODES_MASK (S_ISUID | S_ISGID | S_ISVTX |			\
+#define VALID_MODES_MASK (S_ISUID | S_ISGID | S_ISVTX |	\
 			  S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR |	\
 			  S_IRWXG | S_IRGRP | S_IWGRP | S_IXGRP |	\
 			  S_IRWXO | S_IROTH | S_IWOTH | S_IXOTH)
@@ -384,32 +384,27 @@ extern struct file_operations hepunion_dir_fops;
  * Switch the current context user and group to root to allow
  * modifications on child file systems
  */
-
-#define pop_root()\
-        do\
-        {\
-        struct cred *new1 = prepare_creds();\       
-        new1->fsuid = context->uid;\
-	new1->fsgid = context->gid;\
-	commit_creds(new1);\
-        }while(0);\
-        recursive_mutex_unlock(&context->id_lock)
+#define pop_root()							\
+	do {									\
+		struct cred *new = prepare_creds();	\
+		new->fsuid = context->uid;			\
+		new->fsgid = context->gid;			\
+		commit_creds(new);					\
+	} while(0);								\
+	recursive_mutex_unlock(&context->id_lock)
 /**     
  * Switch the current context back to real user and real group
  */
-
-#define push_root() \
-        recursive_mutex_lock(&context->id_lock);\
-        context->uid = current_fsuid();\
-	context->gid = current_fsgid();\				
-        do\
-        {\ 
-        struct cred *new2 = prepare_creds();\
-	new2->fsuid = 0;\
-	new2->fsgid = 0;\
-        commit_creds(new2);\
-        }while(0);
-     
+#define push_root()							\
+	recursive_mutex_lock(&context->id_lock);\
+	context->uid = current_fsuid();			\
+	context->gid = current_fsgid();			\
+	do {									\
+		struct cred *new = prepare_creds();	\
+		new->fsuid = 0;						\
+		new->fsgid = 0;						\
+		commit_creds(new);					\
+	} while(0)
 /**
  * Switch the current data segment to disable buffers checking
  * To be used when calling a VFS function wanting an usermode
