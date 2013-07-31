@@ -126,7 +126,7 @@ static int hepunion_create(struct inode *dir, struct dentry *dentry, int mode, s
 	}
 
 	/* And fill it in */
-	dir->__i_nlink++;
+	inc_nlink(dir);
 	inode->i_uid = current_fsuid();
 	inode->i_gid = current_fsgid();
 	inode->i_mtime = CURRENT_TIME;
@@ -137,7 +137,7 @@ static int hepunion_create(struct inode *dir, struct dentry *dentry, int mode, s
 	inode->i_op = &hepunion_iops;
 	inode->i_fop = &hepunion_fops;
 	inode->i_mode = mode;
-	inode->__i_nlink = 1;
+	set_nlink(inode, 1);
 	inode->i_ino = name_to_ino(path);
 #ifdef _DEBUG_
 	inode->i_private = (void *)HEPUNION_MAGIC;
@@ -440,7 +440,7 @@ static int hepunion_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 	}
 
 	/* And fill it in */
-	dir->__i_nlink++;
+	inc_nlink(dir);
 	inode->i_uid = current_fsuid();
 	inode->i_gid = current_fsgid();
 	inode->i_mtime = CURRENT_TIME;
@@ -451,7 +451,7 @@ static int hepunion_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 	inode->i_op = &hepunion_dir_iops;
 	inode->i_fop = &hepunion_dir_fops;
 	inode->i_mode = mode;
-	inode->__i_nlink = 1;
+	set_nlink(inode, 1);
 	inode->i_ino = name_to_ino(path);
 #ifdef _DEBUG_
 	inode->i_private = (void *)HEPUNION_MAGIC;
@@ -782,7 +782,7 @@ struct inode *hepunion_iget(struct super_block *sb, unsigned long ino) {
 	inode->i_uid = kstbuf.uid;
 	inode->i_gid = kstbuf.gid;
 	inode->i_size = kstbuf.size;
-	inode->__i_nlink = kstbuf.nlink;
+	set_nlink(inode, kstbuf.nlink);
 	inode->i_blocks = kstbuf.blocks;
 	inode->i_blkbits = kstbuf.blksize;
 
@@ -1410,9 +1410,9 @@ static int hepunion_unlink(struct inode *dir, struct dentry *dentry) {
 
 	/* Kill the inode now */
 	if (err == 0) {
-		dir->__i_nlink--;
+		drop_nlink(dir);
 		mark_inode_dirty(dir);
-        dentry->d_inode->__i_nlink--;
+        drop_nlink(dentry->d_inode);
         mark_inode_dirty(dentry->d_inode);
 	}
 
@@ -1434,24 +1434,6 @@ static ssize_t hepunion_write(struct file *file, const char __user *buf, size_t 
 	return ret;
 }
 
-static int hepunion_readpage(struct file *file, struct page *page)
-{
-	/*called by generic_read happens in fops_read operation*/
-        /*we are instead calling vfs_read which calls do_sync_read*/
-        /*so wont be called*/
-        pr_info("hepunion_readpage\n");
-	return 1;
-}
-
-static int hepunion_writepage(struct page *page, struct writeback_control *wbc)
-{
-	/*only by when generic_write happens in fops_write operation*/
-        /*we are instead calling vfs_write which calls do_sync_write*/
-        /*so wont be called*/
-        pr_info("hepunion_writepage\n");
-	return 1;
-}
-
 static void hepunion_put_super(struct super_block *sb)
 {
        /* this function used for umounting the fs*/	
@@ -1465,43 +1447,6 @@ static void hepunion_put_super(struct super_block *sb)
 }
 
 
-static int hepunion_update(struct hepunion_sb_info *context)
-{
-      //TODO:fillup this function  
-      return 1;
-
-}
-
-
-static int hepunion_write_inode(struct inode *dir, struct dentry *dentry, int mode)
-{
-        /*function will enable changing the meta data of file.*/
-        /*useful for operations like chown, chmod*/
-        int err, mask;
-        struct hepunion_sb_info *context = get_context_i(dir);
-        char *path = context->global1;
-        char *real_path = context->global2;
-	
-        pr_info("hepunion_write_inode: %p, %p, %p\n", dir, dentry, context);
-
-	validate_inode(dir);
-        validate_dentry(dentry);
-        
-        /* Try to find the file first */
-	err = get_relative_path_for_file(dir, dentry, context, path, 1);
-	if (err < 0) 
-		return err;
-	
-	
-	/* Now, check for RW file */
-	if (find_file(path, real_path, context, 1) == -1)
-	     return -1;
-	else
-        {
-	 pr_info(" Writing inode \n");
-         return hepunion_update(context); 
-        }
-}
 
 struct inode_operations hepunion_iops = {
 	.getattr	= hepunion_getattr,
@@ -1530,7 +1475,6 @@ struct super_operations hepunion_sops = {
 	//.read_inode	= hepunion_read_inode,//system-call no longer supported
 	.statfs		= hepunion_statfs,
         .put_super      = hepunion_put_super,
-	.write_inode    = hepunion_write_inode
 };
 
 struct dentry_operations hepunion_dops = {
@@ -1551,11 +1495,4 @@ struct file_operations hepunion_dir_fops = {
 	.open		= hepunion_opendir,
 	.readdir	= hepunion_readdir,
 	.release	= hepunion_closedir
-};
-
-struct address_space_operations hepunion_aops =
-{
-	.readpage = hepunion_readpage,
-	.writepage = hepunion_writepage
-
 };

@@ -211,7 +211,7 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	root_i->i_ctime = ctime;
 	root_i->i_op = &hepunion_dir_iops;
 	root_i->i_fop = &hepunion_dir_fops;
-	root_i->__i_nlink = 2;//i_nlink has been replaced by __i_nlink
+	set_nlink(root_i, 2);
 #ifdef _DEBUG_
 	root_i->i_private = (void *)HEPUNION_MAGIC;
 #endif

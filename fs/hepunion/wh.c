@@ -38,9 +38,8 @@ static int check_whiteout(void *buf, const char *name, int namlen, loff_t offset
         file_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
 	if(!file_path)
             return -ENOMEM;
-        struct readdir_context *ctx = kmalloc(sizeof(struct readdir_context), GFP_KERNEL);
-         ctx = (struct readdir_context*)buf;
-
+        struct readdir_context *ctx = (struct readdir_context*)buf;
+         
 	pr_info("check_whiteout: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
 
 	/* Ignore specials */
