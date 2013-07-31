@@ -30,15 +30,9 @@
 static int hide_entry(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type);
 
 static int check_whiteout(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
-	char *wh_path;
-        wh_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
-        if(!wh_path)
-            return -ENOMEM;
-	char *file_path; 
-        file_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
-	if(!file_path)
-            return -ENOMEM;
-        struct readdir_context *ctx = (struct readdir_context*)buf;
+	int err = -ENOMEM;
+	char *wh_path = NULL, *file_path = NULL;
+	struct readdir_context *ctx = (struct readdir_context*)buf;
          
 	pr_info("check_whiteout: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
 
@@ -47,15 +41,35 @@ static int check_whiteout(void *buf, const char *name, int namlen, loff_t offset
 		return 0;
 	}
 
+	wh_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (!wh_path) {
+		return -ENOMEM;
+	}
+
+	file_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (!file_path) {
+		goto cleanup;
+	}
+
 	/* Get file path */
 	if (snprintf(file_path, PATH_MAX, "%s%s", ctx->path, name) > PATH_MAX) {
-		return -ENAMETOOLONG;
+		err = -ENAMETOOLONG;
+		goto cleanup; 
 	}
-        kfree(wh_path);
-        kfree(file_path);
-        kfree(ctx);
+
 	/* Look for whiteout */
-	return find_whiteout(file_path, ctx->context, wh_path);
+	err = find_whiteout(file_path, ctx->context, wh_path);
+
+cleanup:
+	if (wh_path) {
+		kfree(wh_path);
+	}
+
+	if (file_path) {
+		kfree(file_path);
+	}
+
+	return err;
 }
 
 static int check_writable(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
@@ -138,24 +152,33 @@ int create_whiteout(const char *path, char *wh_path, struct hepunion_sb_info *co
 }
 
 static int delete_whiteout(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
-        char *wh_path;
-        wh_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
-	if(!wh_path)
-            return -ENOMEM;
-        struct readdir_context *ctx = (struct readdir_context*)buf;
+	int err;
+	char *wh_path;
+
+	struct readdir_context *ctx = (struct readdir_context*)buf;
 	struct hepunion_sb_info *context = ctx->context;
 
 	pr_info("delete_whiteout: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
 
 	/* assert(is_whiteout(name, namlen)); */
 
+	wh_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (!wh_path) {
+		return -ENOMEM;
+	}
+
 	/* Get whiteout path */
 	if (snprintf(wh_path, PATH_MAX, "%s%s", ctx->path, name) > PATH_MAX) {
+		kfree(wh_path);
 		return -ENAMETOOLONG;
 	}
-        kfree(wh_path); 
+
 	/* Remove file */
-	return unlink(wh_path, context);
+	err = unlink(wh_path, context);
+
+	kfree(wh_path);
+
+	return err;
 }
 
 int find_whiteout(const char *path, struct hepunion_sb_info *context, char *wh_path) {
@@ -174,38 +197,47 @@ int find_whiteout(const char *path, struct hepunion_sb_info *context, char *wh_p
 }
 
 int hide_directory_contents(const char *path, struct hepunion_sb_info *context) {
-	int err;
+	int err = -ENOMEM;
 	struct file *ro_fd;
-	char *rw_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
-	if(!rw_path)
-            return -ENOMEM;
-        char *ro_path;
-        ro_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
-        if(!ro_path)
-            return -ENOMEM;
+	char *rw_path = NULL, *ro_path = NULL;
+
 	pr_info("hide_directory_contents: %s, %p\n", path, context);
 
+	rw_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if	(!rw_path) {
+		return -ENOMEM;
+	}
+
+	ro_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (!ro_path) {
+		goto cleanup;
+	}
+
 	if (snprintf(ro_path, PATH_MAX, "%s%s", context->read_only_branch, path) > PATH_MAX) {
-		return -ENAMETOOLONG;
+		err = -ENAMETOOLONG;
+		goto cleanup;
 	}
 
 	/* If RO even does not exist, all correct */
 	err = check_exist(ro_path, context, 0);
 	if (err < 0) {
 		if (err == -ENOENT) {
-			return 0;
+			err = 0;
+			goto cleanup;
 		} else {
-			return err;
+			goto cleanup;
 		}
 	}
 
 	if (snprintf(rw_path, PATH_MAX, "%s%s", context->read_write_branch, path) > PATH_MAX) {
-		return -ENAMETOOLONG;
+		err = -ENAMETOOLONG;
+		goto cleanup;
 	}
 
 	ro_fd = open_worker(ro_path, context, O_RDONLY);
 	if (IS_ERR(ro_fd)) {
-		return PTR_ERR(ro_fd);
+		err = PTR_ERR(ro_fd);
+		goto cleanup;
 	}
 
 	/* Hide all entries */
@@ -213,25 +245,41 @@ int hide_directory_contents(const char *path, struct hepunion_sb_info *context) 
 	err = vfs_readdir(ro_fd, hide_entry, rw_path);
 	filp_close(ro_fd, NULL);
 	pop_root();
-        kfree(rw_path); 
-        kfree(ro_path);
+
+cleanup:
+	if (rw_path) {
+		kfree(rw_path);
+	}
+
+	if (ro_path) {
+		kfree(ro_path);
+	}
+
 	return err;
 }
 
 static int hide_entry(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
+	int err;
 	 char *wh_path;
-         wh_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
-	 if(!wh_path)
-            return -ENOMEM;
-        struct readdir_context *ctx = (struct readdir_context*)buf;
+	struct readdir_context *ctx = (struct readdir_context*)buf;
 
 	pr_info("hide_entry: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
 
+	wh_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
+	if (!wh_path) {
+		return -ENOMEM;
+	}
+
 	if (snprintf(wh_path, PATH_MAX, "%s/.wh.%s", ctx->path, name) > PATH_MAX) {
+		kfree(wh_path);
 		return -ENAMETOOLONG;
 	}
-        kfree(wh_path);
-	return create_whiteout_worker(wh_path, ctx->context);
+
+	err = create_whiteout_worker(wh_path, ctx->context);
+
+	kfree(wh_path);
+
+	return err;
 }
 
 int is_empty_dir(const char *path, const char *ro_path, const char *rw_path, struct hepunion_sb_info *context) {
@@ -291,15 +339,14 @@ int is_empty_dir(const char *path, const char *ro_path, const char *rw_path, str
 int unlink_rw_file(const char *path, const char *rw_path, struct hepunion_sb_info *context, char has_ro_sure) {
 	int err;
 	char has_ro = 0;
-	char *ro_path;
-        ro_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
-	if(!ro_path)
-            return -ENOMEM;
-        char *wh_path;
-        wh_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
-        if(!wh_path)
-            return -ENOMEM;
+	char *ro_path, *wh_path;
+
 	pr_info("unlink_rw_file: %s, %s, %p, %u\n", path, rw_path, context, has_ro_sure);
+
+	ro_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (!ro_path) {
+		return -ENOMEM;
+	}
 
 	/* Check if RO exists */
 	if (!has_ro_sure && find_file(path, ro_path, context, MUST_READ_ONLY) >= 0) {
@@ -309,15 +356,25 @@ int unlink_rw_file(const char *path, const char *rw_path, struct hepunion_sb_inf
 		has_ro = 1;
 	}
 
+	/* No needed any longer */
+	kfree(ro_path);
+
+	wh_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (!wh_path) {
+		return -ENOMEM;
+	}
+
 	/* Check if user can unlink file */
 	err = can_remove(path, rw_path, context);
 	if (err < 0) {
+		kfree(wh_path);
 		return err;
 	}
 
 	/* Remove file */
 	err = unlink(rw_path, context);
 	if (err < 0) {
+		kfree(wh_path);
 		return err;
 	}
 
@@ -325,25 +382,34 @@ int unlink_rw_file(const char *path, const char *rw_path, struct hepunion_sb_inf
 	if (has_ro) {
 		create_whiteout(path, wh_path, context);
 	}
-        kfree(ro_path);
-        kfree(wh_path); 
+
+	kfree(wh_path);
+
 	return 0;
 }
 
 int unlink_whiteout(const char *path, struct hepunion_sb_info *context) {
 	int err;
 	char *wh_path;
-        wh_path = kmalloc(PATH_MAX, GFP_KERNEL);//dynamic array to solve stack problem
-        if(!wh_path)
-            return -ENOMEM;
+
 	pr_info("unlink_whiteout: %s, %p\n", path, context);
+
+	wh_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (!wh_path) {
+		return -ENOMEM;
+	}
 
 	/* Get wh path */
 	err = path_to_special(path, WH, context, wh_path);
 	if (err < 0) {
+		kfree(wh_path);
 		return err;
 	}
-        kfree(wh_path);
+
 	/* Now unlink whiteout */
-	return unlink(wh_path, context);
+	err = unlink(wh_path, context);
+
+	kfree(wh_path);
+
+	return err;
 }
