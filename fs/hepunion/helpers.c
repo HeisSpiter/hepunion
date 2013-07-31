@@ -16,7 +16,8 @@
 int can_access(const char *path, const char *real_path, struct hepunion_sb_info *context, int mode) {
 	struct kstat stbuf;
 	int err;
-        uid_t ret;//temporary variable //temporary variable  
+	uid_t fsuid;
+	gid_t fsgid;
 	pr_info("can_access: %s, %s, %p, %x\n", path, real_path, context, mode);
 
 	/* Get file attributes */
@@ -25,10 +26,12 @@ int can_access(const char *path, const char *real_path, struct hepunion_sb_info 
 		return err;
 	}
 
+	/* Get IDs */
+	fsuid = current_fsuid();
+	fsgid = current_fsgid();
+
 	/* If root user, allow almost everything */
-	
-        ret = current_fsuid();  
-        if (ret == 0) {
+	if (fsuid == 0) {
 		if (mode & MAY_EXEC) {
 			/* Root needs at least on X
 			 * For rights details, see below
@@ -62,10 +65,10 @@ int can_access(const char *path, const char *real_path, struct hepunion_sb_info 
 	 * Check is done from more specific to general.
 	 * This explains order and values
 	 */
-	if (ret == stbuf.uid) {
+	if (fsuid == stbuf.uid) {
 		mode <<= (RIGHTS_MASK * 2);
 	}
-	else if (ret == stbuf.gid) {
+	else if (fsgid == stbuf.gid) {
 		mode <<= RIGHTS_MASK;
 	}
 
