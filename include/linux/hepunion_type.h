@@ -5,6 +5,8 @@
 #include <linux/kernel.h>
 #include <linux/limits.h>
 #include <linux/types.h>
+#include <linux/fs_struct.h>
+#include <linux/fcntl.h>
 
 #define HEPUNION_VERSION	"1.0"
 #define HEPUNION_NAME		"HEPunion"
