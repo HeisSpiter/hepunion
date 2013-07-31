@@ -286,13 +286,13 @@ static int hepunion_read_super(struct super_block *sb, void *raw_data,
 	return 0;
 }
 
-static int hepunion_mount_sb(struct file_system_type *fs_type,
-				     int flags, const char *dev_name,
-				     void *raw_data, struct vfsmount *mnt) {
-	int err;
-        err = (int *)mount_nodev(fs_type, flags, raw_data, hepunion_read_super);
+static struct dentry * hepunion_mount_sb(struct file_system_type *fs_type,
+										 int flags, const char *dev_name,
+										 void *raw_data) {
+	struct dentry * dentry;
 
-	return err;
+	dentry = mount_nodev(fs_type, flags, raw_data, hepunion_read_super);
+	return dentry;
 }
 
 static void hepunion_kill_sb(struct super_block *sb) {
