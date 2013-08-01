@@ -625,7 +625,7 @@ long mkdir(const char *pathname, struct hepunion_sb_info *context, umode_t mode)
 	unsigned int lookup_flags = LOOKUP_DIRECTORY;
 
 retry:
-	dentry = user_path_create(AT_FDCWD, pathname, &path, lookup_flags);
+	dentry = kern_path_create(AT_FDCWD, pathname, &path, lookup_flags);
 	if (IS_ERR(dentry)) {
 		return PTR_ERR(dentry);
 	}
@@ -711,7 +711,7 @@ long mknod(const char *pathname, struct hepunion_sb_info *context, umode_t mode,
 	unsigned int lookup_flags = 0;
 
 retry:
-	dentry = user_path_create(AT_FDCWD, pathname, &path, lookup_flags);
+	dentry = kern_path_create(AT_FDCWD, pathname, &path, lookup_flags);
 	if (IS_ERR(dentry)) {
 		return PTR_ERR(dentry);
 	}
@@ -799,7 +799,7 @@ long symlink(const char *oldname, const char *newname, struct hepunion_sb_info *
 	unsigned int lookup_flags = 0;
 
 retry:
-	dentry = user_path_create(AT_FDCWD, newname, &path, lookup_flags);
+	dentry = kern_path_create(AT_FDCWD, newname, &path, lookup_flags);
 	error = PTR_ERR(dentry);
 	if (IS_ERR(dentry)) {
 		return error;
