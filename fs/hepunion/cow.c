@@ -47,8 +47,8 @@ static int copy_child(void *buf, const char *name, int namlen, loff_t offset, u6
 	/* Dynamic allocations to avoid stack errors
 	 * TODO: Optimize later on with lookaside allocations
 	 */
-    tmp_path = kmalloc(PATH_MAX, GFP_KERNEL);
-    if(!tmp_path) {
+	tmp_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if(!tmp_path) {
 		return -ENOMEM;
 	}
 
