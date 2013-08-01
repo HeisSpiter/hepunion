@@ -988,7 +988,12 @@ long rmdir(const char *pathname, struct hepunion_sb_info *context) {
 	short lookup = 0;
 	struct inode *dir;
 	struct dentry *dentry;
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+	struct nameidata nd;
+#else
 	struct path path;
+#endif
+
 	pr_info("rmdir: %s, %p\n", pathname, context);
 
 	/* Get dir dentry */
@@ -1000,13 +1005,21 @@ long rmdir(const char *pathname, struct hepunion_sb_info *context) {
 	/* Get parent inode */
 	dir = dentry->d_parent->d_inode;
 	if (dir == NULL) {
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+		err = path_lookup(pathname, LOOKUP_PARENT, &nd);
+#else
 		err = kern_path(pathname, LOOKUP_PARENT, &path);
+#endif
 		if (err) {
 			dput(dentry);
 			return err;
 		}
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+		dir = nd.dentry->d_inode;
+#else
 		dir = path.dentry->d_inode;
+#endif
 		lookup = 1;
 	}
 
@@ -1017,7 +1030,11 @@ long rmdir(const char *pathname, struct hepunion_sb_info *context) {
 	pop_root();
 	mutex_unlock(&dir->i_mutex);
 	if (lookup) {
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+		path_release(&nd);
+#else
 		path_put(&path);
+#endif
 	}
 	dput(dentry);
 
@@ -1029,7 +1046,11 @@ long unlink(const char *pathname, struct hepunion_sb_info *context) {
 	short lookup = 0;
 	struct inode *dir;
 	struct dentry *dentry;
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+	struct nameidata nd;
+#else
 	struct path path;
+#endif
 	pr_info("unlink: %s, %p\n", pathname, context);
 
 	/* Get file dentry */
@@ -1041,13 +1062,21 @@ long unlink(const char *pathname, struct hepunion_sb_info *context) {
 	/* Get parent inode */
 	dir = dentry->d_parent->d_inode;
 	if (dir == NULL) {
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+		err = path_lookup(pathname, LOOKUP_PARENT, &nd);
+#else
 		err = kern_path(pathname, LOOKUP_PARENT, &path);
+#endif
 		if (err) {
 			dput(dentry);
 			return err;
 		}
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+		dir = nd.dentry->d_inode;
+#else
 		dir = path.dentry->d_inode;
+#endif
 		lookup = 1;
 	}
 
@@ -1058,10 +1087,14 @@ long unlink(const char *pathname, struct hepunion_sb_info *context) {
 	pop_root();
 	mutex_unlock(&dir->i_mutex);
 	if (lookup) {
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+		path_release(&nd);
+#else
 		path_put(&path);
+#endif
 	}
 	dput(dentry);
-        kfree(dentry);
+
 	return err;
 }
 
