@@ -35,7 +35,7 @@
 static int copy_child(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
 	int ret = -ENOMEM;
 	struct readdir_context *ctx = (struct readdir_context*)buf;
-    char *tmp_path = NULL, *tmp_ro_path = NULL, *tmp_rw_path = NULL;
+	char *tmp_path = NULL, *tmp_ro_path = NULL, *tmp_rw_path = NULL;
 
 	pr_info("copy_child: %p, %s, %d, %llx, %llx, %d\n", buf, name, namlen, offset, ino, d_type);
 
