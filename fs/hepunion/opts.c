@@ -736,22 +736,36 @@ cleanup:
 	return err;
 }
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 static int hepunion_permission(struct inode *inode, int mask, struct nameidata *nd) {
+#else
+static int hepunion_permission(struct inode *inode, int mask) {
+#endif
 	int err;
 	struct hepunion_sb_info *context = get_context_i(inode);
 	char *path = context->global1;
 	char *real_path = context->global2;
 
-	pr_info("hepunion_permission: %p, %x, %p\n", inode, mask, nd);
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+	pr_info("hepunion_permission: %p, %#X, %p\n", inode, mask, nd);
+#else
+	pr_info("hepunion_permission: %p, %#X\n", inode, mask);
+#endif
 
 	will_use_buffers(context);
 	validate_inode(inode);
+
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 	if (nd && nd->path.dentry) {
 		validate_dentry(nd->path.dentry);
 	}
 
 	/* Get path */
 	err = get_relative_path(inode, (nd ? nd->path.dentry : NULL), context, path, 1);
+#else
+	/* Get path */
+	err = get_relative_path(inode, NULL, context, path, 1);
+#endif
 	if (err) {
 		release_buffers(context);
 		return err;
