@@ -394,6 +394,7 @@ extern struct file_operations hepunion_dir_fops;
  * \return	The number of caracters written to r
  */
 #define make_rw_path(p, r) snprintf(r, PATH_MAX, "%s%s", context->read_write_branch, p)
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 /**
  * Switch the current context user and group to root to allow
  * modifications on child file systems
@@ -419,6 +420,25 @@ extern struct file_operations hepunion_dir_fops;
 		new->fsgid = 0;						\
 		commit_creds(new);					\
 	} while(0)
+#else
+/**
+ * Switch the current context user and group to root to allow
+ * modifications on child file systems
+ */
+#define pop_root()								\
+	current->fsuid = context->uid;				\
+	current->fsgid = context->gid;				\
+	recursive_mutex_unlock(&context->id_lock)
+/**     
+ * Switch the current context back to real user and real group
+ */
+#define push_root() 							\
+	recursive_mutex_lock(&context->id_lock);	\
+	context->uid = current->fsuid;				\
+	context->gid = current->fsgid;				\
+	current->fsuid = 0;							\
+	current->fsgid = 0
+#endif
 /**
  * Switch the current data segment to disable buffers checking
  * To be used when calling a VFS function wanting an usermode
