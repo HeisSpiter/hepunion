@@ -401,6 +401,24 @@ extern struct file_operations hepunion_dir_fops;
  * Switch the current context user and group to root to allow
  * modifications on child file systems
  */
+#define pop_root()								\
+	current->fsuid = context->uid;				\
+	current->fsgid = context->gid;				\
+	recursive_mutex_unlock(&context->id_lock)
+/**     
+ * Switch the current context back to real user and real group
+ */
+#define push_root() 							\
+	recursive_mutex_lock(&context->id_lock);	\
+	context->uid = current->fsuid;				\
+	context->gid = current->fsgid;				\
+	current->fsuid = 0;							\
+	current->fsgid = 0
+#else
+/**
+ * Switch the current context user and group to root to allow
+ * modifications on child file systems
+ */
 #define pop_root()							\
 	do {									\
 		struct cred *new = prepare_creds();	\
@@ -422,24 +440,6 @@ extern struct file_operations hepunion_dir_fops;
 		new->fsgid = 0;						\
 		commit_creds(new);					\
 	} while(0)
-#else
-/**
- * Switch the current context user and group to root to allow
- * modifications on child file systems
- */
-#define pop_root()								\
-	current->fsuid = context->uid;				\
-	current->fsgid = context->gid;				\
-	recursive_mutex_unlock(&context->id_lock)
-/**     
- * Switch the current context back to real user and real group
- */
-#define push_root() 							\
-	recursive_mutex_lock(&context->id_lock);	\
-	context->uid = current->fsuid;				\
-	context->gid = current->fsgid;				\
-	current->fsuid = 0;							\
-	current->fsgid = 0
 #endif
 /**
  * Switch the current data segment to disable buffers checking
