@@ -32,6 +32,8 @@
 #if LINUX_VERSION_CODE != KERNEL_VERSION(2,6,18)
 #include <linux/cred.h>
 #endif
+#include <linux/fs_struct.h>
+#include <linux/fcntl.h>
 #include "hash.h"
 #include "recursivemutex.h"
 
