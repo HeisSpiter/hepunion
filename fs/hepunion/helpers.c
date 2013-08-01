@@ -857,45 +857,97 @@ retry:
 }
 #endif
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 /* Imported from Linux kernel - simplified */
 long link(const char *oldname, const char *newname, struct hepunion_sb_info *context) {
 	struct dentry *new_dentry;
-	struct path path, old_path;
+	struct nameidata nd, old_nd;
 	int error;
 
 	pr_info("link: %s, %s, %p\n", oldname, newname, context);
 
 	push_root();
-	error = kern_path(oldname, 0, &old_path);
+	error = path_lookup(oldname, 0, &old_nd);
 	pop_root();
 	if (error) {
 		return error;
 	}
 
 	push_root();
-	error = kern_path(newname, LOOKUP_PARENT, &path);
+	error = path_lookup(newname, LOOKUP_PARENT, &nd);
 	pop_root();
 	if (error)
 		goto out;
 	error = -EXDEV;
-	if (old_path.mnt != path.mnt)
+	if (old_nd.mnt != nd.mnt)
 		goto out_release;
 	push_root();
-	new_dentry = kern_path_create(AT_FDCWD, newname, &path, LOOKUP_DIRECTORY);//lookup_create has been removed
+	new_dentry = lookup_create(&nd, 0);
 	pop_root();
 	error = PTR_ERR(new_dentry);
 	if (!IS_ERR(new_dentry)) {
 		push_root();
-		error = vfs_link(old_path.dentry, path.dentry->d_inode, new_dentry);
+		error = vfs_link(old_nd.dentry, nd.dentry->d_inode, new_dentry);
 		pop_root();
 		dput(new_dentry);
 	}
-	out_release:
-	path_put(&path);
+	mutex_unlock(&nd.dentry->d_inode->i_mutex);
+out_release:
+	path_release(&nd);
 out:
-	path_put(&old_path);
+	path_release(&old_nd);
+
 	return error;
 }
+#else
+/* Imported from Linux kernel - simplified */
+long link(const char *oldname, const char *newname, struct hepunion_sb_info *context) {
+	struct dentry *new_dentry;
+	struct path old_path, new_path;
+	int how = 0;
+	int error;
+
+retry:
+	push_root();
+	error = kern_path(oldname, how, &old_path);
+	pop_root();
+	if (error) {
+		return error;
+	}
+
+	push_root();
+	new_dentry = kern_path_create(AT_FDCWD, newname, &new_path, (how & LOOKUP_REVAL));
+	pop_root();
+	error = PTR_ERR(new_dentry);
+	if (IS_ERR(new_dentry)) {
+		goto out;
+	}
+
+	error = -EXDEV;
+	if (old_path.mnt != new_path.mnt) {
+		goto out_dput;
+	}
+	push_root();
+	error = security_path_link(old_path.dentry, &new_path, new_dentry);
+	pop_root();
+	if (error) {
+		goto out_dput;
+	}
+	push_root();
+	error = vfs_link(old_path.dentry, new_path.dentry->d_inode, new_dentry);
+	pop_root();
+out_dput:
+	done_path_create(&new_path, new_dentry);
+	if (retry_estale(error, how)) {
+		how |= LOOKUP_REVAL;
+		goto retry;
+	}
+out:
+	path_put(&old_path);
+
+	return error;
+}
+#endif
 
 /* Imported from Linux kernel */
 long readlink(const char *path, char *buf, struct hepunion_sb_info *context, int bufsiz) {
