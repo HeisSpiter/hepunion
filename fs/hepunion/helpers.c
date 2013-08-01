@@ -759,8 +759,8 @@ int mkfifo(const char *pathname, struct hepunion_sb_info *context, umode_t mode)
 	return mknod(pathname, context, mode, 0);
 }
 
-/* Imported from Linux kernel */
 #if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+/* Imported from Linux kernel */
 long symlink(const char *oldname, const char *newname, struct hepunion_sb_info *context) {
 	int error = 0;
 	struct dentry *dentry;
@@ -791,6 +791,7 @@ long symlink(const char *oldname, const char *newname, struct hepunion_sb_info *
 	return error;
 }
 #else
+/* Imported from Linux kernel */
 long symlink(const char *oldname, const char *newname, struct hepunion_sb_info *context) {
 	int error;
 	struct dentry *dentry;
