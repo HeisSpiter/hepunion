@@ -760,32 +760,63 @@ int mkfifo(const char *pathname, struct hepunion_sb_info *context, umode_t mode)
 }
 
 /* Imported from Linux kernel */
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 long symlink(const char *oldname, const char *newname, struct hepunion_sb_info *context) {
 	int error = 0;
 	struct dentry *dentry;
-	struct path path;
+	struct nameidata nd;
+
 	pr_info("symlink: %s, %s, %p\n", oldname, newname, context);
 
 	push_root();
-	error = kern_path(newname, LOOKUP_PARENT, &path);
+	error = path_lookup(newname, LOOKUP_PARENT, &nd);
 	pop_root();
 	if (error) {
 		return error;
 	}
 
 	push_root();
-	dentry = kern_path_create(AT_FDCWD, newname, &path, LOOKUP_DIRECTORY);//lookup_create has been removed
+	dentry = lookup_create(&nd, 0);
 	pop_root();
 	error = PTR_ERR(dentry);
 	if (!IS_ERR(dentry)) {
 		push_root();
-		error = vfs_symlink(path.dentry->d_inode, dentry, oldname);
+		error = vfs_symlink(nd.dentry->d_inode, dentry, oldname, S_IALLUGO);
 		pop_root();
 		dput(dentry);
 	}
-	path_put(&path);
+	mutex_unlock(&nd.dentry->d_inode->i_mutex);
+	path_release(&nd);
+
 	return error;
 }
+#else
+long symlink(const char *oldname, const char *newname, struct hepunion_sb_info *context) {
+	int error;
+	struct dentry *dentry;
+	struct path path;
+	unsigned int lookup_flags = 0;
+
+retry:
+	dentry = user_path_create(AT_FDCWD, newname, &path, lookup_flags);
+	error = PTR_ERR(dentry);
+	if (IS_ERR(dentry)) {
+		return error;
+	}
+
+	error = security_path_symlink(&path, dentry, oldname);
+	if (!error) {
+		error = vfs_symlink(path.dentry->d_inode, dentry, oldname);
+	}
+	done_path_create(&path, dentry);
+	if (retry_estale(error, lookup_flags)) {
+		lookup_flags |= LOOKUP_REVAL;
+		goto retry;
+	}
+
+	return error;
+}
+#endif
 
 /* Imported from Linux kernel - simplified */
 long link(const char *oldname, const char *newname, struct hepunion_sb_info *context) {
