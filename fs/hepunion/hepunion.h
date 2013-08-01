@@ -29,6 +29,7 @@
 #include <linux/uaccess.h>
 #include <linux/security.h>
 #include <linux/cred.h>
+#include <linux/version.h>
 #include "hash.h"
 #include "recursivemutex.h"
 

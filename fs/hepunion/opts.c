@@ -48,7 +48,11 @@ static int hepunion_closedir(struct inode *inode, struct file *filp) {
 	return 0;
 }
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 static int hepunion_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nameidata) {
+#else
+static int hepunion_create(struct inode *dir, struct dentry *dentry, umode_t mode, bool want_excl) {
+#endif
 	int err;
 	struct hepunion_sb_info *context = get_context_i(dir);
 	char *path = context->global1;
@@ -57,7 +61,11 @@ static int hepunion_create(struct inode *dir, struct dentry *dentry, int mode, s
 	struct iattr attr;
 	struct inode *inode;
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 	pr_info("hepunion_create: %p, %p, %x, %p\n", dir, dentry, mode, nameidata);
+#else
+	pr_info("hepunion_create: %p, %p, %x, %u\n", dir, dentry, mode, want_excl);
+#endif
 
 	will_use_buffers(context);
 	validate_inode(dir);
@@ -295,7 +303,11 @@ static loff_t hepunion_llseek(struct file *file, loff_t offset, int origin) {
 	return ret;
 }
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 static struct dentry * hepunion_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nameidata) {
+#else
+static struct dentry * hepunion_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags) {
+#endif
 	/* We are looking for "dentry" in "dir" */
 	int err;
 	struct hepunion_sb_info *context = get_context_i(dir);
@@ -306,7 +318,11 @@ static struct dentry * hepunion_lookup(struct inode *dir, struct dentry *dentry,
 	size_t namelen;
 	unsigned long ino;
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 	pr_info("hepunion_lookup: %p, %p, %p\n", dir, dentry, nameidata);
+#else
+	pr_info("hepunion_lookup: %p, %p, %#X\n", dir, dentry, flags);
+#endif
 
 	will_use_buffers(context);
 	validate_inode(dir);
@@ -373,7 +389,11 @@ static struct dentry * hepunion_lookup(struct inode *dir, struct dentry *dentry,
 	return NULL;
 }
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 static int hepunion_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
+#else
+static int hepunion_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode) {
+#endif
 	int err;
 	struct inode *inode;
 	struct hepunion_sb_info *context = get_context_i(dir);
@@ -478,7 +498,11 @@ static int hepunion_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 	return 0;
 }
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 static int hepunion_mknod(struct inode *dir, struct dentry *dentry, int mode, dev_t rdev) {
+#else
+static int hepunion_mknod(struct inode *dir, struct dentry *dentry, umode_t mode, dev_t rdev) {
+#endif
 	int err;
 	struct hepunion_sb_info *context = get_context_i(dir);
 	char *path = context->global1;
@@ -1105,8 +1129,15 @@ cleanup:
 	return err;
 }
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 static int hepunion_revalidate(struct dentry *dentry, struct nameidata *nd) {
+
 	pr_info("hepunion_revalidate: %p, %p\n", dentry, nd);
+#else
+static int hepunion_revalidate(struct dentry *dentry, unsigned int flags) {
+
+	pr_info("hepunion_revalidate: %p, %#X\n", dentry, flags);
+#endif
 
 	if (dentry->d_inode == NULL) {
 		return 0;
