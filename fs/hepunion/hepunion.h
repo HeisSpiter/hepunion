@@ -355,6 +355,19 @@ extern struct file_operations hepunion_dir_fops;
 	 (l == 2 &&	n[0] == '.' &&	\
 	  n[1] == '.'))
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+/**
+ * Get current FS uid
+ * \return It returns current FS uid
+ */
+#define current_fsuid() current->fsuid
+/**
+ * Get current FS gid
+ * \return It returns current FS gid
+ */
+#define current_fsgid() current->fsgid
+#endif
+
 /**
  * Get current context associated with dentry
  * \param[in]	d	dentry pointer
