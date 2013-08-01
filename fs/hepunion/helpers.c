@@ -581,40 +581,70 @@ int lstat(const char *pathname, struct hepunion_sb_info *context, struct kstat *
 	return error;
 }
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 /* Imported for Linux kernel */
 long mkdir(const char *pathname, struct hepunion_sb_info *context, int mode) {
 	int error = 0;
 	struct dentry *dentry;
-	struct path path;
+	struct nameidata nd;
 
 	pr_info("mkdir: %s, %p, %x\n", pathname, context, mode);
 
 	push_root();
-	error = kern_path(pathname, LOOKUP_PARENT, &path);
+	error = path_lookup(pathname, LOOKUP_PARENT, &nd);
 	pop_root();
 	if (error) {
 		return error;
 	}
 
 	push_root();
-	dentry = kern_path_create(AT_FDCWD, pathname, &path, LOOKUP_DIRECTORY);
+	dentry = lookup_create(&nd, 1);
 	pop_root();
 	error = PTR_ERR(dentry);
 
 	if (!IS_ERR(dentry)) {
-		if (!IS_POSIXACL(path.dentry->d_inode))
-		{
-	          mode &= ~current->fs->umask;
+		if (!IS_POSIXACL(nd.dentry->d_inode)) {
+			mode &= ~current->fs->umask;
 		}
 		push_root();
-		error = vfs_mkdir(path.dentry->d_inode, dentry, mode);
+		error = vfs_mkdir(nd.dentry->d_inode, dentry, mode);
 		pop_root();
 		dput(dentry);
 	}
-	path_put(&path);
+	mutex_unlock(&nd.dentry->d_inode->i_mutex);
+	path_release(&nd);
 
 	return error;
 }
+#else
+/* Imported for Linux kernel */
+long mkdir(const char *pathname, struct hepunion_sb_info *context, umode_t mode) {
+	struct dentry *dentry;
+	struct path path;
+	int error;
+	unsigned int lookup_flags = LOOKUP_DIRECTORY;
+
+retry:
+	dentry = user_path_create(AT_FDCWD, pathname, &path, lookup_flags);
+	if (IS_ERR(dentry)) {
+		return PTR_ERR(dentry);
+	}
+
+	if (!IS_POSIXACL(path.dentry->d_inode)) {
+		mode &= ~current_umask();
+	}
+	error = security_path_mkdir(&path, dentry, mode);
+	if (!error) {
+		error = vfs_mkdir(path.dentry->d_inode, dentry, mode);
+	}
+	done_path_create(&path, dentry);
+	if (retry_estale(error, lookup_flags)) {
+		lookup_flags |= LOOKUP_REVAL;
+		goto retry;
+	}
+	return error;
+}
+#endif
 
 /* Imported from Linux kernel */
 long mknod(const char *pathname, struct hepunion_sb_info *context, int mode, unsigned dev) {

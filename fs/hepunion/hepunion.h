@@ -754,7 +754,11 @@ int lstat(const char *pathname, struct hepunion_sb_info *context, struct kstat *
  * \param[in]	mode		Mode to set to the directory (see mkdir man page)
  * \return	0 in case of a success, -err otherwise
  */
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 long mkdir(const char *pathname, struct hepunion_sb_info *context, int mode);
+#else
+long mkdir(const char *pathname, struct hepunion_sb_info *context, umode_t mode);
+#endif
 /**
  * Wrapper for mknod that allows creation of a FIFO file using pathname.
  * \param[in]	pathname	FIFO file to create
