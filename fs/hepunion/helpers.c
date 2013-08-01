@@ -561,25 +561,53 @@ int path_to_special(const char *path, specials type, const struct hepunion_sb_in
 	return 0;
 }
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 /* Imported for Linux kernel and simplified */
 int lstat(const char *pathname, struct hepunion_sb_info *context, struct kstat *stat) {
-	struct path path;
+	struct nameidata nd;
 	int error;
 
 	pr_info("lstat: %s, %p\n", pathname, stat);
 
 	push_root();
-	error = kern_path(pathname, 0, &path);
+	error = path_lookup(pathname, 0, &nd);
 	pop_root();
 	if (!error) {
 		push_root();
-		error = vfs_getattr(path.mnt, path.dentry, stat);
+		error = vfs_getattr(nd.mnt, nd.dentry, stat);
 		pop_root();
-		path_put(&path);
+		path_release(&nd);
 	}
 
 	return error;
 }
+#else
+/* Imported for Linux kernel and simplified */
+int lstat(const char *pathname, struct hepunion_sb_info *context, struct kstat *stat) {
+	struct path path;
+	int error = -EINVAL;
+	unsigned int lookup_flags = 0;
+
+retry:
+	push_root();
+	error = kern_path(pathname, lookup_flags, &path);
+	pop_root();
+	if (error) {
+		return error;
+	}
+
+	push_root();
+	error = vfs_getattr(path.mnt, path.dentry, stat);
+	pop_root();
+	path_put(&path);
+	if (retry_estale(error, lookup_flags)) {
+		lookup_flags |= LOOKUP_REVAL;
+		goto retry;
+	}
+
+	return error;
+}
+#endif
 
 #if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 /* Imported for Linux kernel */
