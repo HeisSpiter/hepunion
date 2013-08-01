@@ -766,7 +766,11 @@ long mkdir(const char *pathname, struct hepunion_sb_info *context, umode_t mode)
  * \param[in]	mode		Mode to set to the file (see mkfifo man page)
  * \return 	0 in case of a success, -err otherwise
  */
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 int mkfifo(const char *pathname, struct hepunion_sb_info *context, int mode);
+#else
+int mkfifo(const char *pathname, struct hepunion_sb_info *context, umode_t mode);
+#endif
 /**
  * Implementation taken from Linux kernel. It's here to allow creation of a special
  * file using pathname.
@@ -776,7 +780,11 @@ int mkfifo(const char *pathname, struct hepunion_sb_info *context, int mode);
  * \param[in]	dev			Special device
  * \return	0 in case of a success, -err otherwise
  */
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 long mknod(const char *pathname, struct hepunion_sb_info *context, int mode, unsigned dev);
+#else
+long mknod(const char *pathname, struct hepunion_sb_info *context, umode_t mode, unsigned dev);
+#endif
 /**
  * Implementation taken from Linux kernel. It's here to allow link readding (seems like
  * that's not the job vfs_readdlink is doing).
