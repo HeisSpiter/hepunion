@@ -173,18 +173,31 @@ cleanup:
 
 int check_exist(const char *pathname, struct hepunion_sb_info *context, int flag) {
 	int err;
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+	struct nameidata nd;
+#else
 	struct path path;
+#endif
+
 
 	pr_info("check_exist: %s, %p, %x\n", pathname, context, flag);
 
 	push_root();
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+	err = path_lookup(pathname, flag, &nd);
+#else
 	err = kern_path(pathname, flag, &path);
+#endif
 	pop_root();
 	if (err) {
 		return err;
 	}
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+	path_release(&nd);
+#else
 	path_put(&path);
+#endif
 
 	return 0;
 }
@@ -354,7 +367,11 @@ int get_full_path_d(const struct dentry *dentry, char *real_path) {
 
 	*--end = '\0';
 	buflen--;
-	//spin_lock(&dentry->d_inode->i_lock);need to find alternative
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+	spin_lock(&dcache_lock);
+#else
+	/* FIXME: Use rename lock */
+#endif
 	while (!IS_ROOT(dentry)) {
 		namelen = dentry->d_name.len;
 		buflen -= namelen + 1;
@@ -367,7 +384,9 @@ int get_full_path_d(const struct dentry *dentry, char *real_path) {
 		*--end = '/';
 		dentry = dentry->d_parent;
 	}
-	//spin_unlock(&dentry->d_inode->i_lock);
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+	spin_unlock(&dcache_lock);
+#endif
 
 	if (buflen == PATH_MAX - 1) {
 		*--end = '/';
@@ -380,6 +399,9 @@ int get_full_path_d(const struct dentry *dentry, char *real_path) {
 	pr_info("Full path: %s\n", real_path);
 
 cleanup:
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+	spin_unlock(&dcache_lock);
+#endif
 	kfree(tmp_path);
 	return buflen;
 }
@@ -387,20 +409,36 @@ cleanup:
 struct dentry * get_path_dentry(const char *pathname, struct hepunion_sb_info *context, int flag) {
 	int err;
 	struct dentry *dentry;
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+	struct nameidata nd;
+#else
 	struct path path;
+#endif
 
 	pr_info("get_path_dentry: %s, %p, %x\n", pathname, context, flag);
 
 	push_root();
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+	err = path_lookup(pathname, flag, &nd);
+#else
 	err = kern_path(pathname, flag, &path);
+#endif
 	pop_root();
 	if (err) {
 		return ERR_PTR(err);
 	}
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+	dentry = nd.dentry;
+#else
 	dentry = path.dentry;
+#endif
 	dget(dentry);
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+	path_release(&nd);
+#else
 	path_put(&path);
+#endif
 
 	return dentry;
 }
