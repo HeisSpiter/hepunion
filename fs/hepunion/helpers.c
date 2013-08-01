@@ -313,9 +313,7 @@ cleanup:
 int get_full_path_i(const struct inode *inode, char *real_path) {
 	int len = -EBADF;
 	struct dentry *dentry;
-#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
-	struct list_head *entry = inode->i_dentry.next;
-#else
+#if LINUX_VERSION_CODE != KERNEL_VERSION(2,6,18)
 	struct hlist_node *entry;
 #endif
 
@@ -323,8 +321,7 @@ int get_full_path_i(const struct inode *inode, char *real_path) {
 
 	/* Try to browse all the dentry, till we find one nice */
 #if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
-	while (entry != &inode->i_dentry) {
-		dentry = list_entry(entry, struct dentry, d_alias);
+	list_for_each_entry(dentry, &inode->i_dentry, d_alias) {
 #else
 	hlist_for_each_entry(dentry, entry, &inode->i_dentry, d_alias) {
 #endif
@@ -336,9 +333,6 @@ int get_full_path_i(const struct inode *inode, char *real_path) {
 				break;
 			}
 		}
-
-		/* Jump to next dentry */
-		entry = entry->next;
 	}
 
 	return len;
