@@ -625,7 +625,9 @@ long mkdir(const char *pathname, struct hepunion_sb_info *context, umode_t mode)
 	unsigned int lookup_flags = LOOKUP_DIRECTORY;
 
 retry:
+	push_root();
 	dentry = kern_path_create(AT_FDCWD, pathname, &path, lookup_flags);
+	pop_root();
 	if (IS_ERR(dentry)) {
 		return PTR_ERR(dentry);
 	}
@@ -633,10 +635,12 @@ retry:
 	if (!IS_POSIXACL(path.dentry->d_inode)) {
 		mode &= ~current_umask();
 	}
+	push_root();
 	error = security_path_mkdir(&path, dentry, mode);
 	if (!error) {
 		error = vfs_mkdir(path.dentry->d_inode, dentry, mode);
 	}
+	pop_root();
 	done_path_create(&path, dentry);
 	if (retry_estale(error, lookup_flags)) {
 		lookup_flags |= LOOKUP_REVAL;
@@ -711,7 +715,9 @@ long mknod(const char *pathname, struct hepunion_sb_info *context, umode_t mode,
 	unsigned int lookup_flags = 0;
 
 retry:
+	push_root();
 	dentry = kern_path_create(AT_FDCWD, pathname, &path, lookup_flags);
+	pop_root();
 	if (IS_ERR(dentry)) {
 		return PTR_ERR(dentry);
 	}
@@ -719,6 +725,7 @@ retry:
 	if (!IS_POSIXACL(path.dentry->d_inode)) {
 		mode &= ~current_umask();
 	}
+	push_root();
 	error = security_path_mknod(&path, dentry, mode, dev);
 	if (error) {
 		goto out;
@@ -735,6 +742,7 @@ retry:
 			error = vfs_mknod(path.dentry->d_inode, dentry, mode, 0);
 			break;
 	}
+	pop_root();
 out:
 	done_path_create(&path, dentry);
 	if (retry_estale(error, lookup_flags)) {
@@ -799,6 +807,7 @@ long symlink(const char *oldname, const char *newname, struct hepunion_sb_info *
 	unsigned int lookup_flags = 0;
 
 retry:
+	push_root();
 	dentry = kern_path_create(AT_FDCWD, newname, &path, lookup_flags);
 	error = PTR_ERR(dentry);
 	if (IS_ERR(dentry)) {
@@ -809,6 +818,7 @@ retry:
 	if (!error) {
 		error = vfs_symlink(path.dentry->d_inode, dentry, oldname);
 	}
+	pop_root();
 	done_path_create(&path, dentry);
 	if (retry_estale(error, lookup_flags)) {
 		lookup_flags |= LOOKUP_REVAL;
