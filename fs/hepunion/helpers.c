@@ -954,7 +954,11 @@ long readlink(const char *path, char *buf, struct hepunion_sb_info *context, int
 	struct inode *inode;
 	int error;
 	mm_segment_t oldfs;
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+	struct nameidata nd;
+#else
 	struct path spath;
+#endif
 
 	pr_info("readlink: %s, %p, %p, %d\n", path, buf, context, bufsiz);
 
@@ -962,23 +966,45 @@ long readlink(const char *path, char *buf, struct hepunion_sb_info *context, int
 		return -EINVAL;
 
 	push_root();
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+	error = path_lookup(path, 0, &nd);
+#else
 	error = kern_path(path, 0, &spath);
+#endif
 	pop_root();
 	if (!error) {
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+		inode = nd.dentry->d_inode;
+#else
 		inode = spath.dentry->d_inode;
+#endif
 		error = -EINVAL;
 		if (inode->i_op && inode->i_op->readlink) {
 			push_root();
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+			error = security_inode_readlink(nd.dentry);
+#else
 			error = security_inode_readlink(spath.dentry);
+#endif
 			if (!error) {
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+				touch_atime(nd.mnt, nd.dentry);
+				call_usermode();
+				error = inode->i_op->readlink(nd.dentry, buf, bufsiz);
+#else
 				touch_atime(&spath);
 				call_usermode();
 				error = inode->i_op->readlink(spath.dentry, buf, bufsiz);
+#endif
 				restore_kernelmode();
 			}
 			pop_root();
 		}
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+		path_release(&nd);
+#else
 		path_put(&spath);
+#endif
 	}
 	return error;
 }
