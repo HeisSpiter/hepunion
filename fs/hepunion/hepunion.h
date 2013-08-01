@@ -19,6 +19,7 @@
 
 #ifdef __KERNEL__
 
+#include <linux/version.h>
 #include <linux/hepunion_type.h>
 #include <linux/fs.h>
 #include <linux/dcache.h>
@@ -28,8 +29,9 @@
 #include <linux/statfs.h>
 #include <linux/uaccess.h>
 #include <linux/security.h>
+#if LINUX_VERSION_CODE != KERNEL_VERSION(2,6,18)
 #include <linux/cred.h>
-#include <linux/version.h>
+#endif
 #include "hash.h"
 #include "recursivemutex.h"
 
