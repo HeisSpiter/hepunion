@@ -756,12 +756,12 @@ static int hepunion_permission(struct inode *inode, int mask) {
 	validate_inode(inode);
 
 #if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
-	if (nd && nd->path.dentry) {
-		validate_dentry(nd->path.dentry);
+	if (nd && nd->dentry) {
+		validate_dentry(nd->dentry);
 	}
 
 	/* Get path */
-	err = get_relative_path(inode, (nd ? nd->path.dentry : NULL), context, path, 1);
+	err = get_relative_path(inode, (nd ? nd->dentry : NULL), context, path, 1);
 #else
 	/* Get path */
 	err = get_relative_path(inode, NULL, context, path, 1);
@@ -1425,7 +1425,11 @@ static int hepunion_statfs(struct dentry *dentry, struct kstatfs *buf) {
 		return PTR_ERR(filp);
 	}
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+	err = vfs_statfs(filp->f_dentry, buf);
+#else
 	err = vfs_statfs(&filp->f_path, buf);
+#endif
 	filp_close(filp, NULL);
 
 	if (unlikely(err)) {
