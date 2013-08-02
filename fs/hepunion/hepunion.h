@@ -370,6 +370,12 @@ extern struct file_operations hepunion_dir_fops;
  * \return It returns current FS gid
  */
 #define current_fsgid() current->fsgid
+/**
+ * Set inode number of links
+ * \param[in]	i	Inode on which to set links count
+ * \param[in]	n	Link count
+ */
+#define set_nlink(i, n) i->i_nlink = n
 #endif
 
 /**
