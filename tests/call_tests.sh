@@ -1,10 +1,10 @@
-#!/bin/sh
+#!/bin/bash +x
 
 TESTS_DIR="/tmp/hepunion_tests"
 
 # This is for root, only
 if [ $EUID -ne 0 ]; then
-	echo "Please, sudo make tests" 
+	echo "Please, sudo make tests"
 	exit 1
 fi
 
@@ -42,6 +42,9 @@ insmod ../hepunion.ko
 mount -t HEPunion -o $TESTS_DIR/snapshot/=RW:$TESTS_DIR/root/=RO none $TESTS_DIR/export/
 
 ./hepunion_tests $TESTS_DIR
+
+# Unmount
+umount $TESTS_DIR/export/
 
 # Remove module
 rmmod hepunion
