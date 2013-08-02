@@ -795,6 +795,69 @@ static ssize_t hepunion_read(struct file *file, char __user *buf, size_t count, 
 	return ret;
 }
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+static void hepunion_read_inode(struct inode *inode) {
+	int err;
+	struct kstat kstbuf;
+	struct list_head *entry;
+	struct read_inode_context *ctx;
+	struct hepunion_sb_info *context = get_context_i(inode);
+
+	pr_info("hepunion_read_inode: %p\n", inode);
+
+	/* Get path */
+	entry = context->read_inode_head.next;
+	while (entry != &context->read_inode_head) {
+		ctx = list_entry(entry, struct read_inode_context, read_inode_entry);
+		if (ctx->ino == inode->i_ino) {
+			break;
+		}
+
+		entry = entry->next;
+	}
+
+	/* Quit if no context found */
+	if (entry == &context->read_inode_head) {
+		pr_info("Context not found for: %lu\n", inode->i_ino);
+		return;
+	}
+
+	pr_info("Reading inode: %s\n", ctx->name);
+
+	/* Call worker */
+	err = get_file_attr(ctx->name, context, &kstbuf);
+	if (err < 0) {
+		pr_info("read_inode: %d\n", err);
+		return;
+	}
+
+	/* Set inode */
+	inode->i_mode = kstbuf.mode;
+	inode->i_atime = kstbuf.atime;
+	inode->i_mtime = kstbuf.mtime;
+	inode->i_ctime = kstbuf.ctime;
+	inode->i_uid = kstbuf.uid;
+	inode->i_gid = kstbuf.gid;
+	inode->i_size = kstbuf.size;
+	inode->i_nlink = kstbuf.nlink;
+	inode->i_blocks = kstbuf.blocks;
+	inode->i_blkbits = kstbuf.blksize;
+
+	/* Set operations */
+	if (inode->i_mode & S_IFDIR) {
+		inode->i_op = &hepunion_dir_iops;
+		inode->i_fop = &hepunion_dir_fops;
+	} else {
+		inode->i_op = &hepunion_iops;
+		inode->i_fop = &hepunion_fops;
+	}
+
+#ifdef _DEBUG_
+	inode->i_private = (void *)HEPUNION_MAGIC;
+#endif
+}
+#endif
+
 #if 0 // Looks wrong
 /*this function has replaced hepunion_read_inode*/
 struct inode *hepunion_iget(struct super_block *sb, unsigned long ino) {
@@ -1142,6 +1205,20 @@ cleanup:
 
 	return err;
 }
+
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+static ssize_t hepunion_readv(struct file *file, const struct iovec *vector, unsigned long count, loff_t *offset) {
+	struct file *real_file = (struct file *)file->private_data;
+	ssize_t ret;
+
+	pr_info("hepunion_readv: %p, %p, %lu, %p(%llx)\n", file, vector, count, offset, *offset);
+
+	ret = vfs_readv(real_file, vector, count, offset);
+	file->f_pos = real_file->f_pos;
+
+	return ret;
+}
+#endif
 
 #if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 static int hepunion_revalidate(struct dentry *dentry, struct nameidata *nd) {
@@ -1563,7 +1640,19 @@ static void hepunion_put_super(struct super_block *sb)
 	}
 }
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+static ssize_t hepunion_writev(struct file *file, const struct iovec *vector, unsigned long count, loff_t *offset) {
+	struct file *real_file = (struct file *)file->private_data;
+	ssize_t ret;
 
+	pr_info("hepunion_writev: %p, %p, %lu, %p(%llx)\n", file, vector, count, offset, *offset);
+
+	ret = vfs_writev(real_file, vector, count, offset);
+	file->f_pos = real_file->f_pos;
+
+	return ret;
+}
+#endif
 
 struct inode_operations hepunion_iops = {
 	.getattr	= hepunion_getattr,
@@ -1589,7 +1678,9 @@ struct inode_operations hepunion_dir_iops = {
 };
 
 struct super_operations hepunion_sops = {
-	//.read_inode	= hepunion_read_inode,//system-call no longer supported
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+	.read_inode	= hepunion_read_inode,
+#endif
 	.statfs		= hepunion_statfs,
 	.put_super	= hepunion_put_super,
 };
@@ -1602,10 +1693,14 @@ struct file_operations hepunion_fops = {
 	.llseek		= hepunion_llseek,
 	.open		= hepunion_open,
 	.read		= hepunion_read,
-	//.readv		= hepunion_readv,//system-call no longer supported
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+	.readv		= hepunion_readv,
+#endif
 	.release	= hepunion_close,
-	.write		= hepunion_write
-	//.writev		= hepunion_writev,//system-call no longer supported
+	.write		= hepunion_write,
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+	.writev		= hepunion_writev,
+#endif
 };
 
 struct file_operations hepunion_dir_fops = {
