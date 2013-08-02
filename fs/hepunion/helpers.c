@@ -588,6 +588,8 @@ int lstat(const char *pathname, struct hepunion_sb_info *context, struct kstat *
 	int error = -EINVAL;
 	unsigned int lookup_flags = 0;
 
+	pr_info("lstat: %s, %p\n", pathname, stat);
+
 retry:
 	push_root();
 	error = kern_path(pathname, lookup_flags, &path);
@@ -651,6 +653,8 @@ long mkdir(const char *pathname, struct hepunion_sb_info *context, umode_t mode)
 	struct path path;
 	int error;
 	unsigned int lookup_flags = LOOKUP_DIRECTORY;
+
+	pr_info("mkdir: %s, %p, %x\n", pathname, context, mode);
 
 retry:
 	push_root();
@@ -741,6 +745,8 @@ long mknod(const char *pathname, struct hepunion_sb_info *context, umode_t mode,
 	struct path path;
 	int error;
 	unsigned int lookup_flags = 0;
+
+	pr_info("mknod: %s, %p, %x, %u\n", pathname, context, mode, dev);
 
 retry:
 	push_root();
@@ -834,6 +840,8 @@ long symlink(const char *oldname, const char *newname, struct hepunion_sb_info *
 	struct path path;
 	unsigned int lookup_flags = 0;
 
+	pr_info("symlink: %s, %s, %p\n", oldname, newname, context);
+
 retry:
 	push_root();
 	dentry = kern_path_create(AT_FDCWD, newname, &path, lookup_flags);
@@ -906,6 +914,8 @@ long link(const char *oldname, const char *newname, struct hepunion_sb_info *con
 	struct path old_path, new_path;
 	int how = 0;
 	int error;
+
+	pr_info("link: %s, %s, %p\n", oldname, newname, context);
 
 retry:
 	push_root();
