@@ -48,7 +48,11 @@ static int hepunion_closedir(struct inode *inode, struct file *filp) {
 	return 0;
 }
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 static int hepunion_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nameidata) {
+#else
+static int hepunion_create(struct inode *dir, struct dentry *dentry, umode_t mode, bool want_excl) {
+#endif
 	int err;
 	struct hepunion_sb_info *context = get_context_i(dir);
 	char *path = context->global1;
@@ -57,7 +61,11 @@ static int hepunion_create(struct inode *dir, struct dentry *dentry, int mode, s
 	struct iattr attr;
 	struct inode *inode;
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 	pr_info("hepunion_create: %p, %p, %x, %p\n", dir, dentry, mode, nameidata);
+#else
+	pr_info("hepunion_create: %p, %p, %x, %u\n", dir, dentry, mode, want_excl);
+#endif
 
 	will_use_buffers(context);
 	validate_inode(dir);
@@ -102,8 +110,8 @@ static int hepunion_create(struct inode *dir, struct dentry *dentry, int mode, s
 	}
 
 	/* Set its correct owner in case of creation */
-	attr.ia_uid = current->uid;
-	attr.ia_gid = current->gid;
+	attr.ia_uid = current_fsuid();
+	attr.ia_gid = current_fsgid();
 	attr.ia_valid = ATTR_UID | ATTR_GID;
 
 	push_root();
@@ -126,9 +134,9 @@ static int hepunion_create(struct inode *dir, struct dentry *dentry, int mode, s
 	}
 
 	/* And fill it in */
-	dir->i_nlink++;
-	inode->i_uid = current->fsuid;
-	inode->i_gid = current->fsgid;
+	inc_nlink(dir);
+	inode->i_uid = current_fsuid();
+	inode->i_gid = current_fsgid();
 	inode->i_mtime = CURRENT_TIME;
 	inode->i_atime = CURRENT_TIME;
 	inode->i_ctime = CURRENT_TIME;
@@ -137,12 +145,12 @@ static int hepunion_create(struct inode *dir, struct dentry *dentry, int mode, s
 	inode->i_op = &hepunion_iops;
 	inode->i_fop = &hepunion_fops;
 	inode->i_mode = mode;
-	inode->i_nlink = 1;
+	set_nlink(inode, 1);
 	inode->i_ino = name_to_ino(path);
 #ifdef _DEBUG_
 	inode->i_private = (void *)HEPUNION_MAGIC;
 #endif
-	insert_inode_hash(inode);
+	insert_inode_hash(inode); 
 
 	d_instantiate(dentry, inode);
 	mark_inode_dirty(dir);
@@ -188,9 +196,7 @@ static int hepunion_link(struct dentry *old_dentry, struct inode *dir, struct de
 	struct hepunion_sb_info *context = get_context_d(old_dentry);
 	char *from = context->global1;
 	char *to = context->global2;
-	char real_from[PATH_MAX];
-	char real_to[PATH_MAX];
-
+	char *real_from = NULL, *real_to = NULL; 
 	pr_info("hepunion_link: %p, %p, %p\n", old_dentry, dir, dentry);
 
 	will_use_buffers(context);
@@ -201,71 +207,88 @@ static int hepunion_link(struct dentry *old_dentry, struct inode *dir, struct de
 	/* First, find file */
 	err = get_relative_path(NULL, old_dentry, context, from, 1);
 	if (err < 0) {
-		release_buffers(context);
-		return err;
+		goto cleanup;
+	}
+
+	real_from = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (!real_from) {
+		err = -ENOMEM;
+		goto cleanup;
+	}
+
+	real_to = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (!real_to) {
+		err = -ENOMEM;
+		goto cleanup;
 	}
 
 	origin = find_file(from, real_from, context, 0);
 	if (origin < 0) {
-		release_buffers(context);
-		return origin;
+		err = origin;
+		goto cleanup;
 	}
 
 	/* Find destination */
 	err = get_relative_path_for_file(dir, dentry, context, to, 1);
 	if (err < 0) {
-		release_buffers(context);
-		return err;
+		goto cleanup;
 	}
 
 	/* And ensure it doesn't exist */
 	err = find_file(to, real_to, context, 0);
 	if (err >= 0) {
-		release_buffers(context);
-		return -EEXIST;
+		err = -EEXIST;
+		goto cleanup;
 	}
 
 	/* Check access */
 	err = can_create(to, real_to, context);
 	if (err < 0) {
-		release_buffers(context);
-		return err;
+		goto cleanup;
 	}
 
 	/* Create path if needed */
 	err = find_path(to, real_to, context);
 	if (err < 0) {
-		release_buffers(context);
-		return err;
+		goto cleanup;
 	}
 
 	if (origin == READ_ONLY) {
 		/* Here, fallback to a symlink */
 		err = symlink_worker(real_from, real_to, context);
 		if (err < 0) {
-			release_buffers(context);
-			return err;
+			goto cleanup;
 		}
 	}
 	else {
 		/* Get RW name */
 		if (make_rw_path(to, real_to) > PATH_MAX) {
-			release_buffers(context);
-			return -ENAMETOOLONG;
+			err = -ENAMETOOLONG;
+			goto cleanup;
 		}
 
 		err = link_worker(real_from, real_to, context);
 		if (err < 0) {
-			release_buffers(context);
-			return err;
+			goto cleanup;
 		}
 	}
 
 	/* Remove possible whiteout */
 	unlink_whiteout(to, context);
+	err = 0;
+
+cleanup:
+	if (real_from) {
+		kfree(real_from);
+	}
+
+	if (real_to) {
+		kfree(real_to); 
+	}
 
 	release_buffers(context);
-	return 0;
+
+	return err;
 }
 
 static loff_t hepunion_llseek(struct file *file, loff_t offset, int origin) {
@@ -280,7 +303,11 @@ static loff_t hepunion_llseek(struct file *file, loff_t offset, int origin) {
 	return ret;
 }
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 static struct dentry * hepunion_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nameidata) {
+#else
+static struct dentry * hepunion_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags) {
+#endif
 	/* We are looking for "dentry" in "dir" */
 	int err;
 	struct hepunion_sb_info *context = get_context_i(dir);
@@ -291,7 +318,11 @@ static struct dentry * hepunion_lookup(struct inode *dir, struct dentry *dentry,
 	size_t namelen;
 	unsigned long ino;
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 	pr_info("hepunion_lookup: %p, %p, %p\n", dir, dentry, nameidata);
+#else
+	pr_info("hepunion_lookup: %p, %p, %#X\n", dir, dentry, flags);
+#endif
 
 	will_use_buffers(context);
 	validate_inode(dir);
@@ -339,7 +370,7 @@ static struct dentry * hepunion_lookup(struct inode *dir, struct dentry *dentry,
 	list_add(&ctx->read_inode_entry, &context->read_inode_head);
 
 	/* Get inode */
-	inode = iget(dir->i_sb, ino);
+	inode = iget_locked(dir->i_sb, ino);
 	if (!inode) {
 		inode = ERR_PTR(-EACCES);
 	} else {
@@ -358,7 +389,11 @@ static struct dentry * hepunion_lookup(struct inode *dir, struct dentry *dentry,
 	return NULL;
 }
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 static int hepunion_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
+#else
+static int hepunion_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode) {
+#endif
 	int err;
 	struct inode *inode;
 	struct hepunion_sb_info *context = get_context_i(dir);
@@ -434,9 +469,9 @@ static int hepunion_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 	}
 
 	/* And fill it in */
-	dir->i_nlink++;
-	inode->i_uid = current->fsuid;
-	inode->i_gid = current->fsgid;
+	inc_nlink(dir);
+	inode->i_uid = current_fsuid();
+	inode->i_gid = current_fsgid();
 	inode->i_mtime = CURRENT_TIME;
 	inode->i_atime = CURRENT_TIME;
 	inode->i_ctime = CURRENT_TIME;
@@ -445,7 +480,7 @@ static int hepunion_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 	inode->i_op = &hepunion_dir_iops;
 	inode->i_fop = &hepunion_dir_fops;
 	inode->i_mode = mode;
-	inode->i_nlink = 1;
+	set_nlink(inode, 1);
 	inode->i_ino = name_to_ino(path);
 #ifdef _DEBUG_
 	inode->i_private = (void *)HEPUNION_MAGIC;
@@ -463,7 +498,11 @@ static int hepunion_mkdir(struct inode *dir, struct dentry *dentry, int mode) {
 	return 0;
 }
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 static int hepunion_mknod(struct inode *dir, struct dentry *dentry, int mode, dev_t rdev) {
+#else
+static int hepunion_mknod(struct inode *dir, struct dentry *dentry, umode_t mode, dev_t rdev) {
+#endif
 	int err;
 	struct hepunion_sb_info *context = get_context_i(dir);
 	char *path = context->global1;
@@ -589,8 +628,7 @@ static int hepunion_opendir(struct inode *inode, struct file *file) {
 	char *path = context->global1;
 	char *real_path = context->global2;
 	struct opendir_context *ctx;
-	char ro_path[PATH_MAX];
-	char rw_path[PATH_MAX];
+	char *ro_path = NULL, *rw_path = NULL;
 	size_t ro_len = 0;
 	size_t rw_len = 0;
 
@@ -616,6 +654,18 @@ static int hepunion_opendir(struct inode *inode, struct file *file) {
 		return err;
 	}
 
+	ro_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (!ro_path) {
+		err = -ENOMEM;
+		goto cleanup;
+	}
+
+	rw_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (!rw_path) {
+		err = -ENOMEM;
+		goto cleanup;
+	}
+
 	if (find_file(path, rw_path, context, MUST_READ_WRITE) >= 0) {
 		rw_len = strlen(rw_path);
 	}
@@ -627,8 +677,8 @@ static int hepunion_opendir(struct inode *inode, struct file *file) {
 	/* Allocate readdir context */
 	ctx = kmalloc(sizeof(struct opendir_context) + rw_len + ro_len + 2 * sizeof(char), GFP_KERNEL);
 	if (!ctx) {
-		release_buffers(context);
-		return -ENOMEM;
+		err = -ENOMEM;
+		goto cleanup;
 	}
 
 	/* Copy strings - RO first */
@@ -670,26 +720,52 @@ static int hepunion_opendir(struct inode *inode, struct file *file) {
 
 	file->private_data = ctx;
 
+	err = 0;
+
+cleanup:
 	release_buffers(context);
-	return 0;
+
+	if (ro_path) {
+		kfree(ro_path);
+	}
+
+	if (rw_path) {
+		kfree(rw_path);
+	}
+
+	return err;
 }
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 static int hepunion_permission(struct inode *inode, int mask, struct nameidata *nd) {
+#else
+static int hepunion_permission(struct inode *inode, int mask) {
+#endif
 	int err;
 	struct hepunion_sb_info *context = get_context_i(inode);
 	char *path = context->global1;
 	char *real_path = context->global2;
 
-	pr_info("hepunion_permission: %p, %x, %p\n", inode, mask, nd);
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+	pr_info("hepunion_permission: %p, %#X, %p\n", inode, mask, nd);
+#else
+	pr_info("hepunion_permission: %p, %#X\n", inode, mask);
+#endif
 
 	will_use_buffers(context);
 	validate_inode(inode);
+
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 	if (nd && nd->dentry) {
 		validate_dentry(nd->dentry);
 	}
 
 	/* Get path */
 	err = get_relative_path(inode, (nd ? nd->dentry : NULL), context, path, 1);
+#else
+	/* Get path */
+	err = get_relative_path(inode, NULL, context, path, 1);
+#endif
 	if (err) {
 		release_buffers(context);
 		return err;
@@ -719,6 +795,7 @@ static ssize_t hepunion_read(struct file *file, char __user *buf, size_t count, 
 	return ret;
 }
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 static void hepunion_read_inode(struct inode *inode) {
 	int err;
 	struct kstat kstbuf;
@@ -779,12 +856,84 @@ static void hepunion_read_inode(struct inode *inode) {
 	inode->i_private = (void *)HEPUNION_MAGIC;
 #endif
 }
+#endif
+
+#if 0 // Looks wrong
+/*this function has replaced hepunion_read_inode*/
+struct inode *hepunion_iget(struct super_block *sb, unsigned long ino) {
+	int err;
+	struct kstat kstbuf;
+	struct list_head *entry;
+	struct read_inode_context *ctx;
+	struct inode *inode;
+              
+        inode = iget_locked(sb, ino);
+        struct hepunion_sb_info *context = get_context_i(inode);
+        pr_info("hepunion_read_inode: %p\n", inode);
+
+        if(!inode)
+            return;
+        
+	/* Get path */
+	entry = context->read_inode_head.next;
+	while (entry != &context->read_inode_head) {
+		ctx = list_entry(entry, struct read_inode_context, read_inode_entry);
+		if (ctx->ino == inode->i_ino) {
+			break;
+		}
+
+		entry = entry->next;
+	}
+
+	/* Quit if no context found */
+	if (entry == &context->read_inode_head) {
+		pr_info("Context not found for: %lu\n", inode->i_ino);
+		return;
+	}
+
+	pr_info("Reading inode: %s\n", ctx->name);
+
+	/* Call worker */
+	err = get_file_attr(ctx->name, context, &kstbuf);
+	if (err < 0) {
+		pr_info("read_inode: %d\n", err);
+		return;
+	}
+
+	/* Set inode */
+	inode->i_mode = kstbuf.mode;
+	inode->i_atime = kstbuf.atime;
+	inode->i_mtime = kstbuf.mtime;
+	inode->i_ctime = kstbuf.ctime;
+	inode->i_uid = kstbuf.uid;
+	inode->i_gid = kstbuf.gid;
+	inode->i_size = kstbuf.size;
+	set_nlink(inode, kstbuf.nlink);
+	inode->i_blocks = kstbuf.blocks;
+	inode->i_blkbits = kstbuf.blksize;
+
+	/* Set operations */
+	if (inode->i_mode & S_IFDIR) {
+		inode->i_op = &hepunion_dir_iops;
+		inode->i_fop = &hepunion_dir_fops;
+	} else {
+		inode->i_op = &hepunion_iops;
+		inode->i_fop = &hepunion_fops;
+	}
+
+#ifdef _DEBUG_
+	inode->i_private = (void *)HEPUNION_MAGIC;
+#endif
+        unlock_new_inode(inode);
+        return inode;
+}
+#endif
 
 static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
 	struct readdir_file *entry;
 	struct opendir_context *ctx = (struct opendir_context *)buf;
 	struct hepunion_sb_info *context = ctx->context;
-	char complete_path[PATH_MAX];
+	char *complete_path;
 	char *path;
 	size_t len;
 
@@ -828,11 +977,17 @@ static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset
 		}
 	}
 	else {
+		complete_path = kmalloc(PATH_MAX, GFP_KERNEL);
+		if (!complete_path) {
+			return -ENOMEM;
+		}
+
 		/* This is a normal entry
 		 * Just add it to the list
 		 */
 		entry = kmalloc(sizeof(struct readdir_file) + namlen + sizeof(char), GFP_KERNEL);
 		if (!entry) {
+			kfree(complete_path);
 			return -ENOMEM;
 		}
 
@@ -849,6 +1004,8 @@ static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset
 		path = (char *)(ctx->rw_off + (unsigned long)ctx);
 		len = ctx->rw_len - context->rw_len;
 		if (len + namlen + 1 > PATH_MAX) {
+			/* FIXME: What to do with entry? */
+			kfree(complete_path);
 			return -ENAMETOOLONG;
 		}
 		memcpy(complete_path, path + context->rw_len, len);
@@ -856,6 +1013,7 @@ static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset
 		complete_path[len + namlen] = '\0';
 
 		entry->ino = name_to_ino(complete_path);
+		kfree(complete_path);
 	}
 
 	return 0;
@@ -864,7 +1022,7 @@ static int read_rw_branch(void *buf, const char *name, int namlen, loff_t offset
 static int read_ro_branch(void *buf, const char *name, int namlen, loff_t offset, u64 ino, unsigned d_type) {
 	struct opendir_context *ctx = (struct opendir_context *)buf;
 	struct hepunion_sb_info *context = ctx->context;
-	char complete_path[PATH_MAX];
+	char *complete_path;
 	char *path;
 	size_t len;
 	struct readdir_file *entry;
@@ -911,6 +1069,12 @@ static int read_ro_branch(void *buf, const char *name, int namlen, loff_t offset
 		return -ENOMEM;
 	}
 
+	complete_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (!complete_path) {
+		kfree(entry);
+		return -ENOMEM;
+	}
+
 	/* Add it to list */
 	list_add(&entry->files_entry, &ctx->files_head);
 
@@ -924,6 +1088,8 @@ static int read_ro_branch(void *buf, const char *name, int namlen, loff_t offset
 	path = (char *)(ctx->ro_off + (unsigned long)ctx);
 	len = ctx->ro_len - context->ro_len;
 	if (len + namlen + 1 > PATH_MAX) {
+		/* FIXME: What to do with entry? */
+		kfree(complete_path);
 		return -ENAMETOOLONG;
 	}
 	memcpy(complete_path, path + context->ro_len, len);
@@ -931,6 +1097,7 @@ static int read_ro_branch(void *buf, const char *name, int namlen, loff_t offset
 	complete_path[len + namlen] = '\0';
 
 	entry->ino = name_to_ino(complete_path);
+	kfree(complete_path); 
 
 	return 0;
 }
@@ -1039,6 +1206,7 @@ cleanup:
 	return err;
 }
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 static ssize_t hepunion_readv(struct file *file, const struct iovec *vector, unsigned long count, loff_t *offset) {
 	struct file *real_file = (struct file *)file->private_data;
 	ssize_t ret;
@@ -1050,9 +1218,17 @@ static ssize_t hepunion_readv(struct file *file, const struct iovec *vector, uns
 
 	return ret;
 }
+#endif
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 static int hepunion_revalidate(struct dentry *dentry, struct nameidata *nd) {
+
 	pr_info("hepunion_revalidate: %p, %p\n", dentry, nd);
+#else
+static int hepunion_revalidate(struct dentry *dentry, unsigned int flags) {
+
+	pr_info("hepunion_revalidate: %p, %#X\n", dentry, flags);
+#endif
 
 	if (dentry->d_inode == NULL) {
 		return 0;
@@ -1064,9 +1240,7 @@ static int hepunion_revalidate(struct dentry *dentry, struct nameidata *nd) {
 static int hepunion_rmdir(struct inode *dir, struct dentry *dentry) {
 	int err;
 	struct kstat kstbuf;
-	char me_path[PATH_MAX];
-	char wh_path[PATH_MAX];
-	char ro_path[PATH_MAX];
+	char *me_path = NULL, *wh_path = NULL, *ro_path = NULL;
 	char has_ro = 0;
 	struct hepunion_sb_info *context = get_context_i(dir);
 	char *path = context->global1;
@@ -1085,6 +1259,12 @@ static int hepunion_rmdir(struct inode *dir, struct dentry *dentry) {
 		return err;
 	}
 
+	wh_path = kmalloc(PATH_MAX, GFP_KERNEL);
+	if (!wh_path) {
+		release_buffers(context);
+		return -ENOMEM;
+	}
+
 	/* Then, find dir */
 	err = find_file(path, real_path, context, 0);
 	switch (err) {
@@ -1092,6 +1272,12 @@ static int hepunion_rmdir(struct inode *dir, struct dentry *dentry) {
 		/* On RW, just remove it */
 		case READ_WRITE_COPYUP: // Can't happen
 		case READ_WRITE:
+			ro_path = kmalloc(PATH_MAX, GFP_KERNEL);
+			if (!ro_path) {
+				err = -ENOMEM;
+				break;
+			}
+
 			/* Check if RO exists */
 			if (find_file(path, ro_path, context, MUST_READ_ONLY) >= 0) {
 				has_ro = 1;
@@ -1136,6 +1322,12 @@ static int hepunion_rmdir(struct inode *dir, struct dentry *dentry) {
 				break;
 			}
 
+			me_path = kmalloc(PATH_MAX, GFP_KERNEL);
+			if(!me_path) {
+				err = -ENOMEM;
+				break;
+			}
+
 			/* Get me first */
 			if (find_me(path, context, me_path, &kstbuf) >= 0) {
 				has_me = 1;
@@ -1159,6 +1351,19 @@ static int hepunion_rmdir(struct inode *dir, struct dentry *dentry) {
 	}
 
 	release_buffers(context);
+
+	if (me_path) {
+		kfree(me_path);
+	}
+
+	if (wh_path) {
+		kfree(wh_path);
+	}
+
+	if (ro_path) {
+		kfree(ro_path); 
+	}
+
 	return err;
 }
 
@@ -1277,6 +1482,7 @@ static int hepunion_symlink(struct inode *dir, struct dentry *dentry, const char
 	return 0;
 }
 
+/* used by df to show it up */
 static int hepunion_statfs(struct dentry *dentry, struct kstatfs *buf) {
 	struct super_block *sb = dentry->d_sb;
 	struct hepunion_sb_info * sb_info = sb->s_fs_info;
@@ -1296,7 +1502,11 @@ static int hepunion_statfs(struct dentry *dentry, struct kstatfs *buf) {
 		return PTR_ERR(filp);
 	}
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 	err = vfs_statfs(filp->f_dentry, buf);
+#else
+	err = vfs_statfs(&filp->f_path, buf);
+#endif
 	filp_close(filp, NULL);
 
 	if (unlikely(err)) {
@@ -1317,8 +1527,7 @@ static int hepunion_unlink(struct inode *dir, struct dentry *dentry) {
 	char *path = context->global1;
 	char *real_path = context->global2;
 	struct kstat kstbuf;
-	char me_path[PATH_MAX];
-	char wh_path[PATH_MAX];
+	char *me_path = NULL, *wh_path = NULL;
 
 	pr_info("hepunion_unlink: %p, %p\n", dir, dentry);
 
@@ -1351,6 +1560,19 @@ static int hepunion_unlink(struct inode *dir, struct dentry *dentry) {
 				break;
 			}
 
+			me_path = kmalloc(PATH_MAX, GFP_KERNEL);
+			if (!me_path) {
+				err = -ENOMEM;
+				break;
+			}
+
+			/* Allocate now to make failure path easier */
+			wh_path = kmalloc(PATH_MAX, GFP_KERNEL);
+			if (!wh_path) {
+				err = -ENOMEM;
+				break;
+			}
+
 			/* Get me first */
 			if (find_me(path, context, me_path, &kstbuf) >= 0) {
 				has_me = 1;
@@ -1375,13 +1597,22 @@ static int hepunion_unlink(struct inode *dir, struct dentry *dentry) {
 
 	/* Kill the inode now */
 	if (err == 0) {
-		dir->i_nlink--;
+		drop_nlink(dir);
 		mark_inode_dirty(dir);
-        dentry->d_inode->i_nlink--;
+        drop_nlink(dentry->d_inode);
         mark_inode_dirty(dentry->d_inode);
 	}
 
 	release_buffers(context);
+
+	if (me_path) {
+		kfree(me_path);
+	}
+
+	if (wh_path) {
+		kfree(wh_path);
+	}
+     
 	return err;
 }
 
@@ -1397,6 +1628,19 @@ static ssize_t hepunion_write(struct file *file, const char __user *buf, size_t 
 	return ret;
 }
 
+static void hepunion_put_super(struct super_block *sb)
+{
+       /* this function used for umounting the fs*/	
+       struct hepunion_sb_info * sb_info = sb->s_fs_info; 
+       pr_info("hepunion_put_super\n");
+       if (sb_info)
+	{
+		kfree(sb_info);
+		sb->s_fs_info = NULL;
+	}
+}
+
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 static ssize_t hepunion_writev(struct file *file, const struct iovec *vector, unsigned long count, loff_t *offset) {
 	struct file *real_file = (struct file *)file->private_data;
 	ssize_t ret;
@@ -1408,6 +1652,7 @@ static ssize_t hepunion_writev(struct file *file, const struct iovec *vector, un
 
 	return ret;
 }
+#endif
 
 struct inode_operations hepunion_iops = {
 	.getattr	= hepunion_getattr,
@@ -1415,7 +1660,7 @@ struct inode_operations hepunion_iops = {
 #if 0
 	.readlink	= generic_readlink, /* dentry will already point on the right file */
 #endif
-	.setattr	= hepunion_setattr,
+	.setattr	= hepunion_setattr
 };
 
 struct inode_operations hepunion_dir_iops = {
@@ -1429,30 +1674,37 @@ struct inode_operations hepunion_dir_iops = {
 	.rmdir		= hepunion_rmdir,
 	.setattr	= hepunion_setattr,
 	.symlink	= hepunion_symlink,
-	.unlink		= hepunion_unlink,
+	.unlink		= hepunion_unlink
 };
 
 struct super_operations hepunion_sops = {
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 	.read_inode	= hepunion_read_inode,
+#endif
 	.statfs		= hepunion_statfs,
+	.put_super	= hepunion_put_super,
 };
 
 struct dentry_operations hepunion_dops = {
-	.d_revalidate	= hepunion_revalidate,
+	.d_revalidate	= hepunion_revalidate
 };
 
 struct file_operations hepunion_fops = {
 	.llseek		= hepunion_llseek,
 	.open		= hepunion_open,
 	.read		= hepunion_read,
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 	.readv		= hepunion_readv,
+#endif
 	.release	= hepunion_close,
 	.write		= hepunion_write,
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 	.writev		= hepunion_writev,
+#endif
 };
 
 struct file_operations hepunion_dir_fops = {
 	.open		= hepunion_opendir,
 	.readdir	= hepunion_readdir,
-	.release	= hepunion_closedir,
+	.release	= hepunion_closedir
 };
