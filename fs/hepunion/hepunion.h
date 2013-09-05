@@ -105,6 +105,9 @@ struct hepunion_sb_info {
 	 * lookup
 	 */
 	struct list_head read_inode_head;
+
+        struct cred *new;  
+        struct cred *old; 
 };
 
 struct readdir_context {
@@ -427,27 +430,23 @@ extern struct file_operations hepunion_dir_fops;
  * Switch the current context user and group to root to allow
  * modifications on child file systems
  */
-#define pop_root()							\
-	do {									\
-		struct cred *new = prepare_creds();	\
-		new->fsuid = context->uid;			\
-		new->fsgid = context->gid;			\
-		commit_creds(new);					\
-	} while(0);								\
-	recursive_mutex_unlock(&context->id_lock)
+#define pop_root()                          \
+    do {                                    \
+        revert_creds(context->old);         \
+        put_cred(context->new);             \
+    } while(0);                             \
+    recursive_mutex_unlock(&context->id_lock)
 /**     
  * Switch the current context back to real user and real group
  */
-#define push_root()							\
-	recursive_mutex_lock(&context->id_lock);\
-	context->uid = current_fsuid();			\
-	context->gid = current_fsgid();			\
-	do {									\
-		struct cred *new = prepare_creds();	\
-		new->fsuid = 0;						\
-		new->fsgid = 0;						\
-		commit_creds(new);					\
-	} while(0)
+#define push_root()                            \
+    recursive_mutex_lock(&context->id_lock);   \
+    do {                                       \
+        context->new = prepare_creds();       \
+        context->new->uid = 0;                \
+        context->new->gid = 0;                \
+        context->old = override_creds(context->new);\
+    } while(0)
 #endif
 /**
  * Switch the current data segment to disable buffers checking
