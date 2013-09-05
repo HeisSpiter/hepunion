@@ -19,12 +19,13 @@ EXTRA_CFLAGS += ${HEPUNION_DEF_CONFIG}
 
 MakeMod = ${MAKE} -C ${KDIR} M=${CURDIR}/fs/hepunion EXTRA_CFLAGS="${EXTRA_CFLAGS}"
 
-all: hepunion.ko usr/include/linux/hepunion_type.h
+all: hepunion.ko include/linux/hepunion_type.h
 
 clean:
 	${MakeMod} $@
 	find . -type f -name '*~' | xargs -r ${RM}
 	${RM} -r hepunion.ko usr
+	${MAKE} -C tests clean
 
 install: fs/hepunion/hepunion.ko
 	${MakeMod} modules_install
@@ -50,3 +51,8 @@ usr/include/linux/hepunion_type.h:
 		-f Makefile \
 		obj=${d}/include/linux dst=${d}/usr/include/linux
 	test -s $@
+
+tests:
+	${MAKE} -C tests
+
+.PHONY: tests

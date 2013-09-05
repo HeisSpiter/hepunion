@@ -19,6 +19,7 @@
 
 #ifdef __KERNEL__
 
+#include <linux/version.h>
 #include <linux/hepunion_type.h>
 #include <linux/fs.h>
 #include <linux/dcache.h>
@@ -28,6 +29,11 @@
 #include <linux/statfs.h>
 #include <linux/uaccess.h>
 #include <linux/security.h>
+#if LINUX_VERSION_CODE != KERNEL_VERSION(2,6,18)
+#include <linux/cred.h>
+#endif
+#include <linux/fs_struct.h>
+#include <linux/fcntl.h>
 #include "hash.h"
 #include "recursivemutex.h"
 
@@ -299,7 +305,7 @@ extern struct file_operations hepunion_dir_fops;
  * Mask that defines all the modes of a file that can be changed using the
  * metadata mechanism
  */
-#define VALID_MODES_MASK (S_ISUID | S_ISGID | S_ISVTX |			\
+#define VALID_MODES_MASK (S_ISUID | S_ISGID | S_ISVTX |	\
 			  S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR |	\
 			  S_IRWXG | S_IRGRP | S_IWGRP | S_IXGRP |	\
 			  S_IRWXO | S_IROTH | S_IWOTH | S_IXOTH)
@@ -353,6 +359,25 @@ extern struct file_operations hepunion_dir_fops;
 	 (l == 2 &&	n[0] == '.' &&	\
 	  n[1] == '.'))
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
+/**
+ * Get current FS uid
+ * \return It returns current FS uid
+ */
+#define current_fsuid() current->fsuid
+/**
+ * Get current FS gid
+ * \return It returns current FS gid
+ */
+#define current_fsgid() current->fsgid
+/**
+ * Set inode number of links
+ * \param[in]	i	Inode on which to set links count
+ * \param[in]	n	Link count
+ */
+#define set_nlink(i, n) i->i_nlink = n
+#endif
+
 /**
  * Get current context associated with dentry
  * \param[in]	d	dentry pointer
@@ -379,6 +404,7 @@ extern struct file_operations hepunion_dir_fops;
  * \return	The number of caracters written to r
  */
 #define make_rw_path(p, r) snprintf(r, PATH_MAX, "%s%s", context->read_write_branch, p)
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 /**
  * Switch the current context user and group to root to allow
  * modifications on child file systems
@@ -387,15 +413,42 @@ extern struct file_operations hepunion_dir_fops;
 	current->fsuid = context->uid;				\
 	current->fsgid = context->gid;				\
 	recursive_mutex_unlock(&context->id_lock)
-/**
+/**     
  * Switch the current context back to real user and real group
  */
-#define push_root()								\
+#define push_root() 							\
 	recursive_mutex_lock(&context->id_lock);	\
 	context->uid = current->fsuid;				\
 	context->gid = current->fsgid;				\
 	current->fsuid = 0;							\
 	current->fsgid = 0
+#else
+/**
+ * Switch the current context user and group to root to allow
+ * modifications on child file systems
+ */
+#define pop_root()							\
+	do {									\
+		struct cred *new = prepare_creds();	\
+		new->fsuid = context->uid;			\
+		new->fsgid = context->gid;			\
+		commit_creds(new);					\
+	} while(0);								\
+	recursive_mutex_unlock(&context->id_lock)
+/**     
+ * Switch the current context back to real user and real group
+ */
+#define push_root()							\
+	recursive_mutex_lock(&context->id_lock);\
+	context->uid = current_fsuid();			\
+	context->gid = current_fsgid();			\
+	do {									\
+		struct cred *new = prepare_creds();	\
+		new->fsuid = 0;						\
+		new->fsgid = 0;						\
+		commit_creds(new);					\
+	} while(0)
+#endif
 /**
  * Switch the current data segment to disable buffers checking
  * To be used when calling a VFS function wanting an usermode
@@ -707,7 +760,11 @@ int lstat(const char *pathname, struct hepunion_sb_info *context, struct kstat *
  * \param[in]	mode		Mode to set to the directory (see mkdir man page)
  * \return	0 in case of a success, -err otherwise
  */
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 long mkdir(const char *pathname, struct hepunion_sb_info *context, int mode);
+#else
+long mkdir(const char *pathname, struct hepunion_sb_info *context, umode_t mode);
+#endif
 /**
  * Wrapper for mknod that allows creation of a FIFO file using pathname.
  * \param[in]	pathname	FIFO file to create
@@ -715,7 +772,11 @@ long mkdir(const char *pathname, struct hepunion_sb_info *context, int mode);
  * \param[in]	mode		Mode to set to the file (see mkfifo man page)
  * \return 	0 in case of a success, -err otherwise
  */
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 int mkfifo(const char *pathname, struct hepunion_sb_info *context, int mode);
+#else
+int mkfifo(const char *pathname, struct hepunion_sb_info *context, umode_t mode);
+#endif
 /**
  * Implementation taken from Linux kernel. It's here to allow creation of a special
  * file using pathname.
@@ -725,7 +786,11 @@ int mkfifo(const char *pathname, struct hepunion_sb_info *context, int mode);
  * \param[in]	dev			Special device
  * \return	0 in case of a success, -err otherwise
  */
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 long mknod(const char *pathname, struct hepunion_sb_info *context, int mode, unsigned dev);
+#else
+long mknod(const char *pathname, struct hepunion_sb_info *context, umode_t mode, unsigned dev);
+#endif
 /**
  * Implementation taken from Linux kernel. It's here to allow link readding (seems like
  * that's not the job vfs_readdlink is doing).

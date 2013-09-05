@@ -211,13 +211,18 @@ static int get_branches(struct super_block *sb, const char *arg) {
 	root_i->i_ctime = ctime;
 	root_i->i_op = &hepunion_dir_iops;
 	root_i->i_fop = &hepunion_dir_fops;
-	root_i->i_nlink = 2;
+	set_nlink(root_i, 2);
 #ifdef _DEBUG_
 	root_i->i_private = (void *)HEPUNION_MAGIC;
 #endif
 
 	/* Create its directory entry */
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 	sb->s_root = d_alloc_root(root_i);
+#else
+	sb->s_root = d_make_root(root_i);
+#endif
+
 	if (IS_ERR(sb->s_root)) {
 		pr_crit("Failed allocating new dentry for /!\n");
 		iput(root_i);
@@ -286,6 +291,7 @@ static int hepunion_read_super(struct super_block *sb, void *raw_data,
 	return 0;
 }
 
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 static int hepunion_get_sb(struct file_system_type *fs_type,
 				     int flags, const char *dev_name,
 				     void *raw_data, struct vfsmount *mnt) {
@@ -294,6 +300,16 @@ static int hepunion_get_sb(struct file_system_type *fs_type,
 
 	return err;
 }
+#else
+static struct dentry * hepunion_mount_sb(struct file_system_type *fs_type,
+										 int flags, const char *dev_name,
+										 void *raw_data) {
+	struct dentry * dentry;
+
+	dentry = mount_nodev(fs_type, flags, raw_data, hepunion_read_super);
+	return dentry;
+}
+#endif
 
 static void hepunion_kill_sb(struct super_block *sb) {
 	struct hepunion_sb_info *sb_info;
@@ -316,9 +332,13 @@ static void hepunion_kill_sb(struct super_block *sb) {
 static struct file_system_type hepunion_fs_type = {
 	.owner		= THIS_MODULE,
 	.name		= HEPUNION_NAME,
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2,6,18)
 	.get_sb		= hepunion_get_sb,
+#else
+	.mount		= hepunion_mount_sb,
+#endif
 	.kill_sb	= hepunion_kill_sb,
-	.fs_flags	= FS_REVAL_DOT,
+	.fs_flags	= FS_REVAL_DOT
 };
 
 static int __init init_hepunion_fs(void) {
