@@ -107,7 +107,7 @@ struct hepunion_sb_info {
 	struct list_head read_inode_head;
 
         struct cred *new;  
-        struct cred *old; 
+        const struct cred *old; 
 };
 
 struct readdir_context {
